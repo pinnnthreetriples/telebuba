@@ -29,6 +29,7 @@ DeferralReason = Literal[
     "fleet_hard_cap",
     "busy",
     "startup_quiet",
+    "no_live_session",
 ]
 RefusalReason = Literal[
     "account_missing",
@@ -46,6 +47,7 @@ Reason = Literal[
     "fleet_hard_cap",
     "busy",
     "startup_quiet",
+    "no_live_session",
     "account_missing",
     "account_not_alive",
     "no_proxy",
@@ -112,6 +114,13 @@ class BudgetSnapshot(BaseModel):
     operator_count_24h: int = 0
 
 
+class SampleStructure(BaseModel):
+    """The structural flags of the conversation a reply came from."""
+
+    multi_message: bool = False
+    has_markup: bool = False
+
+
 class ReplySample(BaseModel):
     """One redacted reply of @SpamBot, kept once per distinct text."""
 
@@ -122,6 +131,10 @@ class ReplySample(BaseModel):
     legacy_status: str | None = None
     strict_status: str | None = None
     has_date: bool = False
+    # Structural flags of the conversation the text came from (never read for a verdict yet):
+    # the bot sent more than one message, and a message carried buttons or a keyboard.
+    multi_message: bool = False
+    has_markup: bool = False
     first_seen_at: str
     last_seen_at: str
     seen_count: int = Field(default=1, ge=1)

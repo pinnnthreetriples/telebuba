@@ -31,6 +31,7 @@ from api.v1._accounts_qr_login import qr_login_router
 from api.v1._accounts_registered import registered_router
 from api.v1._accounts_scheduled import scheduled_router
 from api.v1._accounts_session_audit import session_audit_router
+from api.v1._accounts_spam_check import spam_check_router
 from api.v1._accounts_twofa import twofa_router
 from api.v1._errors import service_errors_to_http
 from api.v1._uploads import reject_oversized_upload, staged_upload
@@ -50,9 +51,8 @@ from schemas.accounts import (
 from schemas.device_fingerprint import DeviceType  # noqa: TC001 - FastAPI form at runtime
 from schemas.lifecycle import AccountDeleteReasonGuess, DeleteReason
 from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
-from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
-from services import accounts, spam_intel
+from services import accounts
 from services import warming as warming_service
 
 # No router-wide ``responses``: the routes here do NOT share one error surface (a
@@ -140,24 +140,6 @@ async def check_account(body: AccountCheckRequest) -> AccountRead:
     with service_errors_to_http():
         await accounts.require_account(body.account_id)
         return await accounts.check_account_session(body)
-
-
-@router.post(
-    "/accounts/{account_id}/spam-check",
-    response_model=SpamStatusVerdict,
-    operation_id="spamCheckAccount",
-    responses=SERVICE_ERRORS,
-)
-async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
-    """Re-probe @SpamBot for one account within the shared probe budget; return the verdict."""
-    # 404 on a missing row like every sibling route. ``refresh_spam_status`` answers
-    # an uncached ``unknown`` verdict instead of raising, because warming and
-    # neurocomment onboarding call it too and a hard raise there would change cycle
-    # behaviour — so the hard lookup lives here, not in the shared service. Kept out
-    # of the docstring: that text becomes the OpenAPI ``description``.
-    with service_errors_to_http():
-        await accounts.require_account(account_id)
-        return await spam_intel.operator_check(account_id, confirm_out_of_turn=True)
 
 
 @router.post(
@@ -427,6 +409,7 @@ router.include_router(twofa_router)
 router.include_router(passkey_router)
 router.include_router(qr_login_router)
 router.include_router(session_audit_router)
+router.include_router(spam_check_router)
 router.include_router(registered_router)
 router.include_router(bulk_messages_router)
 router.include_router(contact_lookup_router)

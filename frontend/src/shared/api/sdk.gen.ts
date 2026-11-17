@@ -343,6 +343,9 @@ import type {
   GetSessionGuardStatusData,
   GetSessionGuardStatusErrors,
   GetSessionGuardStatusResponses,
+  GetSpamAppealData,
+  GetSpamAppealErrors,
+  GetSpamAppealResponses,
   GetUserParserRunData,
   GetUserParserRunErrors,
   GetUserParserRunResponses,
@@ -451,6 +454,9 @@ import type {
   ListSmsInboxData,
   ListSmsInboxErrors,
   ListSmsInboxResponses,
+  ListSpamAppealsData,
+  ListSpamAppealsErrors,
+  ListSpamAppealsResponses,
   ListUserParserAccountsData,
   ListUserParserAccountsErrors,
   ListUserParserAccountsResponses,
@@ -502,12 +508,18 @@ import type {
   MarkAccountSessionOursData,
   MarkAccountSessionOursErrors,
   MarkAccountSessionOursResponses,
+  MarkSpamAppealFiledData,
+  MarkSpamAppealFiledErrors,
+  MarkSpamAppealFiledResponses,
   OpenAccountMobileData,
   OpenAccountMobileErrors,
   OpenAccountMobileResponses,
   OpenAccountWebData,
   OpenAccountWebErrors,
   OpenAccountWebResponses,
+  OpenSpamAppealWindowData,
+  OpenSpamAppealWindowErrors,
+  OpenSpamAppealWindowResponses,
   PostAccountStoryData,
   PostAccountStoryErrors,
   PostAccountStoryResponses,
@@ -670,6 +682,9 @@ import type {
   SkipNeurocommentPairData,
   SkipNeurocommentPairErrors,
   SkipNeurocommentPairResponses,
+  SpamBudgetStatusData,
+  SpamBudgetStatusErrors,
+  SpamBudgetStatusResponses,
   SpamCheckAccountData,
   SpamCheckAccountErrors,
   SpamCheckAccountResponses,
@@ -931,19 +946,6 @@ export const checkAccount = <ThrowOnError extends boolean = false>(
       'Content-Type': 'application/json',
       ...options.headers,
     },
-  });
-
-/**
- * Spam Check Account
- *
- * Re-probe @SpamBot for one account within the shared probe budget; return the verdict.
- */
-export const spamCheckAccount = <ThrowOnError extends boolean = false>(
-  options: Options<SpamCheckAccountData, ThrowOnError>,
-): RequestResult<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError> =>
-  (options.client ?? client).post<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError>({
-    url: '/api/v1/accounts/{account_id}/spam-check',
-    ...options,
   });
 
 /**
@@ -2138,6 +2140,40 @@ export const markAccountSessionOurs = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Spam Budget Status
+ *
+ * The fleet's @SpamBot probes over the last 24 h against the caps, for the page warning.
+ */
+export const spamBudgetStatus = <ThrowOnError extends boolean = false>(
+  options?: Options<SpamBudgetStatusData, ThrowOnError>,
+): RequestResult<SpamBudgetStatusResponses, SpamBudgetStatusErrors, ThrowOnError> =>
+  (options?.client ?? client).get<SpamBudgetStatusResponses, SpamBudgetStatusErrors, ThrowOnError>({
+    url: '/api/v1/accounts/spam-budget',
+    ...options,
+  });
+
+/**
+ * Spam Check Account
+ *
+ * Re-probe @SpamBot for one account within the shared probe budget; return the verdict.
+ *
+ * Out of turn (the last probe is past the 30-minute window but under a day old) the click is
+ * refused with 409 ``needs_confirmation`` unless ``confirm_out_of_turn`` is true. A held or
+ * refused check answers 200 with ``served_from``, ``reason`` and ``retry_at`` instead.
+ */
+export const spamCheckAccount = <ThrowOnError extends boolean = false>(
+  options: Options<SpamCheckAccountData, ThrowOnError>,
+): RequestResult<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError> =>
+  (options.client ?? client).post<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/spam-check',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
  * Set Account Registered At
  *
  * Set (or clear, with ``null``) when the account was registered in Telegram.
@@ -2656,6 +2692,67 @@ export const accountMobileProgress = <ThrowOnError extends boolean = false>(
     AccountMobileProgressErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/open-mobile/progress', ...options });
+
+/**
+ * List Spam Appeals
+ *
+ * The open appeals of every account, with the time each is re-checked.
+ */
+export const listSpamAppeals = <ThrowOnError extends boolean = false>(
+  options?: Options<ListSpamAppealsData, ThrowOnError>,
+): RequestResult<ListSpamAppealsResponses, ListSpamAppealsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListSpamAppealsResponses, ListSpamAppealsErrors, ThrowOnError>({
+    url: '/api/v1/accounts/spam-appeals',
+    ...options,
+  });
+
+/**
+ * Get Spam Appeal
+ *
+ * What the card shows: the newest appeal (none, open or closed) and its re-check time.
+ */
+export const getSpamAppeal = <ThrowOnError extends boolean = false>(
+  options: Options<GetSpamAppealData, ThrowOnError>,
+): RequestResult<GetSpamAppealResponses, GetSpamAppealErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetSpamAppealResponses, GetSpamAppealErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/spam-appeal',
+    ...options,
+  });
+
+/**
+ * Open Spam Appeal Window
+ *
+ * Open the account's own web window on @SpamBot's dialog (the operator appeals by hand).
+ *
+ * The account's proxy and fingerprint, refused without a proxy exactly like the plain open.
+ * If the dialog does not open, the window is still on Telegram Web and the operator searches
+ * for the bot there.
+ */
+export const openSpamAppealWindow = <ThrowOnError extends boolean = false>(
+  options: Options<OpenSpamAppealWindowData, ThrowOnError>,
+): RequestResult<OpenSpamAppealWindowResponses, OpenSpamAppealWindowErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    OpenSpamAppealWindowResponses,
+    OpenSpamAppealWindowErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/spam-appeal/open', ...options });
+
+/**
+ * Mark Spam Appeal Filed
+ *
+ * Record that the signed-in operator filed the appeal by hand.
+ *
+ * Nothing is inferred from the window. A second press while the appeal is open changes
+ * nothing; a clean account has no block to appeal (400).
+ */
+export const markSpamAppealFiled = <ThrowOnError extends boolean = false>(
+  options: Options<MarkSpamAppealFiledData, ThrowOnError>,
+): RequestResult<MarkSpamAppealFiledResponses, MarkSpamAppealFiledErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    MarkSpamAppealFiledResponses,
+    MarkSpamAppealFiledErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/spam-appeal/filed', ...options });
 
 /**
  * List Proxies

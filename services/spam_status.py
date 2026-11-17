@@ -16,15 +16,15 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from core.config import settings
 from core.db import fetch_account, get_spam_status, upsert_spam_status
 from core.logging import log_event
 from core.repositories.device_fingerprint import list_device_fingerprints_by_ids
 from core.repositories.spam_reply_samples import upsert_reply_sample
-from core.telegram_client import check_spam_status
-from schemas.spam_intel import ReplySample
+from core.telegram_client import check_spam_status, converse_spam_status
+from schemas.spam_intel import ReplySample, SampleStructure
 from schemas.spam_status import (
     ProbeOutcome,
     SpamStatusKind,
@@ -34,6 +34,7 @@ from schemas.spam_status import (
 from services._spam_parse import (
     classify_legacy,
     classify_strict,
+    classify_transcript,
     find_date,
     redact_reply,
     reply_hash,
@@ -41,20 +42,37 @@ from services._spam_parse import (
 from services.lifecycle_journal import record_lifecycle_event
 from services.spam_block_lift import lift_on_clean
 
+if TYPE_CHECKING:
+    from schemas.spam_probe import HumanProbePlan
+
 logger = logging.getLogger(__name__)
 
 _SECONDS_PER_HOUR = 3600
+_Reading = tuple[SpamStatusKind, str | None]
 
 
 def classify_spam_probe(probe: SpamStatusProbe) -> tuple[SpamStatusKind, str | None]:
     """Map a raw probe to a (status, detail) verdict.
 
     The strict classifier when ``SPAM_INTEL__STRICT_PARSER`` is on (a reply nothing
-    recognised is ``unknown``), the pre-gateway one otherwise.
+    recognised is ``unknown``), the pre-gateway one otherwise. A probe that came from the
+    human-like conversation (``n_messages`` > 0) is read as a transcript: every message, any
+    limited one decides (``_spam_parse.classify_transcript``).
     """
-    if settings.spam_intel.strict_parser:
-        return classify_strict(probe)
-    return classify_legacy(probe)
+    strict = settings.spam_intel.strict_parser
+    if probe.n_messages:
+        return classify_transcript(probe.texts, strict=strict)
+    return classify_strict(probe) if strict else classify_legacy(probe)
+
+
+def _compare(probe: SpamStatusProbe) -> tuple[_Reading, _Reading]:
+    """What the legacy and the strict classifier each make of this probe."""
+    if probe.n_messages:
+        return (
+            classify_transcript(probe.texts, strict=False),
+            classify_transcript(probe.texts, strict=True),
+        )
+    return classify_legacy(probe), classify_strict(probe)
 
 
 def is_reading_fresh(checked_at: str, now: datetime) -> bool:
@@ -72,11 +90,13 @@ def is_reading_fresh(checked_at: str, now: datetime) -> bool:
 
 
 async def _observe_reply(account_id: str, probe: SpamStatusProbe, now: datetime) -> None:
-    """Shadow-compare the two classifiers and keep a redacted sample; never fails the probe."""
-    if probe.error or not (probe.reply_text or "").strip():
+    """Shadow-compare the two classifiers and keep redacted samples; never fails the probe."""
+    texts = probe.texts if probe.n_messages else [probe.reply_text or ""]
+    texts = [text for text in texts if text.strip()]
+    if probe.error or not texts:
         return
     intel = settings.spam_intel
-    legacy, strict = classify_legacy(probe), classify_strict(probe)
+    legacy, strict = _compare(probe)
     try:
         if not intel.strict_parser and intel.parser_shadow and legacy[0] != strict[0]:
             await log_event(
@@ -86,7 +106,16 @@ async def _observe_reply(account_id: str, probe: SpamStatusProbe, now: datetime)
                 extra={"legacy": legacy[0], "strict": strict[0], "strict_detail": strict[1]},
             )
         if intel.sample_capture:
-            await store_reply_sample(account_id, probe.reply_text or "", "probe", now)
+            for text in texts:
+                await store_reply_sample(
+                    account_id,
+                    text,
+                    "probe",
+                    now,
+                    SampleStructure(
+                        multi_message=probe.n_messages > 1, has_markup=probe.has_markup
+                    ),
+                )
     except Exception as exc:  # noqa: BLE001 - observation must never fail a probe.
         logger.warning("spam reply observation failed: %s", type(exc).__name__, exc_info=exc)
 
@@ -96,8 +125,13 @@ async def store_reply_sample(
     text: str,
     source: Literal["probe", "history"],
     now: datetime,
+    structure: SampleStructure | None = None,
 ) -> None:
-    """Keep one reply of @SpamBot, redacted, with what each classifier makes of it."""
+    """Keep one reply of @SpamBot, redacted, with what each classifier makes of it.
+
+    ``structure``: the flags of the conversation the text came from (the bot sent more than one
+    message; a message carried buttons). A history read has none.
+    """
     account = await fetch_account(account_id)
     names = (
         [account.first_name, account.last_name, account.username, account.phone]
@@ -119,6 +153,8 @@ async def store_reply_sample(
             legacy_status=classify_legacy(probe)[0],
             strict_status=classify_strict(probe)[0],
             has_date=find_date(redacted) is not None,
+            multi_message=structure.multi_message if structure else False,
+            has_markup=structure.has_markup if structure else False,
             first_seen_at=stamp,
             last_seen_at=stamp,
         ),
@@ -130,8 +166,13 @@ async def probe_and_store(
     account_id: str,
     *,
     previous: SpamStatusVerdict | None = None,
+    plan: HumanProbePlan | None = None,
 ) -> ProbeOutcome:
     """Ask @SpamBot now, classify, persist, journal, lift — no cache check, no budget.
+
+    ``plan``: the pauses of the human-like conversation (the gateway draws one when
+    ``SPAM_INTEL__HUMAN_SEQUENCE`` is on). Without it the single ``/start`` probe asks, as
+    before.
 
     A probe that never reached the bot returns an ``unknown`` for the caller only, with
     ``error`` set: caching it would serve it as fresh for ``spam_status_ttl_hours`` (36 h by
@@ -140,7 +181,11 @@ async def probe_and_store(
     rather than opening it.
     """
     now = datetime.now(UTC)
-    probe = await check_spam_status(account_id)
+    probe = (
+        await check_spam_status(account_id)
+        if plan is None
+        else await converse_spam_status(account_id, plan)
+    )
     status, detail = classify_spam_probe(probe)
     await _observe_reply(account_id, probe, now)
     if probe.error:

@@ -154,6 +154,20 @@ async def spam_verdict(account_id: str) -> SpamStatusKind | Literal["deferred"]:
     return verdict.status
 
 
+async def known_spam_status(account_id: str) -> SpamStatusKind:
+    """What is ALREADY known about the account's spam status: no Telegram, no probe.
+
+    The stored reading as every decision reader sees it (``spam_intel.decision_status``): a dated
+    limit that has ended reads ``unknown``, a fold that says ``limited`` reads ``limited`` when
+    passive decisions are on. An account nobody has read reads ``unknown``, which never rests it.
+    """
+    from core.db import get_spam_status  # noqa: PLC0415 - import cycle
+    from services.spam_intel import decision_status  # noqa: PLC0415 - import cycle
+
+    view = await decision_status(account_id, await get_spam_status(account_id))
+    return "unknown" if view is None else view.status
+
+
 def now() -> int:
     """Unix seconds — the engine's one clock, so tests can move it."""
     return int(time.time())
@@ -170,6 +184,7 @@ __all__ = [
     "execute_read",
     "generate_text",
     "generate_text_deepseek",
+    "known_spam_status",
     "now",
     "rng",
     "run_scope",

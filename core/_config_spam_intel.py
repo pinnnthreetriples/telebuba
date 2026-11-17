@@ -7,10 +7,23 @@ budget. A change takes effect after a restart; nothing needs a deploy.
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# (min, max) field pairs of the Stage 3 ranges: each minimum must not exceed its maximum.
+_RANGES = tuple(
+    (f"{name}_min_seconds", f"{name}_max_seconds")
+    for name in (
+        "human_pre_open",
+        "human_open_to_typing",
+        "human_typing",
+        "human_quiet",
+        "human_read_delay",
+        "live_session_delay",
+    )
+)
 
 
 class SpamIntelSettings(BaseSettings):
@@ -54,6 +67,9 @@ class SpamIntelSettings(BaseSettings):
     # probe must be for the click to need the operator's confirmation.
     operator_daily_cap: int = Field(default=3, ge=1)
     out_of_turn_hours: float = Field(default=24.0, ge=0.0)
+    # The Accounts page warns when the operator's own checks (out of turn or not) over the last
+    # 24 h reach this many across the fleet; the fleet's probes at the soft cap warn too.
+    out_of_turn_warn_count: int = Field(default=5, ge=1)
     # After an unreadable answer or a failure: this long, doubling per consecutive
     # failure up to the cap (6, 12, 24, 48 h by default).
     backoff_base_hours: float = Field(default=6.0, gt=0.0)
@@ -63,6 +79,34 @@ class SpamIntelSettings(BaseSettings):
     startup_quiet_minutes: float = Field(default=10.0, ge=0.0)
     # A busy account (another feature runs on it) is asked again after this long.
     busy_retry_minutes: float = Field(default=10.0, gt=0.0)
+
+    # The probe as a person (Stage 3, design 5.7). ``human_sequence``: ask @SpamBot by opening
+    # the dialog, pausing, "typing", pausing, sending ``/start``, collecting EVERY message of
+    # the bot until it has been quiet for a while, pausing and marking the dialog read. Off: the
+    # single ``/start`` probe as before. Each pause is drawn from its range (seconds) per probe.
+    human_sequence: bool = False
+    human_pre_open_min_seconds: float = Field(default=1.0, ge=0.0)
+    human_pre_open_max_seconds: float = Field(default=4.0, ge=0.0)
+    human_open_to_typing_min_seconds: float = Field(default=2.0, ge=0.0)
+    human_open_to_typing_max_seconds: float = Field(default=6.0, ge=0.0)
+    human_typing_min_seconds: float = Field(default=1.0, ge=0.0)
+    human_typing_max_seconds: float = Field(default=3.0, ge=0.0)
+    # How long to wait for the bot's FIRST message, and how long without a further one ends
+    # the collection.
+    human_reply_wait_seconds: float = Field(default=30.0, gt=0.0)
+    human_quiet_min_seconds: float = Field(default=8.0, gt=0.0)
+    human_quiet_max_seconds: float = Field(default=15.0, gt=0.0)
+    human_read_delay_min_seconds: float = Field(default=1.0, ge=0.0)
+    human_read_delay_max_seconds: float = Field(default=5.0, ge=0.0)
+    # Inside a live session (Stage 3, design 5.7). On: a ROUTINE or DECISION ask for an account
+    # whose pooled client is already connected is served a jittered moment into that session
+    # (this range, seconds); a ROUTINE ask for an account with no live client is deferred (asked
+    # again after ``live_session_retry_minutes``) instead of connecting it just to probe. A
+    # DECISION, MEASUREMENT or operator ask still connects. Off: probes at the caller's moment.
+    live_session_embedding: bool = False
+    live_session_delay_min_seconds: float = Field(default=15.0, ge=0.0)
+    live_session_delay_max_seconds: float = Field(default=120.0, ge=0.0)
+    live_session_retry_minutes: float = Field(default=30.0, gt=0.0)
 
     # Passive evidence (Stage 2). ``passive_signals``: record what the accounts' normal work
     # shows (PeerFlood, freeze, a delivered first message) and fold it into a projection that
@@ -88,6 +132,20 @@ class SpamIntelSettings(BaseSettings):
     routine_mid_after_clean: int = Field(default=3, ge=1)
     routine_long_after_clean: int = Field(default=5, ge=1)
 
+    # The semi-automatic appeal of a spam block (design 5.12): a HUMAN files it in the account's
+    # own Telegram Web window. ``appeal_recheck_hours``: how long after the operator says it was
+    # filed an open-ended limit is asked about again (a dated one: its end day plus up to
+    # ``appeal_recheck_jitter_hours``), as an ordinary decision under the shared budget.
+    # ``appeal_scan_minutes``: how often the recheck loop looks for due appeals.
+    appeal_recheck_hours: float = Field(default=24.0, gt=0.0)
+    appeal_recheck_jitter_hours: float = Field(default=4.0, ge=0.0)
+    appeal_scan_minutes: float = Field(default=10.0, gt=0.0)
+    # Which address opens the @SpamBot dialog in the web window: ``hash`` is WebK's own deep
+    # link (``/k/#@SpamBot``), ``tgaddr`` the form Telegram's ``tg://`` links use. Neither is
+    # verified live yet (docs/spam-intel.md D8): flipping this needs no code change. If the dialog
+    # does not open, the window still opens on WebK and the operator searches the bot by hand.
+    appeal_dialog_target: Literal["hash", "tgaddr"] = "hash"
+
     # Ledger and sample bounds.
     attempts_retention_days: int = Field(default=90, ge=1)
     attempts_max_rows: int = Field(default=5000, ge=100)
@@ -111,4 +169,8 @@ class SpamIntelSettings(BaseSettings):
         if self.backoff_base_hours > self.backoff_max_hours:
             msg = "backoff_base_hours must not exceed backoff_max_hours"
             raise ValueError(msg)
+        for low, high in _RANGES:
+            if getattr(self, low) > getattr(self, high):
+                msg = f"{low} must not exceed {high}"
+                raise ValueError(msg)
         return self

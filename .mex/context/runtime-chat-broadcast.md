@@ -50,7 +50,7 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
 - The AI rewrite is an embellishment, never a gate: any failure or unsafe answer sends
   the operator's text.
 - An account Telegram stops is rested, not lost (`services/chat_broadcast/_rotation.py`):
-  a flood wait, its own limit or a spam block rests it until a known moment, a waker
+  a flood wait, its own limit or a spam block (known too) rests it until a known moment, a waker
   brings it back, and its chats stay, are handed over or are all handed over by the
   length of the rest. A ban is asked to @SpamBot at once: a clean account loses only
   that chat, moved once (skipped when it bans a second account); only a ban @SpamBot

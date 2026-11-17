@@ -32,6 +32,9 @@ if TYPE_CHECKING:
 _TOKEN = "123456:AAH-secret_token_value_abcdefXYZ"
 _VERDICT = "spam_intel_verdict_changed"
 
+# The fixed appeal hint the ``spam_limited`` message ends with.
+_APPEAL_HINT = "Апелляцию подаёте вы сами: на карточке аккаунта кнопка «Подать апелляцию»."
+
 
 class _Bot:
     def __init__(self) -> None:
@@ -137,7 +140,20 @@ def test_a_dated_limit_names_the_day_and_the_source() -> None:
     notice = SpamNotice(until=date(2026, 10, 29), source="@SpamBot")
     text = compose_message("spam_limited", "Анна (@anna_w)", notice)
     expected = "Telebuba · Анна (@anna_w): аккаунт ограничен за спам — до 29.10.2026."
-    assert text == f"{expected} Источник: @SpamBot."
+    assert text == f"{expected} Источник: @SpamBot. {_APPEAL_HINT}"
+
+
+def test_the_limit_message_points_to_the_appeal_button_and_says_the_operator_files_it() -> None:
+    """Design 5.12: the program opens the window; a human appeals. A fixed text, no reply quoted."""
+    for notice in (
+        SpamNotice(until=date(2026, 10, 29), source="@SpamBot"),
+        SpamNotice(until=None, source="PeerFlood"),
+        None,
+    ):
+        text = compose_message("spam_limited", "Анна", notice)
+        assert text.endswith(_APPEAL_HINT)
+    assert "Подать апелляцию" in _APPEAL_HINT
+    assert "сами" in _APPEAL_HINT
 
 
 def test_an_undated_limit_says_open_ended() -> None:
@@ -168,7 +184,7 @@ async def test_a_passive_limit_sends_the_day_and_the_source_from_the_enum(bot: _
     )
     assert [m.text for m in bot.sent] == [
         "Telebuba · Анна (@anna_w): аккаунт ограничен за спам — до 29.10.2026. "
-        "Источник: PeerFlood при отправке."
+        f"Источник: PeerFlood при отправке. {_APPEAL_HINT}"
     ]
 
 
@@ -198,7 +214,7 @@ async def test_the_spambot_reading_path_names_the_date_it_parsed_from_the_reply(
         )
     )
     (message,) = bot.sent
-    assert message.text.endswith("до 29.10.2026. Источник: @SpamBot.")
+    assert message.text.endswith(f"до 29.10.2026. Источник: @SpamBot. {_APPEAL_HINT}")
     assert "Contact the admin" not in message.text
 
 

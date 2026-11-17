@@ -66,7 +66,12 @@ import {
   ProfileModal,
   ProxyAddModal,
 } from '@/widgets/account-edit';
-import { AccountsTable, DeleteAccountModal, type DeleteReason } from '@/widgets/accounts-table';
+import {
+  AccountsTable,
+  DeleteAccountModal,
+  type DeleteReason,
+  SpamBudgetWarning,
+} from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
 
 import { MobileOpenDialog, type MobileOutcome } from './MobileOpenDialog';
@@ -493,6 +498,8 @@ export function AccountsPage() {
       </div>
 
       <StatGrid stats={stats} className="mb-4" />
+
+      <SpamBudgetWarning />
 
       <div
         ref={panelRef}

@@ -299,6 +299,8 @@ _account_spam_status = Table(
     Column("tos_restricted", Integer, nullable=True),
     Column("tos_reason", String, nullable=True),
     Column("folded_at", String, nullable=True),
+    # When the deciding observation was made (migration 119, additive; the card's source line).
+    Column("primary_observed_at", String, nullable=True),
 )
 _users = Table(
     "users",

@@ -20,7 +20,7 @@ from core.repositories import chat_broadcast as repository
 from core.telegram_client import TelegramReadError
 from schemas.telegram_action_results import ReadChatMessagesResult
 from schemas.telegram_actions import ReadChatMessages
-from services.chat_broadcast import _join, _moves, _schedule, _seams, _send
+from services.chat_broadcast import _join, _moves, _rotation, _schedule, _seams, _send
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -62,7 +62,11 @@ async def work(ctx: RunContext, account_id: str) -> WorkerOutcome:
         if not due:
             await _seams.sleep(_idle(ctx, targets, account_id, now))
             continue
-        step = await handle(ctx, account_id, due[0])
+        # Before it joins or writes anything: a block it is already known to carry is not to be
+        # discovered by sending (design 5.12), so it rests like a PeerFlood would rest it.
+        step = await _rotation.rest_known_block(ctx, account_id, due[0]) or await handle(
+            ctx, account_id, due[0]
+        )
         if step == "halted" or step == "resting" or step == "volume":  # noqa: PLR1714 - narrows for ty
             return step
         # "idle" moved nothing worth a pause, but must still yield: a chat whose state

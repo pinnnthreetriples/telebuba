@@ -67,6 +67,8 @@ _spam_reply_samples = Table(
     Column("legacy_status", String, nullable=True),
     Column("strict_status", String, nullable=True),
     Column("has_date", Integer, nullable=False, server_default=text("0")),
+    Column("multi_message", Integer, nullable=False, server_default=text("0")),
+    Column("has_markup", Integer, nullable=False, server_default=text("0")),
     Column("first_seen_at", String, nullable=False),
     Column("last_seen_at", String, nullable=False),
     Column("seen_count", Integer, nullable=False, server_default=text("1")),

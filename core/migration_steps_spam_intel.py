@@ -57,6 +57,10 @@ _STATEMENTS = (
     " legacy_status VARCHAR,"
     " strict_status VARCHAR,"
     " has_date INTEGER DEFAULT 0 NOT NULL,"
+    # The two flags below came with migration 118 (``migration_steps_spam_sample_flags``); a
+    # database that reaches 114 now gets them here, one that was already past it gets them there.
+    " multi_message INTEGER DEFAULT 0 NOT NULL,"
+    " has_markup INTEGER DEFAULT 0 NOT NULL,"
     " first_seen_at VARCHAR NOT NULL,"
     " last_seen_at VARCHAR NOT NULL,"
     " seen_count INTEGER DEFAULT 1 NOT NULL,"

@@ -31,11 +31,12 @@ from schemas.accounts import (
     AccountStatus,
     health_for_status,
 )
-from services.spam_intel import decision_statuses
+from services.spam_intel import card_signals, decision_statuses
 from services.trust import account_trust_score_from
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
+    from schemas.spam_card import SpamCardSignals
 
 # Design stat-tile buckets (mirror the SPA's accountDesignStatus). Everything not
 # listed here falls into "problem" — the banned/frozen/errored catch-all.
@@ -148,6 +149,7 @@ async def _attach_signals(accounts: list[AccountRead]) -> None:
     floods = await list_warming_flood_summaries()
     foreign = await list_foreign_session_counts()
     passkeys = await list_passkey_account_ids()
+    cards = await card_signals([account.account_id for account in accounts])
     now = datetime.now(UTC)
     for account in accounts:
         account.foreign_sessions = foreign.get(account.account_id)
@@ -167,8 +169,33 @@ async def _attach_signals(accounts: list[AccountRead]) -> None:
         if spam is not None:
             account.spam_status = spam.status
             account.spam_detail = spam.detail
+        _attach_spam_card(account, cards.get(account.account_id))
         if fingerprint is not None:
             account.device_lang = fingerprint.system_lang_code
+
+
+def _iso(moment: datetime | None) -> str | None:
+    return None if moment is None else moment.isoformat()
+
+
+def _attach_spam_card(account: AccountRead, card: SpamCardSignals | None) -> None:
+    """Copy the card's spam signals onto the row (instants as ISO text like its other fields)."""
+    if card is None:
+        return
+    account.spam_verdict = card.verdict
+    account.spam_confidence = card.confidence
+    account.spam_source = card.source
+    account.spam_observed_at = _iso(card.observed_at)
+    account.spam_valid_until = _iso(card.valid_until)
+    account.spam_next_probe_at = _iso(card.next_probe_at)
+    account.spam_last_probe_at = _iso(card.last_probe_at)
+    account.spam_probes_7d = card.probes_7d
+    account.spam_out_of_turn = card.out_of_turn
+    account.spam_tos_restricted = card.tos_restricted
+    account.spam_tos_reason = card.tos_reason
+    account.spam_appeal_status = card.appeal_status
+    account.spam_appeal_filed_at = _iso(card.appeal_filed_at)
+    account.spam_appeal_filed_by = card.appeal_filed_by
 
 
 async def list_listener_accounts() -> AccountList:

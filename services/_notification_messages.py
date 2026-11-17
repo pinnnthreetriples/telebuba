@@ -49,8 +49,12 @@ _PREFIX = "Telebuba · "
 _TEMPLATES: dict[NotificationKind, str] = {
     "quarantine": "{label}: спам-блок (PeerFlood), аккаунт на карантине прогрева.",
     "fleet_dm_paused": "Прогрев: личные сообщения между аккаунтами приостановлены для всего парка.",
-    # ``{until}`` is "до 29.10.2026" or "бессрочно"; ``{source}`` is " Источник: ..." or empty.
-    "spam_limited": "{label}: аккаунт ограничен за спам — {until}.{source}",
+    # ``{until}`` is "до 29.10.2026" or "бессрочно"; ``{source}`` is " Источник: ..." or empty. The
+    # last sentence is the appeal hint (design 5.12): a fixed text, the operator appeals by hand.
+    "spam_limited": (
+        "{label}: аккаунт ограничен за спам — {until}.{source} "
+        "Апелляцию подаёте вы сами: на карточке аккаунта кнопка «Подать апелляцию»."
+    ),
     "account_frozen": (
         "{label}: Telegram заморозил аккаунт — сообщения и вступления с него недоступны, "
         "пока заморозка не снята. Проверьте аккаунт в приложении Telegram."

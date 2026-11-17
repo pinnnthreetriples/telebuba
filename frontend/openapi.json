@@ -738,117 +738,6 @@
         }
       }
     },
-    "/api/v1/accounts/{account_id}/spam-check": {
-      "post": {
-        "tags": [
-          "accounts"
-        ],
-        "summary": "Spam Check Account",
-        "description": "Re-probe @SpamBot for one account within the shared probe budget; return the verdict.",
-        "operationId": "spamCheckAccount",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
-              "title": "Account Id"
-            }
-          },
-          {
-            "name": "tb_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tb Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpamStatusVerdict"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request validation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request, or Telegram refused the action",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Upstream gateway unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/accounts/{account_id}/open-web": {
       "post": {
         "tags": [
@@ -8992,6 +8881,214 @@
         }
       }
     },
+    "/api/v1/accounts/spam-budget": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Spam Budget Status",
+        "description": "The fleet's @SpamBot probes over the last 24 h against the caps, for the page warning.",
+        "operationId": "spamBudgetStatus",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpamBudgetStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/spam-check": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Spam Check Account",
+        "description": "Re-probe @SpamBot for one account within the shared probe budget; return the verdict.\n\nOut of turn (the last probe is past the 30-minute window but under a day old) the click is\nrefused with 409 ``needs_confirmation`` unless ``confirm_out_of_turn`` is true. A held or\nrefused check answers 200 with ``served_from``, ``reason`` and ``retry_at`` instead.",
+        "operationId": "spamCheckAccount",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SpamCheckRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpamCheckResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/{account_id}/registered-at": {
       "put": {
         "tags": [
@@ -12197,6 +12294,409 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/spam-appeals": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "List Spam Appeals",
+        "description": "The open appeals of every account, with the time each is re-checked.",
+        "operationId": "listSpamAppeals",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpamAppealList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/spam-appeal": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Spam Appeal",
+        "description": "What the card shows: the newest appeal (none, open or closed) and its re-check time.",
+        "operationId": "getSpamAppeal",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpamAppealState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/spam-appeal/open": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Open Spam Appeal Window",
+        "description": "Open the account's own web window on @SpamBot's dialog (the operator appeals by hand).\n\nThe account's proxy and fingerprint, refused without a proxy exactly like the plain open.\nIf the dialog does not open, the window is still on Telegram Web and the operator searches\nfor the bot there.",
+        "operationId": "openSpamAppealWindow",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenWebResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/spam-appeal/filed": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Mark Spam Appeal Filed",
+        "description": "Record that the signed-in operator filed the appeal by hand.\n\nNothing is inferred from the window. A second press while the appeal is open changes\nnothing; a clean account has no block to appeal (400).",
+        "operationId": "markSpamAppealFiled",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpamAppealState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -26555,6 +27055,184 @@
             ],
             "title": "Spam Detail"
           },
+          "spam_verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "clean",
+                  "limited",
+                  "unknown",
+                  "frozen"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Verdict"
+          },
+          "spam_confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Confidence"
+          },
+          "spam_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "spambot",
+                  "peer_flood",
+                  "chat_ban",
+                  "freeze",
+                  "none"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Source"
+          },
+          "spam_observed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Observed At"
+          },
+          "spam_valid_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Valid Until"
+          },
+          "spam_next_probe_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Next Probe At"
+          },
+          "spam_last_probe_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Last Probe At"
+          },
+          "spam_probes_7d": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Probes 7D"
+          },
+          "spam_out_of_turn": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Out Of Turn"
+          },
+          "spam_tos_restricted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Tos Restricted"
+          },
+          "spam_tos_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Tos Reason"
+          },
+          "spam_appeal_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "open",
+                  "closed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Appeal Status"
+          },
+          "spam_appeal_filed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Appeal Filed At"
+          },
+          "spam_appeal_filed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Appeal Filed By"
+          },
           "foreign_sessions": {
             "anyOf": [
               {
@@ -38421,7 +39099,196 @@
         "title": "SolverToggleRequest",
         "description": "Turn the per-campaign challenge (captcha) solver on/off."
       },
-      "SpamStatusVerdict": {
+      "SpamAppealList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SpamAppealState"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SpamAppealList",
+        "description": "The open appeals of every account (one query, for the accounts table)."
+      },
+      "SpamAppealState": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "default": "none"
+          },
+          "filed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filed At"
+          },
+          "filed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filed By"
+          },
+          "filed_verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "clean",
+                  "limited",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filed Verdict"
+          },
+          "filed_until_day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filed Until Day"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "spambot_clean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By Kind"
+          },
+          "recheck_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recheck At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "SpamAppealState",
+        "description": "What the account card shows about the appeal; one value per account."
+      },
+      "SpamBudgetStatus": {
+        "properties": {
+          "probes_24h": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Probes 24H"
+          },
+          "soft_cap": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Soft Cap"
+          },
+          "hard_cap": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Hard Cap"
+          },
+          "out_of_turn_24h": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Out Of Turn 24H"
+          },
+          "out_of_turn_warn_at": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Out Of Turn Warn At"
+          },
+          "daily_cap_reached": {
+            "type": "boolean",
+            "title": "Daily Cap Reached"
+          },
+          "out_of_turn_warned": {
+            "type": "boolean",
+            "title": "Out Of Turn Warned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "probes_24h",
+          "soft_cap",
+          "hard_cap",
+          "out_of_turn_24h",
+          "out_of_turn_warn_at",
+          "daily_cap_reached",
+          "out_of_turn_warned"
+        ],
+        "title": "SpamBudgetStatus",
+        "description": "The fleet's probe use over the last 24 h against its caps, for the Accounts page warning.\n\n``daily_cap_reached``: ``probes_24h`` is at or past the soft cap (routine probes now wait;\nat the hard cap nothing goes). ``out_of_turn_warned``: the operator's own checks in the\nwindow are at or past ``out_of_turn_warn_at`` (an out-of-turn check is an operator click\non an account probed less than a day ago)."
+      },
+      "SpamCheckRequest": {
+        "properties": {
+          "confirm_out_of_turn": {
+            "type": "boolean",
+            "title": "Confirm Out Of Turn",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SpamCheckRequest",
+        "description": "Body of ``POST /accounts/{id}/spam-check`` (every field optional: no body = defaults).\n\n``confirm_out_of_turn``: the operator confirmed a check while the last probe is under\n``out_of_turn_hours`` old. Without it such a click is refused with ``needs_confirmation``."
+      },
+      "SpamCheckResult": {
         "properties": {
           "account_id": {
             "type": "string",
@@ -38496,6 +39363,7 @@
                   "fleet_hard_cap",
                   "busy",
                   "startup_quiet",
+                  "no_live_session",
                   "account_missing",
                   "account_not_alive",
                   "no_proxy",
@@ -38508,6 +39376,22 @@
               }
             ],
             "title": "Reason"
+          },
+          "probed": {
+            "type": "boolean",
+            "title": "Probed",
+            "default": false
+          },
+          "next_allowed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Allowed At"
           }
         },
         "type": "object",
@@ -38516,8 +39400,8 @@
           "status",
           "checked_at"
         ],
-        "title": "SpamStatusVerdict",
-        "description": "Parsed, cacheable spam-status verdict for one account.\n\nThe last three fields are never stored: the gateway fills them on an answer so the\ncaller can tell \"not asked, the budget says later\" (``deferred``, ``retry_at``) and\n\"will not be asked\" (``refused``, ``reason``) from a reading that came back\nunreadable. ``None`` everywhere means a plain stored reading, as before the gateway."
+        "title": "SpamCheckResult",
+        "description": "The Spam-check answer: the verdict, how it was served and when to ask again.\n\n``probed``: a real question went to @SpamBot just now (``served_from == \"probe\"``).\n``next_allowed_at``: the earliest instant another probe of the account may go out, an ISO\ninstant, or ``None`` when it may now. For a ``deferred`` / ``refused`` answer see\n``retry_at`` and ``reason``."
       },
       "StandaloneEmulatorCreate": {
         "properties": {

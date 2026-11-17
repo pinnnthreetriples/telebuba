@@ -120,6 +120,7 @@ def _limited(
         confidence=bucket(value),
         valid_until=_ending([item for item, _ in limited]),
         primary_kind=decider.kind,
+        primary_observed_at=decider.observed_at,
         needs_probe=reason is not None,
         contradiction=contradiction,
         reason=reason,
@@ -132,6 +133,7 @@ def _clean(cleans: list[_Scored]) -> Verdict:
         status="clean",
         confidence=bucket(value),
         primary_kind=decider.kind,
+        primary_observed_at=decider.observed_at,
         reason="stale" if value < STALE_BELOW else None,
     )
 
@@ -188,7 +190,12 @@ def fold(evidence: Iterable[Evidence], now: datetime, cfg: SpamIntelSettings) ->
         ),
         "weights_used": {item.kind: KIND_POLICY[item.kind].base for item in items},
     }
-    if _open(items, "freeze_seen", "freeze_cleared"):
-        base = Verdict(status="frozen", confidence="high", primary_kind="freeze_seen")
+    if freezes := _open(items, "freeze_seen", "freeze_cleared"):
+        base = Verdict(
+            status="frozen",
+            confidence="high",
+            primary_kind="freeze_seen",
+            primary_observed_at=max(item.observed_at for item in freezes),
+        )
         return base.model_copy(update={**flags, "reason": "frozen"})
     return _spam_verdict(items, now, cfg).model_copy(update=flags)

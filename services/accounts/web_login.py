@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from core.db import fetch_account_proxy_settings
 from core.web_login import (
@@ -56,6 +56,7 @@ from services.accounts._web_errors import (
 from services.accounts._web_identity import launch_dressed
 from services.accounts._web_passkey import web_passkey_signer
 from services.accounts._web_proxy_probe import probe_exit_country
+from services.accounts._web_target import WebTarget, navigate_quietly, target_url
 from services.accounts._web_watch import cancel_watchers, watch_window
 
 if TYPE_CHECKING:
@@ -68,6 +69,7 @@ __all__ = [
     "OpenWebResult",
     "WebLoginLaunchError",
     "WebLoginServiceError",
+    "WebTarget",
     "open_account_web",
     "shutdown_web_login",
 ]
@@ -112,7 +114,7 @@ async def _account_open_lock(account_id: str) -> asyncio.Lock:
         return lock
 
 
-async def open_account_web(account_id: str) -> OpenWebResult:
+async def open_account_web(account_id: str, *, target: WebTarget | None = None) -> OpenWebResult:
     """Open (or raise) a signed-in web.telegram.org window for ``account_id``.
 
     Requires a proxy: the browser must reach Telegram through the account's own exit,
@@ -120,7 +122,13 @@ async def open_account_web(account_id: str) -> OpenWebResult:
     the window is launched wearing the account's fingerprint. Either way a profile that
     has never signed in gets the QR login driven into it, and the result says whether
     the account is actually signed in — an opened window is not a completed login.
+
+    ``target`` names where the window should stand: a new window launches on that address, a
+    signed-in one that is already open is raised and navigated to it (one ``Page.navigate``). A
+    window whose login is still being driven is never navigated mid-login. Same proxy, same
+    fingerprint, same refusal without a proxy as ever.
     """
+    start_url = target_url(target)
     proxy = await fetch_account_proxy_settings(account_id)
     if proxy is None:
         raise NoProxyForWebLoginError(_NO_PROXY_REFUSAL)
@@ -134,20 +142,21 @@ async def open_account_web(account_id: str) -> OpenWebResult:
             await _kill_registered_window(account_id)
         window = await _raise_open_window(account_id)
         if window is not None:
-            reused = await _reuse_raised_window(account_id, window, profile)
+            reused = await _reuse_raised_window(account_id, window, profile, start_url)
             if reused is not None:
                 return reused
         if _closing.is_set():
             raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
         country = await probe_exit_country(account_id, proxy)
         relay_port = await _relay_port_for(account_id, proxy)
-        return await _launch(account_id, relay_port, profile, proxy, country)
+        return await _launch(account_id, relay_port, profile, proxy, country, start_url)
 
 
 async def _reuse_raised_window(
     account_id: str,
     window: WebWindow,
     profile: Path,
+    start_url: str | None = None,
 ) -> OpenWebResult | None:
     """What a raised window may claim; ``None`` means it was dropped — relaunch.
 
@@ -165,6 +174,8 @@ async def _reuse_raised_window(
     if not profile_is_seeded(profile):
         return await _drive_and_mark(account_id, window, profile)
     if await still_signed_in(window):
+        if start_url is not None:
+            await navigate_quietly(window, start_url)
         return OpenWebResult(launched=True, signed_in=True)
     # The stored session is gone. This window was launched WITHOUT the QR capture hook
     # (a seeded profile must not accept a second token) so it cannot be driven; forget
@@ -282,17 +293,21 @@ async def _relay_port_for(account_id: str, proxy: ProxySettings) -> int:
     raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
 
 
-async def _spawn(
+async def _spawn(  # noqa: PLR0913 - the open's own context, passed once.
     account_id: str,
     relay_port: int,
     profile: Path,
     country: str | None,
     *,
     capture: bool,
+    start_url: str | None = None,
 ) -> WebWindow:
     """Launch a window wearing the account's fingerprint and register it."""
     signer = await web_passkey_signer(account_id)
-    extra = {} if signer is None else {"passkey_signer": signer}
+    # Only what was asked for is passed, so a plain open launches exactly as it always did.
+    options: dict[str, Any] = {} if signer is None else {"passkey_signer": signer}
+    if start_url is not None:
+        options["start_url"] = start_url
     try:
         # Inside the try: resolving the identity reads the INSTALLED browser (its build
         # and its brand), so "no browser" surfaces here as the same fixed refusal the
@@ -305,7 +320,7 @@ async def _spawn(
                 profile_dir=profile,
                 fingerprint=fingerprint,
                 capture_tokens=capture,
-                **extra,
+                **options,
             ),
         )
     except NotImplementedError as exc:
@@ -337,8 +352,13 @@ async def _spawn(
     raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
 
 
-async def _launch(
-    account_id: str, relay_port: int, profile: Path, proxy: ProxySettings, country: str | None
+async def _launch(  # noqa: PLR0913 - the open's own context, passed once.
+    account_id: str,
+    relay_port: int,
+    profile: Path,
+    proxy: ProxySettings,
+    country: str | None,
+    start_url: str | None = None,
 ) -> OpenWebResult:
     """Launch the window, drive the login if needed; report whether it signed in.
 
@@ -349,7 +369,9 @@ async def _launch(
     ``capture_tokens`` decision cannot be revisited after the launch.
     """
     seeded = profile_is_seeded(profile)
-    window = await _spawn(account_id, relay_port, profile, country, capture=not seeded)
+    window = await _spawn(
+        account_id, relay_port, profile, country, capture=not seeded, start_url=start_url
+    )
     if not seeded:
         return await _drive_and_mark(account_id, window, profile)
     if await still_signed_in(window):
@@ -357,7 +379,9 @@ async def _launch(
     forget_signed_in(profile)
     await _drop_window(account_id, window)  # its relay went with it
     relay_port = await _relay_port_for(account_id, proxy)
-    window = await _spawn(account_id, relay_port, profile, country, capture=True)
+    window = await _spawn(
+        account_id, relay_port, profile, country, capture=True, start_url=start_url
+    )
     return await _drive_and_mark(account_id, window, profile)
 
 

@@ -72,6 +72,17 @@ export const accounts = {
 export const accountStats = { total: 5, active: 2, idle: 1, needs_code: 1, problem: 1 };
 // None open: the close-all action stays hidden, so the baselines are unchanged.
 export const accountWebWindows = { count: 0 };
+// The fleet's @SpamBot probes against the caps: within them, so the Accounts page shows no
+// warning and the baselines are unchanged.
+export const spamBudget = {
+  probes_24h: 2,
+  soft_cap: 10,
+  hard_cap: 24,
+  out_of_turn_24h: 0,
+  out_of_turn_warn_at: 5,
+  daily_cap_reached: false,
+  out_of_turn_warned: false,
+};
 
 // The mobile container is off by default, so the phone action renders disabled.
 export const accountEmulator = { enabled: false };

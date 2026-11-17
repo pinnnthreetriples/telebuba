@@ -15,7 +15,7 @@ from schemas.accounts import AccountCreate
 from schemas.proxy import ProxyCreate
 from schemas.spam_status import SpamStatusProbe
 from services import _account_owner, spam_status
-from services.spam_intel import _answers, _evidence, _gateway, _history, _served, _shadow
+from services.spam_intel import _answers, _card, _evidence, _gateway, _history, _served, _shadow
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -82,6 +82,7 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     fake = Clock()
     monkeypatch.setattr(_gateway, "now", fake.now)
     monkeypatch.setattr(_evidence, "now", fake.now)
+    monkeypatch.setattr(_card, "now", fake.now)
     return fake
 
 

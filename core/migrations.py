@@ -126,9 +126,12 @@ from core.migration_steps_scheduled_posts import (
     _add_scheduled_posts_tables,
 )
 from core.migration_steps_session_audits import _add_account_session_audits
+from core.migration_steps_spam_appeals import _add_spam_appeals
 from core.migration_steps_spam_evidence import _add_spam_evidence
 from core.migration_steps_spam_intel import _add_spam_probe_ledger
 from core.migration_steps_spam_lift import _allow_lifecycle_spam_block_lifted
+from core.migration_steps_spam_projection_observed import _add_spam_projection_observed
+from core.migration_steps_spam_sample_flags import _add_spam_sample_flags
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
 from core.migration_steps_standalone_emulators import (
     _add_standalone_emulators,
@@ -304,6 +307,9 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (114, "add_spam_probe_ledger", _add_spam_probe_ledger),
     (115, "add_device_fingerprint_api_id", _add_device_fingerprint_api_id),
     (116, "add_spam_evidence", _add_spam_evidence),
+    (117, "add_spam_appeals", _add_spam_appeals),
+    (118, "add_spam_sample_flags", _add_spam_sample_flags),
+    (119, "add_spam_projection_observed", _add_spam_projection_observed),
 )
 
 

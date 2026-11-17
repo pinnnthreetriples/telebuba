@@ -17,11 +17,14 @@ from core._schema_spam_intel import _spam_reply_samples
 from core.db import _get_engine
 from schemas.spam_intel import ReplySample
 
+_FLAGS = ("has_date", "multi_message", "has_markup")
+
 
 def _upsert_sample(sample: ReplySample, max_rows: int) -> None:
     table = _spam_reply_samples
     values = sample.model_dump()
-    values["has_date"] = int(sample.has_date)
+    for flag in _FLAGS:
+        values[flag] = int(getattr(sample, flag))
     statement = sqlite_insert(table).values(**values)
     with _get_engine().begin() as connection:
         connection.execute(
@@ -32,6 +35,9 @@ def _upsert_sample(sample: ReplySample, max_rows: int) -> None:
                     "seen_count": table.c.seen_count + 1,
                     "legacy_status": sample.legacy_status,
                     "strict_status": sample.strict_status,
+                    # A flag once seen stays: the same text may come single and in a pair.
+                    "multi_message": func.max(table.c.multi_message, int(sample.multi_message)),
+                    "has_markup": func.max(table.c.has_markup, int(sample.has_markup)),
                 },
             )
         )
@@ -57,7 +63,8 @@ def _list_samples() -> list[ReplySample]:
     out: list[ReplySample] = []
     for row in rows:
         data = dict(row._mapping)  # noqa: SLF001
-        data["has_date"] = bool(data["has_date"])
+        for flag in _FLAGS:
+            data[flag] = bool(data[flag])
         out.append(ReplySample.model_validate(data))
     return out
 

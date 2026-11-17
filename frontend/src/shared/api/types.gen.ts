@@ -662,6 +662,62 @@ export type AccountRead = {
    */
   spam_detail?: string | null;
   /**
+   * Spam Verdict
+   */
+  spam_verdict?: 'clean' | 'limited' | 'unknown' | 'frozen' | null;
+  /**
+   * Spam Confidence
+   */
+  spam_confidence?: 'high' | 'medium' | 'low' | null;
+  /**
+   * Spam Source
+   */
+  spam_source?: 'spambot' | 'peer_flood' | 'chat_ban' | 'freeze' | 'none' | null;
+  /**
+   * Spam Observed At
+   */
+  spam_observed_at?: string | null;
+  /**
+   * Spam Valid Until
+   */
+  spam_valid_until?: string | null;
+  /**
+   * Spam Next Probe At
+   */
+  spam_next_probe_at?: string | null;
+  /**
+   * Spam Last Probe At
+   */
+  spam_last_probe_at?: string | null;
+  /**
+   * Spam Probes 7D
+   */
+  spam_probes_7d?: number | null;
+  /**
+   * Spam Out Of Turn
+   */
+  spam_out_of_turn?: boolean | null;
+  /**
+   * Spam Tos Restricted
+   */
+  spam_tos_restricted?: boolean | null;
+  /**
+   * Spam Tos Reason
+   */
+  spam_tos_reason?: string | null;
+  /**
+   * Spam Appeal Status
+   */
+  spam_appeal_status?: 'none' | 'open' | 'closed' | null;
+  /**
+   * Spam Appeal Filed At
+   */
+  spam_appeal_filed_at?: string | null;
+  /**
+   * Spam Appeal Filed By
+   */
+  spam_appeal_filed_by?: string | null;
+  /**
    * Foreign Sessions
    */
   foreign_sessions?: number | null;
@@ -7655,16 +7711,128 @@ export type SolverToggleRequest = {
 };
 
 /**
- * SpamStatusVerdict
+ * SpamAppealList
  *
- * Parsed, cacheable spam-status verdict for one account.
- *
- * The last three fields are never stored: the gateway fills them on an answer so the
- * caller can tell "not asked, the budget says later" (``deferred``, ``retry_at``) and
- * "will not be asked" (``refused``, ``reason``) from a reading that came back
- * unreadable. ``None`` everywhere means a plain stored reading, as before the gateway.
+ * The open appeals of every account (one query, for the accounts table).
  */
-export type SpamStatusVerdict = {
+export type SpamAppealList = {
+  /**
+   * Items
+   */
+  items: Array<SpamAppealState>;
+};
+
+/**
+ * SpamAppealState
+ *
+ * What the account card shows about the appeal; one value per account.
+ */
+export type SpamAppealState = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Status
+   */
+  status?: 'none' | 'open' | 'closed';
+  /**
+   * Filed At
+   */
+  filed_at?: string | null;
+  /**
+   * Filed By
+   */
+  filed_by?: string | null;
+  /**
+   * Filed Verdict
+   */
+  filed_verdict?: 'clean' | 'limited' | 'unknown' | null;
+  /**
+   * Filed Until Day
+   */
+  filed_until_day?: string | null;
+  /**
+   * Closed At
+   */
+  closed_at?: string | null;
+  /**
+   * Closed By Kind
+   */
+  closed_by_kind?: 'spambot_clean' | null;
+  /**
+   * Recheck At
+   */
+  recheck_at?: string | null;
+};
+
+/**
+ * SpamBudgetStatus
+ *
+ * The fleet's probe use over the last 24 h against its caps, for the Accounts page warning.
+ *
+ * ``daily_cap_reached``: ``probes_24h`` is at or past the soft cap (routine probes now wait;
+ * at the hard cap nothing goes). ``out_of_turn_warned``: the operator's own checks in the
+ * window are at or past ``out_of_turn_warn_at`` (an out-of-turn check is an operator click
+ * on an account probed less than a day ago).
+ */
+export type SpamBudgetStatus = {
+  /**
+   * Probes 24H
+   */
+  probes_24h: number;
+  /**
+   * Soft Cap
+   */
+  soft_cap: number;
+  /**
+   * Hard Cap
+   */
+  hard_cap: number;
+  /**
+   * Out Of Turn 24H
+   */
+  out_of_turn_24h: number;
+  /**
+   * Out Of Turn Warn At
+   */
+  out_of_turn_warn_at: number;
+  /**
+   * Daily Cap Reached
+   */
+  daily_cap_reached: boolean;
+  /**
+   * Out Of Turn Warned
+   */
+  out_of_turn_warned: boolean;
+};
+
+/**
+ * SpamCheckRequest
+ *
+ * Body of ``POST /accounts/{id}/spam-check`` (every field optional: no body = defaults).
+ *
+ * ``confirm_out_of_turn``: the operator confirmed a check while the last probe is under
+ * ``out_of_turn_hours`` old. Without it such a click is refused with ``needs_confirmation``.
+ */
+export type SpamCheckRequest = {
+  /**
+   * Confirm Out Of Turn
+   */
+  confirm_out_of_turn?: boolean;
+};
+
+/**
+ * SpamCheckResult
+ *
+ * The Spam-check answer: the verdict, how it was served and when to ask again.
+ *
+ * ``probed``: a real question went to @SpamBot just now (``served_from == "probe"``).
+ * ``next_allowed_at``: the earliest instant another probe of the account may go out, an ISO
+ * instant, or ``None`` when it may now. For a ``deferred`` / ``refused`` answer see
+ * ``retry_at`` and ``reason``.
+ */
+export type SpamCheckResult = {
   /**
    * Account Id
    */
@@ -7701,12 +7869,21 @@ export type SpamStatusVerdict = {
     | 'fleet_hard_cap'
     | 'busy'
     | 'startup_quiet'
+    | 'no_live_session'
     | 'account_missing'
     | 'account_not_alive'
     | 'no_proxy'
     | 'operator_daily_cap'
     | 'needs_confirmation'
     | null;
+  /**
+   * Probed
+   */
+  probed?: boolean;
+  /**
+   * Next Allowed At
+   */
+  next_allowed_at?: string | null;
 };
 
 /**
@@ -10314,56 +10491,6 @@ export type CheckAccountResponses = {
 };
 
 export type CheckAccountResponse = CheckAccountResponses[keyof CheckAccountResponses];
-
-export type SpamCheckAccountData = {
-  body?: never;
-  path: {
-    /**
-     * Account Id
-     */
-    account_id: string;
-  };
-  query?: never;
-  url: '/api/v1/accounts/{account_id}/spam-check';
-};
-
-export type SpamCheckAccountErrors = {
-  /**
-   * Bad request, or Telegram refused the action
-   */
-  400: ErrorEnvelope;
-  /**
-   * Not authenticated
-   */
-  401: ErrorEnvelope;
-  /**
-   * Not found
-   */
-  404: ErrorEnvelope;
-  /**
-   * Request validation failed
-   */
-  422: ErrorEnvelope;
-  /**
-   * Internal server error
-   */
-  500: ErrorEnvelope;
-  /**
-   * Upstream gateway unavailable
-   */
-  503: ErrorEnvelope;
-};
-
-export type SpamCheckAccountError = SpamCheckAccountErrors[keyof SpamCheckAccountErrors];
-
-export type SpamCheckAccountResponses = {
-  /**
-   * Successful Response
-   */
-  200: SpamStatusVerdict;
-};
-
-export type SpamCheckAccountResponse = SpamCheckAccountResponses[keyof SpamCheckAccountResponses];
 
 export type OpenAccountWebData = {
   body?: never;
@@ -14035,6 +14162,96 @@ export type MarkAccountSessionOursResponses = {
 export type MarkAccountSessionOursResponse =
   MarkAccountSessionOursResponses[keyof MarkAccountSessionOursResponses];
 
+export type SpamBudgetStatusData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/spam-budget';
+};
+
+export type SpamBudgetStatusErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SpamBudgetStatusError = SpamBudgetStatusErrors[keyof SpamBudgetStatusErrors];
+
+export type SpamBudgetStatusResponses = {
+  /**
+   * Successful Response
+   */
+  200: SpamBudgetStatus;
+};
+
+export type SpamBudgetStatusResponse = SpamBudgetStatusResponses[keyof SpamBudgetStatusResponses];
+
+export type SpamCheckAccountData = {
+  /**
+   * Body
+   */
+  body?: SpamCheckRequest | null;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/spam-check';
+};
+
+export type SpamCheckAccountErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type SpamCheckAccountError = SpamCheckAccountErrors[keyof SpamCheckAccountErrors];
+
+export type SpamCheckAccountResponses = {
+  /**
+   * Successful Response
+   */
+  200: SpamCheckResult;
+};
+
+export type SpamCheckAccountResponse = SpamCheckAccountResponses[keyof SpamCheckAccountResponses];
+
 export type SetAccountRegisteredAtData = {
   body: AccountRegisteredUpdate;
   path: {
@@ -15517,6 +15734,192 @@ export type AccountMobileProgressResponses = {
 
 export type AccountMobileProgressResponse =
   AccountMobileProgressResponses[keyof AccountMobileProgressResponses];
+
+export type ListSpamAppealsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/spam-appeals';
+};
+
+export type ListSpamAppealsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListSpamAppealsError = ListSpamAppealsErrors[keyof ListSpamAppealsErrors];
+
+export type ListSpamAppealsResponses = {
+  /**
+   * Successful Response
+   */
+  200: SpamAppealList;
+};
+
+export type ListSpamAppealsResponse = ListSpamAppealsResponses[keyof ListSpamAppealsResponses];
+
+export type GetSpamAppealData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/spam-appeal';
+};
+
+export type GetSpamAppealErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetSpamAppealError = GetSpamAppealErrors[keyof GetSpamAppealErrors];
+
+export type GetSpamAppealResponses = {
+  /**
+   * Successful Response
+   */
+  200: SpamAppealState;
+};
+
+export type GetSpamAppealResponse = GetSpamAppealResponses[keyof GetSpamAppealResponses];
+
+export type OpenSpamAppealWindowData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/spam-appeal/open';
+};
+
+export type OpenSpamAppealWindowErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type OpenSpamAppealWindowError =
+  OpenSpamAppealWindowErrors[keyof OpenSpamAppealWindowErrors];
+
+export type OpenSpamAppealWindowResponses = {
+  /**
+   * Successful Response
+   */
+  200: OpenWebResult;
+};
+
+export type OpenSpamAppealWindowResponse =
+  OpenSpamAppealWindowResponses[keyof OpenSpamAppealWindowResponses];
+
+export type MarkSpamAppealFiledData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/spam-appeal/filed';
+};
+
+export type MarkSpamAppealFiledErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type MarkSpamAppealFiledError = MarkSpamAppealFiledErrors[keyof MarkSpamAppealFiledErrors];
+
+export type MarkSpamAppealFiledResponses = {
+  /**
+   * Successful Response
+   */
+  200: SpamAppealState;
+};
+
+export type MarkSpamAppealFiledResponse =
+  MarkSpamAppealFiledResponses[keyof MarkSpamAppealFiledResponses];
 
 export type ListProxiesData = {
   body?: never;

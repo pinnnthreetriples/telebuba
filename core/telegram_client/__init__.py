@@ -6,6 +6,7 @@ to keep each file small:
 
 - ``_client``  — client construction + per-call lifecycle (probe paths only)
 - ``_pool``    — long-lived connected-client cache, one per account device
+- ``_pool_live`` — whether the pool already holds a connected client (no I/O)
 - ``_second_device`` — a second, separate authorization of the other device type
 - ``_session`` — session liveness check
 - ``_session_audit`` — the account's authorizations, ours told from the rest
@@ -88,6 +89,7 @@ from core.telegram_client._pool import (
     removing_client,
     shutdown_telegram_pool,
 )
+from core.telegram_client._pool_live import has_live_client
 from core.telegram_client._qr_login import (
     QrLoginGatewayError,
     cancel_qr_login,
@@ -110,7 +112,11 @@ from core.telegram_client._second_device import authorize_second_device, remove_
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._session_audit import SessionAuditGatewayError, read_account_sessions
 from core.telegram_client._session_close import close_sessions
-from core.telegram_client._spam import check_spam_status, read_spambot_history
+from core.telegram_client._spam import (
+    check_spam_status,
+    converse_spam_status,
+    read_spambot_history,
+)
 from core.telegram_client._story_image import is_known_collage_layout
 from core.telegram_client._web_login import WebLoginTransientError, accept_web_login_token
 
@@ -134,6 +140,7 @@ __all__ = [
     "check_spam_status",
     "check_telegram_session",
     "close_sessions",
+    "converse_spam_status",
     "create_telegram_client",
     "delete_passkey",
     "download_post_image",
@@ -148,6 +155,7 @@ __all__ = [
     "forget_primary_device",
     "forget_qr_login",
     "get_client",
+    "has_live_client",
     "invalidate_reaction_whitelist_cache",
     "is_known_collage_layout",
     "is_passkey_listed",

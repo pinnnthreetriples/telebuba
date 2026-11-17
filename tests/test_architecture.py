@@ -292,6 +292,8 @@ def test_only_the_spam_gateway_may_probe_or_write_the_spam_verdict() -> None:
     forbidden: dict[str, tuple[str, ...]] = {
         "core.telegram_client.check_spam_status": ("core/", "services/spam_status.py"),
         "core.telegram_client._spam": ("core/", "services/spam_status.py"),
+        # Stage 3: the human-like conversation is the same probe, with the same one importer.
+        "core.telegram_client.converse_spam_status": ("core/", "services/spam_status.py"),
         "core.telegram_client.read_spambot_history": ("core/", "services/spam_intel/"),
         "services.spam_status": _SPAM_GATEWAY,
         "services.spam_status.refresh_spam_status": _SPAM_GATEWAY,
@@ -302,6 +304,8 @@ def test_only_the_spam_gateway_may_probe_or_write_the_spam_verdict() -> None:
         # Stage 2: evidence and the folded projection are the gateway's; everyone else records
         # through ``services.spam_intel.record_evidence`` and reads ``verdicts_for``.
         "core.repositories.spam_evidence": ("core/", "services/spam_intel/"),
+        # Stage 3: the record of a hand-filed appeal is the gateway package's too.
+        "core.repositories.spam_appeals": ("core/", "services/spam_intel/"),
         "core.repositories.spam_status.store_projection": ("core/", "services/spam_intel/"),
         "core.repositories.spam_status.list_projections_by_ids": ("core/", "services/spam_intel/"),
     }

@@ -18,41 +18,43 @@ test('account editors keep their position and show a subtle tab hover', async ({
             ? fx.accountStats
             : path.endsWith('/accounts/web-windows')
               ? fx.accountWebWindows
-              : path.endsWith('/accounts/emulator')
-                ? fx.accountEmulator
-                : path.endsWith('/accounts/filter-options')
-                  ? fx.accountFilterOptions
-                  : path.endsWith('/account-folders')
-                    ? fx.accountFolders
-                    : path.endsWith('/proxies')
-                      ? fx.proxies
-                      : path.endsWith('/accounts/bulk-messages/active') ||
-                          path.endsWith('/accounts/bulk-messages/latest')
-                        ? null
-                        : path.endsWith('/profile-snapshot')
-                          ? {
-                              first_name: 'Иван',
-                              photos: [],
-                              stories: [],
-                              music: [],
-                              music_supported: true,
-                            }
-                          : path.endsWith('/privacy')
+              : path.endsWith('/accounts/spam-budget')
+                ? fx.spamBudget
+                : path.endsWith('/accounts/emulator')
+                  ? fx.accountEmulator
+                  : path.endsWith('/accounts/filter-options')
+                    ? fx.accountFilterOptions
+                    : path.endsWith('/account-folders')
+                      ? fx.accountFolders
+                      : path.endsWith('/proxies')
+                        ? fx.proxies
+                        : path.endsWith('/accounts/bulk-messages/active') ||
+                            path.endsWith('/accounts/bulk-messages/latest')
+                          ? null
+                          : path.endsWith('/profile-snapshot')
                             ? {
-                                settings: {
-                                  profile_photo: 'everybody',
-                                  bio: 'everybody',
-                                  last_seen: 'contacts',
-                                },
-                                error: null,
+                                first_name: 'Иван',
+                                photos: [],
+                                stories: [],
+                                music: [],
+                                music_supported: true,
                               }
-                            : path.endsWith('/channels')
-                              ? { items: [], next_cursor: null }
-                              : path.endsWith('/scheduled')
-                                ? { items: [], server_now: new Date().toISOString() }
-                                : path.endsWith('/accounts')
-                                  ? fx.accounts
-                                  : undefined;
+                            : path.endsWith('/privacy')
+                              ? {
+                                  settings: {
+                                    profile_photo: 'everybody',
+                                    bio: 'everybody',
+                                    last_seen: 'contacts',
+                                  },
+                                  error: null,
+                                }
+                              : path.endsWith('/channels')
+                                ? { items: [], next_cursor: null }
+                                : path.endsWith('/scheduled')
+                                  ? { items: [], server_now: new Date().toISOString() }
+                                  : path.endsWith('/accounts')
+                                    ? fx.accounts
+                                    : undefined;
     if (body === undefined) unmatched.push(path);
     await route.fulfill({
       status: 200,
@@ -167,4 +169,92 @@ test('account editors keep their position and show a subtle tab hover', async ({
   await profile.screenshot({ path: privacyPath });
   await testInfo.attach('privacy', { path: privacyPath, contentType: 'image/png' });
   expect(unmatched).toEqual([]);
+});
+
+// The account card's spam block: the verdict with its source, the check that asks before an
+// out-of-turn click, and the appeal that is only ever opened and recorded, never typed.
+test('the account card words the spam verdict and asks before an out-of-turn check', async ({
+  page,
+}) => {
+  const day = 24 * 3_600_000;
+  const limited = {
+    ...fx.accounts.items[0],
+    spam_status: 'limited',
+    spam_detail: null,
+    spam_verdict: 'limited',
+    spam_confidence: 'high',
+    spam_source: 'spambot',
+    spam_observed_at: new Date(Date.now() - 3 * day).toISOString(),
+    spam_valid_until: null,
+    spam_next_probe_at: null,
+    spam_last_probe_at: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+    spam_probes_7d: 2,
+    spam_out_of_turn: true,
+    spam_tos_restricted: false,
+    spam_appeal_status: 'none',
+  };
+  const checks: unknown[] = [];
+  const written: string[] = [];
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() !== 'GET') written.push(`${request.method()} ${path}`);
+    let body: unknown = {};
+    if (path.endsWith('/auth/me')) body = fx.me;
+    else if (path.endsWith('/health')) body = fx.health;
+    else if (path.endsWith('/events')) body = { events: [] };
+    else if (path.endsWith('/accounts/stats')) body = fx.accountStats;
+    else if (path.endsWith('/accounts/web-windows')) body = fx.accountWebWindows;
+    else if (path.endsWith('/accounts/spam-budget')) body = fx.spamBudget;
+    else if (path.endsWith('/accounts/emulator')) body = fx.accountEmulator;
+    else if (path.endsWith('/accounts/filter-options')) body = fx.accountFilterOptions;
+    else if (path.endsWith('/account-folders')) body = fx.accountFolders;
+    else if (path.endsWith('/proxies')) body = fx.proxies;
+    else if (path.endsWith('/accounts/bulk-messages/active')) body = null;
+    else if (path.endsWith('/accounts/bulk-messages/latest')) body = null;
+    else if (path.endsWith('/accounts/acc-0/spam-appeal'))
+      body = { account_id: 'acc-0', status: 'none' };
+    else if (path.endsWith('/accounts/acc-0/spam-check')) {
+      checks.push(request.postDataJSON());
+      body = {
+        account_id: 'acc-0',
+        status: 'limited',
+        checked_at: new Date().toISOString(),
+        served_from: 'probe',
+        probed: true,
+      };
+    } else if (path.endsWith('/accounts')) body = { items: [limited], next_cursor: null };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
+    });
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Аккаунты' })).toBeVisible();
+  await page.getByText('+7 900 100-22-33').first().click();
+  await page.getByText('Спам/бан-сигналы').click();
+
+  await expect(page.getByText('Ограничен', { exact: true })).toBeVisible();
+  await expect(page.getByText('уверенность: высокая')).toBeVisible();
+  await expect(page.getByText('@SpamBot, 3 дня назад')).toBeVisible();
+  await expect(page.getByText('бессрочно')).toBeVisible();
+  await expect(page.getByText('Проверок за 7 дней')).toBeVisible();
+
+  // The appeal block opens a window and records a filing; it has nothing to type into.
+  const appeal = page.getByTestId('spam-appeal');
+  await expect(appeal.getByRole('button', { name: 'Подать апелляцию' })).toBeVisible();
+  await expect(appeal.getByRole('button', { name: 'Апелляция подана' })).toBeVisible();
+  await expect(appeal.locator('input, textarea')).toHaveCount(0);
+
+  // Out of turn the check asks first: nothing is sent until the operator confirms.
+  await page.locator('button[aria-describedby]').filter({ hasText: 'Проверить' }).last().click();
+  await expect(page.getByRole('dialog', { name: 'Проверка вне очереди' })).toBeVisible();
+  expect(checks).toEqual([]);
+  await page.getByRole('button', { name: 'Проверить сейчас' }).click();
+  await expect.poll(() => checks.length).toBe(1);
+  expect(checks[0]).toEqual({ confirm_out_of_turn: true });
+  // The only write the whole card made is that one check.
+  expect(written).toEqual(['POST /api/v1/accounts/acc-0/spam-check']);
 });
