@@ -77,6 +77,11 @@ _SUBMIT_CODES = {
     "PasswordHashInvalidError": "password_invalid",
 }
 
+# The statuses that say the account's key is gone: a sign-in then makes a new authorization,
+# which may use the new API (``TelegramClientRequest.new_key``). Any other status may hide a
+# live key, which must keep the API it was made with.
+KEY_GONE_STATUSES = frozenset({"unauthorized", "session_error"})
+
 # A logout or reset that Telegram did not confirm: nothing was ended or deleted.
 _LOGOUT_UNCONFIRMED = "logout_unconfirmed"
 
@@ -205,11 +210,13 @@ async def request_login_code(account_id: str) -> PhoneCodeRequestResult:
         msg = "No phone number on record — check the account first."
         raise PhoneLoginError(msg)
     assert_device_configured(account.session_device)
+    new_key = account.status in KEY_GONE_STATUSES
     challenge = await request_phone_code(
         PhoneCodeRequest(
             account_id=account_id,
             session_name=account.session_name,
             phone=account.phone,
+            new_key=new_key,
         ),
     )
     if not challenge.phone_code_hash:
@@ -221,6 +228,7 @@ async def request_login_code(account_id: str) -> PhoneCodeRequestResult:
         challenge.phone_code_hash,
         now=time.monotonic(),
         ttl_seconds=settings.telegram.phone_code_ttl_seconds,
+        new_key=new_key,
     )
     await log_event("INFO", "phone_code_requested", account_id=account_id)
     return PhoneCodeRequestResult(account_id=account_id, phone=account.phone)
@@ -254,6 +262,7 @@ async def submit_login_code(
             code=code,
             password=candidates[0] if candidates else None,
             fallback_passwords=candidates[1:],
+            new_key=pending.new_key,
         ),
     )
     if result.status != "alive":

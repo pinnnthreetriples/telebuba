@@ -31,13 +31,16 @@ followed straight by reset-session), so all three also run under
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path as PlainPath
 from typing import TYPE_CHECKING
 
-from anyio import Path
+from anyio import Path, to_thread
 from telethon import TelegramClient, errors
 from telethon.tl.functions.auth import LogOutRequest
 
 from core.config import settings
+from core.session_vault import quarantine_file, snapshot_session
+from core.telegram_client._api_credentials import record_key_api
 from core.telegram_client._auth_bounds import (
     UNREACHABLE_ERRORS,
     auth_deadline,
@@ -92,18 +95,21 @@ def _auth_lock(account_id: str) -> asyncio.Lock:
     return lock
 
 
-def _login_request(account_id: str, session_name: str | None) -> TelegramClientRequest:
+def _login_request(
+    account_id: str, session_name: str | None, *, new_key: bool = False
+) -> TelegramClientRequest:
     return TelegramClientRequest(
         account_id=account_id,
         session_name=session_name,
         receive_updates=False,
+        new_key=new_key,
     )
 
 
 async def request_phone_code(request: PhoneCodeRequest) -> PhoneCodeChallenge:
     """Ask Telegram to send a login code to ``request.phone`` on its own session."""
     profile = await prepare_telegram_client_profile(
-        _login_request(request.account_id, request.session_name),
+        _login_request(request.account_id, request.session_name, new_key=request.new_key),
     )
     async with (
         _auth_lock(request.account_id),
@@ -145,7 +151,7 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
     fields). A submit with only a code on a 2FA account returns ``unauthorized``.
     """
     profile = await prepare_telegram_client_profile(
-        _login_request(request.account_id, request.session_name),
+        _login_request(request.account_id, request.session_name, new_key=request.new_key),
     )
     async with (
         _auth_lock(request.account_id),
@@ -157,6 +163,8 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
             async with asyncio.timeout(auth_deadline()):
                 await client.connect()
                 typed_accepted = await _sign_in(client, request, attempted)
+                # The key now carries this API for good (a new one, when it was a new key).
+                await record_key_api(profile)
                 return _alive_result(
                     profile, await client.get_me(), typed_password_accepted=typed_accepted
                 )
@@ -180,6 +188,7 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
             if isinstance(exc, TimeoutError) and (
                 alive := await _probe_authorized(client, profile, typed_accepted=typed_only)
             ):
+                await record_key_api(profile)
                 return alive
             return _error_result(profile, exc, status="network_error", is_temporary=True)
         except Exception as exc:  # noqa: BLE001 - classify any other SDK/network failure for the UI.
@@ -311,10 +320,20 @@ def _challenge_error(
 
 
 async def _remove_session_file(session_path: str) -> None:
-    # Telethon's SQLiteSession stores at "<session_path>.session".
+    """Take the session file out of the sessions folder: into the quarantine, not deleted.
+
+    A ``.session`` is the only copy of an auth key; a removal that turns out wrong (the
+    wrong account, a key that was still alive) must stay recoverable for a while
+    (``core.session_vault``, purged after ``SESSION_VAULT__QUARANTINE_DAYS``). Telethon's
+    SQLiteSession stores at "<session_path>.session"; its ``-journal`` sidecar, if one is
+    left, holds nothing of its own and is dropped.
+    """
     session_file = Path(f"{session_path}.session")
     if await session_file.exists():
-        await session_file.unlink()
+        await to_thread.run_sync(quarantine_file, PlainPath(str(session_file)))
+    journal = Path(f"{session_path}.session-journal")
+    if await journal.exists():
+        await journal.unlink()
 
 
 async def remove_account_session(account_id: str, session_name: str | None = None) -> None:
@@ -390,3 +409,16 @@ def _alive_result(
         premium=optional_bool(getattr(me, "premium", None)),
         typed_password_accepted=typed_password_accepted,
     )
+
+
+async def back_up_account_session(account_id: str, session_name: str | None = None) -> bool:
+    """Store an encrypted copy of one of the account's session files (``core.session_vault``).
+
+    ``True`` when a new version was written; ``False`` when the vault is off, the file is not
+    there or nothing changed since the last copy. Path composition is the client's own, so
+    the copy is of exactly the file a client would open.
+    """
+    session_file = PlainPath(
+        f"{await _session_path(_login_request(account_id, session_name))}.session"
+    )
+    return await to_thread.run_sync(snapshot_session, session_file) is not None

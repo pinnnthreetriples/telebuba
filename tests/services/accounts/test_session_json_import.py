@@ -139,3 +139,17 @@ async def test_android_json_needs_the_mobile_keys(monkeypatch: pytest.MonkeyPatc
         await import_account_session(_import(_meta()))
 
     assert str(excinfo.value) == "mobile_api_not_configured"
+
+
+@pytest.mark.asyncio
+async def test_the_seller_password_is_kept_at_once_as_an_unverified_candidate(
+    telegram_calls: list[tuple[str, object]],
+    mobile_keys: None,  # noqa: ARG001
+) -> None:
+    from core.db import fetch_account_twofa_pair  # noqa: PLC0415 - this test only
+
+    await import_account_session(_import(_meta()))
+
+    # Not the verified one (nothing confirmed it), but a login can try it.
+    assert await fetch_account_twofa_pair(PHONE) == (None, FAKE_PASSWORD)
+    assert telegram_calls == []

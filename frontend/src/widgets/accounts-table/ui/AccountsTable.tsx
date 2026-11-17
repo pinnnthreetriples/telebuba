@@ -172,6 +172,12 @@ export function AccountsTable({
                 {t('accounts.table.foreignSessions', { count: foreign })}
               </Badge>
             ) : null}
+            {/* No passkey: a dead key could then only come back with an SMS or a code. */}
+            {row.original.has_passkey === false ? (
+              <Badge tone="neutral" size="sm">
+                {t('accounts.table.noPasskey')}
+              </Badge>
+            ) : null}
           </div>
         );
       },

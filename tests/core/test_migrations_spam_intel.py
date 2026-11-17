@@ -48,7 +48,8 @@ def _shape(engine: Engine, table: str) -> dict[str, object]:
 def test_the_registry_carries_the_migration_exactly_once() -> None:
     entries = [entry for entry in MIGRATIONS if entry[2] is _add_spam_probe_ledger]
     assert entries == [(114, "add_spam_probe_ledger", _add_spam_probe_ledger)]
-    assert max(version for version, _name, _body in MIGRATIONS) == 114
+    versions = [version for version, _name, _body in MIGRATIONS]
+    assert len(versions) == len(set(versions))  # no number is used twice
 
 
 @pytest.mark.parametrize("table", _TABLES)

@@ -666,6 +666,10 @@ export type AccountRead = {
    */
   foreign_sessions?: number | null;
   /**
+   * Has Passkey
+   */
+  has_passkey?: boolean | null;
+  /**
    * Folder Ids
    */
   folder_ids?: Array<string>;
@@ -740,7 +744,7 @@ export type AccountSession = {
   /**
    * Kind
    */
-  kind?: 'web' | null;
+  kind?: 'web' | 'manual' | null;
   /**
    * Key Predates Import
    */
@@ -7019,6 +7023,7 @@ export type QrLoginView = {
     | 'password_invalid'
     | 'flood_wait'
     | 'connection_failed'
+    | 'session_not_dead'
     | null;
   /**
    * Flood Wait Seconds
@@ -7451,6 +7456,18 @@ export type SessionGuardStatus = {
    * Reason
    */
   reason?: 'stopped' | 'silent' | null;
+};
+
+/**
+ * SessionOursRequest
+ *
+ * The operator's mark on one listed session: ours, or (for such a mark) not ours.
+ */
+export type SessionOursRequest = {
+  /**
+   * Ours
+   */
+  ours: boolean;
 };
 
 /**
@@ -13961,6 +13978,62 @@ export type GetSessionGuardStatusResponses = {
 
 export type GetSessionGuardStatusResponse =
   GetSessionGuardStatusResponses[keyof GetSessionGuardStatusResponses];
+
+export type MarkAccountSessionOursData = {
+  body: SessionOursRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Session Hash
+     */
+    session_hash: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/sessions/{session_hash}/ours';
+};
+
+export type MarkAccountSessionOursErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type MarkAccountSessionOursError =
+  MarkAccountSessionOursErrors[keyof MarkAccountSessionOursErrors];
+
+export type MarkAccountSessionOursResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountSessionAudit;
+};
+
+export type MarkAccountSessionOursResponse =
+  MarkAccountSessionOursResponses[keyof MarkAccountSessionOursResponses];
 
 export type SetAccountRegisteredAtData = {
   body: AccountRegisteredUpdate;

@@ -14,7 +14,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_account, update_account_from_session_check
+from core.db import (
+    fetch_account,
+    fetch_account_twofa_pair,
+    set_account_twofa_pending,
+    update_account_from_session_check,
+)
 from core.logging import log_event
 from core.session_json import SessionJsonError, fingerprint_from_meta, parse_seller_json
 from core.tdata_import import convert_tdata_zip
@@ -155,7 +160,23 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
         except Exception as exc:
             await _discard_orphaned_session(session_path, session_name, exc)
             raise
+    if meta is not None and meta.password:
+        await _keep_seller_password(account.account_id, meta.password)
     return account
+
+
+async def _keep_seller_password(account_id: str, password: str) -> None:
+    """Keep the seller JSON's cloud password at once, as an unverified candidate.
+
+    The import cannot verify it (no proxy yet, so no Telegram call), and the wizard's later
+    verify step can be skipped or fail on a network error: then Telebuba had no copy, and an
+    account whose session is reset cannot re-authorise without it. Staged as the pending
+    candidate (the login paths try it after the current one) only while nothing is stored:
+    a verified password, or a write in flight, is never replaced by the seller's word.
+    """
+    if any(await fetch_account_twofa_pair(account_id)):
+        return
+    await set_account_twofa_pending(account_id, password)
 
 
 async def _discard_orphaned_session(path: Path, session_name: str, cause: Exception) -> None:
@@ -208,6 +229,10 @@ async def check_account_session(data: AccountCheckRequest) -> AccountRead:
     if account is None:
         msg = f"Unknown account: {data.account_id}"
         raise ValueError(msg)
+    if account.proxy_id is None and not settings.telegram.allow_direct_connection:
+        # Refused before any Telegram call and before any write: the row stays as it is.
+        code = "proxy_required"
+        raise AccountActionError(code)
     result = await check_telegram_session(
         TelegramSessionCheckRequest(
             account_id=account.account_id,

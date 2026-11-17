@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 from telethon import errors
 from telethon.tl.functions.auth import FinishPasskeyLoginRequest, InitPasskeyLoginRequest
+from telethon.tl.functions.updates import GetStateRequest
 from telethon.tl.types import InputPasskeyCredentialPublicKey, InputPasskeyResponseLogin
 
 from core.passkey_vault import PasskeyVaultError
@@ -46,6 +47,7 @@ class _Client:
         connect_error: Exception | None = None,
         session: object = "default",
         finish_once: Exception | None = None,
+        state_error: Exception | None = None,
     ) -> None:
         self.session = (
             SimpleNamespace(dc_id=2, auth_key=SimpleNamespace(key_id=(1 << 64) - 5))
@@ -59,6 +61,7 @@ class _Client:
         self.finish_once = finish_once
         self.me_id = me_id
         self.connect_error = connect_error
+        self.state_error = state_error
         self.requests: list[object] = []
         self.calls: list[str] = []
 
@@ -71,6 +74,13 @@ class _Client:
 
     async def __call__(self, request: object) -> object:
         self.requests.append(request)
+        if isinstance(request, GetStateRequest):
+            # How the session check asks; a session that is not signed in is refused.
+            if self.state_error is not None:
+                raise self.state_error
+            if not self.authorized:
+                raise errors.AuthKeyUnregisteredError(request=None)
+            return SimpleNamespace()
         if isinstance(request, InitPasskeyLoginRequest):
             payload = {"publicKey": {"challenge": "bG9naW4"}}
             return SimpleNamespace(options=SimpleNamespace(data=json.dumps(payload)))
@@ -255,7 +265,8 @@ async def test_an_authorized_session_is_reported_alive_without_a_login(
     result = await login_with_passkey(_passkey(), None)
 
     assert result.status == "alive"
-    assert client.requests == []
+    # Only the session check was asked; no passkey sign-in was started.
+    assert [r for r in client.requests if not isinstance(r, GetStateRequest)] == []
     assert wire["signed"] == []
 
 
@@ -270,7 +281,8 @@ async def test_an_authorized_session_of_another_user_is_a_mismatch_and_left_alon
 
     assert result.status == "unauthorized"
     assert result.error_message == "passkey_user_mismatch"
-    assert client.requests == []
+    # Only the session check was asked; no passkey sign-in was started.
+    assert [r for r in client.requests if not isinstance(r, GetStateRequest)] == []
     assert "log_out" not in client.calls
 
 
@@ -466,3 +478,26 @@ async def test_every_candidate_rejected_is_reported_as_invalid(wire: dict[str, o
 
     assert result.error_message == "passkey_twofa_invalid"
     assert "confirmed" not in wire
+
+
+@pytest.mark.parametrize(
+    "hiccup",
+    [
+        errors.FloodWaitError(request=None, capture=5),
+        errors.RPCError(request=None, message="INTERNAL", code=500),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_session_check_that_hiccups_never_starts_a_sign_in_over_the_key(
+    wire: dict[str, object], hiccup: Exception
+) -> None:
+    # Telethon's ``is_user_authorized`` would say "not authorized" here, and the sign-in's
+    # DC switch would empty the live key in the account's own file.
+    client = _Client(authorized=True, state_error=hiccup)
+    wire["client"] = client
+
+    result = await login_with_passkey(_passkey(), None)
+
+    assert result.status != "alive"
+    assert not any(call.startswith("switch") for call in client.calls)
+    assert not any(isinstance(r, FinishPasskeyLoginRequest) for r in client.requests)

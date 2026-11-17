@@ -174,3 +174,24 @@ async def forget_second_device(account_id: str) -> None:
     and adding it again mints a fresh fingerprint for a fresh sign-in.
     """
     await asyncio.to_thread(_forget_second_device, account_id)
+
+
+def _set_device_api_id(account_id: str, device_type: str, api_id: int) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_device_fingerprints)
+            .where(
+                _device_fingerprints.c.account_id == account_id,
+                _device_fingerprints.c.device_type == device_type,
+            )
+            .values(api_id=api_id),
+        )
+
+
+async def set_device_api_id(account_id: str, device_type: str, api_id: int) -> None:
+    """Record the API a device's session key was just made with (a sign-in that succeeded).
+
+    The table's second UPDATE: written only when a new key exists, so a key is always
+    connected with the API that made it (``core.telegram_client._api_credentials``).
+    """
+    await asyncio.to_thread(_set_device_api_id, account_id, device_type, api_id)

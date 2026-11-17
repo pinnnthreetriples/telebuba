@@ -35,12 +35,14 @@ from core._config_domains import (
     TrustSettings,
 )
 from core._config_emulator import EmulatorSettings
+from core._config_instance import InstanceSettings
 from core._config_masstagging import MasstaggingSettings
 from core._config_neuroshilling import NeuroshillingSettings
 from core._config_notifications import NotificationsSettings
 from core._config_passkey_vault import PasskeyVaultSettings
 from core._config_scheduled import ScheduledPostsSettings
 from core._config_session_audit import SessionAuditSettings
+from core._config_session_vault import SessionVaultSettings
 from core._config_soft_start import SoftStartSettings
 from core._config_spam_intel import SpamIntelSettings
 from core._config_survival import SurvivalSettings
@@ -62,6 +64,10 @@ class TelegramSettings(BaseSettings):
     api_id: int = Field(default=0, ge=0, repr=False)
     api_hash: str = Field(default="", repr=False)
     session_dir: Path = Path("sessions")
+    # Off: an account without a proxy is never connected to Telegram (it would connect from
+    # this computer's own IP, the same IP for every such account). On only for a deliberate
+    # local test.
+    allow_direct_connection: bool = False
     timeout_seconds: int = Field(default=20, ge=1)
     connection_retries: int = Field(default=3, ge=0)
     retry_delay_seconds: int = Field(default=2, ge=0)
@@ -106,6 +112,11 @@ class TelegramSettings(BaseSettings):
     # mismatch Telegram can see, and ``lang_pack`` is accepted from official apps only.
     mobile_api_id: int = Field(default=0, ge=0, repr=False)
     mobile_api_hash: str = Field(default="", repr=False)
+    # A second desktop API (a neutral app title) for NEW keys only: a re-key's new session,
+    # a second device, a sign-in over a key Telegram ended. Existing sessions keep the API
+    # their key was made with (``core.telegram_client._api_credentials``). 0 / empty: unused.
+    new_api_id: int = Field(default=0, ge=0, repr=False)
+    new_api_hash: str = Field(default="", repr=False)
     # A second device's sign-in: how long to wait for the login code to reach the
     # account's existing session (Telegram service messages from 777000), how often to
     # look, and the per-account pause before another code may be requested.
@@ -213,9 +224,10 @@ class DbSettings(BaseSettings):
     max_overflow: int = Field(default=20, ge=0)
     pool_timeout_seconds: float = Field(default=30.0, gt=0)
     # Periodic maintenance: WAL checkpoint (TRUNCATE) always runs; the online
-    # backup (VACUUM INTO a timestamped file) is opt-in. telebuba.db is the sole
+    # backup (VACUUM INTO a timestamped file) is on by default (it holds the 2FA
+    # passwords every re-login needs). telebuba.db is the sole
     # datastore (incl. users/auth), so a backup guards against corruption/loss.
-    backup_enabled: bool = False
+    backup_enabled: bool = True
     backup_interval_hours: float = Field(default=24.0, gt=0)
     backup_dir: Path = Path("backups")
     backup_keep: int = Field(default=7, ge=1)
@@ -388,6 +400,8 @@ class Settings(BaseSettings):
     survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
     spam_intel: SpamIntelSettings = Field(default_factory=SpamIntelSettings)
     session_audit: SessionAuditSettings = Field(default_factory=SessionAuditSettings)
+    session_vault: SessionVaultSettings = Field(default_factory=SessionVaultSettings)
+    instance: InstanceSettings = Field(default_factory=InstanceSettings)
     emulator: EmulatorSettings = Field(default_factory=EmulatorSettings)
     telephony: TelephonySettings = Field(default_factory=TelephonySettings)
     passkey_vault: PasskeyVaultSettings = Field(default_factory=PasskeyVaultSettings)

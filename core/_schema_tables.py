@@ -35,6 +35,8 @@ _device_fingerprints = Table(
     Column("app_version", String, nullable=False),
     Column("lang_code", String, nullable=False),
     Column("system_lang_code", String, nullable=False),
+    # The API the session's key was created with; NULL: the configured default (migration 115).
+    Column("api_id", Integer, nullable=True),
 )
 _accounts = Table(
     "accounts",

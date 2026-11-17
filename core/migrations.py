@@ -66,6 +66,7 @@ from core.migration_steps_console import (
     _add_warming_state_nc_start,
 )
 from core.migration_steps_daily_stats import _add_warming_daily_stats
+from core.migration_steps_device_api import _add_device_fingerprint_api_id
 from core.migration_steps_devices import _add_account_devices
 from core.migration_steps_discovery import (
     _add_discovery_kind_and_seen,
@@ -300,6 +301,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (112, "add_chat_broadcast_pinned", _add_chat_broadcast_pinned),
     (113, "add_account_rekey_problem", _add_account_rekey_problem),
     (114, "add_spam_probe_ledger", _add_spam_probe_ledger),
+    (115, "add_device_fingerprint_api_id", _add_device_fingerprint_api_id),
 )
 
 

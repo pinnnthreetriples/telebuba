@@ -27,6 +27,9 @@ QrLoginErrorCode = Literal[
     "password_invalid",
     "flood_wait",
     "connection_failed",
+    # An imported account whose own session is not known to be dead: a QR sign-in on its
+    # file would replace (and, for a duplicate, log out) a key that may still work.
+    "session_not_dead",
 ]
 
 
@@ -37,6 +40,9 @@ class QrLoginRequest(BaseModel):
     session_name: str | None = Field(default=None, min_length=1)
     # Telegram user ids already signed in here; Telegram will not offer them the QR.
     ignored_user_ids: list[int] = Field(default_factory=list)
+    # A placeholder or a key known dead: the sign-in makes a new authorization and may use
+    # the new API (``TelegramClientRequest.new_key``).
+    new_key: bool = False
 
 
 class QrLoginState(BaseModel):

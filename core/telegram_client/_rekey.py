@@ -44,6 +44,7 @@ from telethon.tl.functions.auth import AcceptLoginTokenRequest
 
 from core.config import settings
 from core.telegram_client import _rekey_files as _files
+from core.telegram_client._api_credentials import record_key_api
 from core.telegram_client._auth import _auth_lock, _remove_session_file
 from core.telegram_client._client import (
     create_telegram_client,
@@ -355,11 +356,15 @@ async def rekey_session(
                     session_name=scratch_name,
                     # The login token arrives as an update, so this client must receive them.
                     receive_updates=True,
+                    # A brand-new key: it may use the new API (recorded after the swap).
+                    new_key=True,
                 ),
             )
             final = await prepare_telegram_client_profile(
+                # The account's own file, opened with the API the NEW key is made with: once
+                # swapped in, that is the key it holds.
                 TelegramClientRequest(
-                    account_id=account_id, device_type=device, receive_updates=False
+                    account_id=account_id, device_type=device, receive_updates=False, new_key=True
                 ),
             )
             await _require_free(scratch.session_path)
@@ -377,6 +382,8 @@ async def rekey_session(
                 await new.disconnect()
                 final_file = f"{final.session_path}.session"
                 await _swap(final, scratch.session_path, user_id, device)
+                # The account's file holds the new key now: it keeps the API that made it.
+                await record_key_api(final)
             except RekeyGatewayError as exc:
                 if exc.code == _INCOMPLETE:
                     # Neither key is ended and no file dropped: a person sorts it out.

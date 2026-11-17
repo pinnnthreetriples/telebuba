@@ -40,6 +40,9 @@ class DeviceFingerprint(BaseModel):
     app_version: str = Field(min_length=1)
     lang_code: str = Field(min_length=1)
     system_lang_code: str = Field(min_length=1)
+    # The Telegram API the session's key was created with; ``None``: the configured default
+    # of its device type (every session from before this was recorded, every import).
+    api_id: int | None = None
 
 
 class TelegramClientRequest(BaseModel):
@@ -48,6 +51,9 @@ class TelegramClientRequest(BaseModel):
     device_type: DeviceType | None = None
     session_name: str | None = Field(default=None, min_length=1)
     receive_updates: bool = True
+    # A sign-in that makes a NEW key (or re-authorises one Telegram ended): it may use the
+    # new API (``TELEGRAM__NEW_API_ID``). Never for a key that may still be signed in.
+    new_key: bool = False
 
 
 class TelegramClientProfile(BaseModel):

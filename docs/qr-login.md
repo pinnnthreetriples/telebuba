@@ -15,3 +15,7 @@ How the add-account wizard signs a new account in by QR code. The operator scans
 
 ## Duplicate scan
 If the scanned Telegram user is already in Telebuba under another id, the new authorization is logged out (`log_out_session`, wiping the file) and the placeholder row is dropped. The API answers `409 account_exists`. Telegram is also passed the fleet's user ids as `except_ids`.
+
+## Only on a placeholder or a dead session
+
+A QR sign-in writes the new key into the account's own session file. It is allowed only on a `qr-` placeholder (the "add by QR" flow) or on an account whose session check already said the key is gone (`unauthorized`, `session_error`). Any other account (an import never checked, one failing for another reason) is refused with `session_not_dead`: its file may hold a live key, and a duplicate would even be logged out.

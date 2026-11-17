@@ -89,3 +89,6 @@ skills-lock.json
 
 # scrcpy-server and the Telegram APK the mobile pod pushes (downloaded, see docs/redroid.md).
 /emulator/
+
+# SQLite backups (DB__BACKUP_DIR): a copy of the credential store
+backups/

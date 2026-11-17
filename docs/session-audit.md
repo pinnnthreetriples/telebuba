@@ -10,6 +10,8 @@ If any one of the account's clients cannot answer, the whole read fails: a parti
 
 The Telegram app inside a mobile container (pod) is not one of our clients, so its authorization is not recognised as ours and lists as foreign. Closing is therefore always an explicit, confirmed operator action.
 
+**Marked ours by hand.** What Telebuba cannot prove (an orphan of a failed sign-in, a login made by hand, a web login from before they were recorded) the operator can mark as ours on the card ("This session is ours", `PUT /accounts/{id}/sessions/{hash}/ours`); it then counts as ours (kind `manual`): no foreign badge, no alert, and a close refuses it. Nothing is closed and Telegram is not asked. Only such a mark can be taken back.
+
 ## When it runs
 
 - On demand from the account's "Sessions" card.
@@ -70,6 +72,10 @@ Verified against the pages on 2026-11-02, not assumed:
 - If the account has a stored passkey, the watch asks Telegram whether it still lists it (`check_account_passkey`, read-only). A passkey that is gone is logged (`session_watch_passkey_missing`) and sent to the operator bot (kind `passkey_missing`): somebody else was in the account's security settings.
 
 Switch it off with `SESSION_AUDIT__WATCH_ENABLED=false`; the old-key closing keeps running.
+
+Copies of every session file and the quarantine for removed ones: `docs/session-vault.md`.
+
+Which Telegram API (app title) each session uses, and the new neutral one: `docs/neutral-api.md`.
 
 ## A dead key is never silent
 

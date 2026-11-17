@@ -52,6 +52,7 @@ from schemas.passkey import (
     StoredPasskey,
 )
 from services.accounts._result import AccountActionError, AccountNotFoundError
+from services.accounts.login import KEY_GONE_STATUSES
 from services.inbox_runtime import start_account_inbox
 
 # One lock per account, never freed (bounded by the accounts ever touched): a
@@ -215,7 +216,10 @@ async def relogin_with_passkey(account_id: str) -> AccountPasskeyView:
     if passkey is None:
         msg = "passkey_missing"
         raise AccountActionError(msg)
-    result = await login_with_passkey(passkey, account.session_name)
+    # A key known dead is re-authorised as a new authorization (it may use the new API);
+    # any other keeps the API it was made with.
+    new_key = account.status in KEY_GONE_STATUSES
+    result = await login_with_passkey(passkey, account.session_name, new_key=new_key)
     if result.status != "alive":
         code = result.error_message if result.status == "unauthorized" else result.status
         extra: dict[str, object] = {"code": code}

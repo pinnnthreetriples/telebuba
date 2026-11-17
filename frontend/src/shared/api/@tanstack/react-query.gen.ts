@@ -172,6 +172,7 @@ import {
   logoutAccount,
   manualInputPhoneOtp,
   markAccountChatRead,
+  markAccountSessionOurs,
   openAccountMobile,
   openAccountWeb,
   type Options,
@@ -757,6 +758,9 @@ import type {
   MarkAccountChatReadData,
   MarkAccountChatReadError,
   MarkAccountChatReadResponse,
+  MarkAccountSessionOursData,
+  MarkAccountSessionOursError,
+  MarkAccountSessionOursResponse,
   OpenAccountMobileData,
   OpenAccountMobileError,
   OpenAccountMobileResponse,
@@ -3485,6 +3489,35 @@ export const getSessionGuardStatusOptions = (options?: Options<GetSessionGuardSt
     },
     queryKey: getSessionGuardStatusQueryKey(options),
   });
+
+/**
+ * Mark Account Session Ours
+ *
+ * Mark a listed session as ours (or take such a mark back). Closes nothing.
+ */
+export const markAccountSessionOursMutation = (
+  options?: Partial<Options<MarkAccountSessionOursData>>,
+): UseMutationOptions<
+  MarkAccountSessionOursResponse,
+  MarkAccountSessionOursError,
+  Options<MarkAccountSessionOursData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    MarkAccountSessionOursResponse,
+    MarkAccountSessionOursError,
+    Options<MarkAccountSessionOursData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await markAccountSessionOurs({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 /**
  * Set Account Registered At

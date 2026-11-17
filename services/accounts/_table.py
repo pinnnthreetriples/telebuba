@@ -13,6 +13,7 @@ from core.db import (
     list_warming_states,
 )
 from core.phone_geo import calling_code_for_phone
+from core.repositories._accounts_passkey import list_passkey_account_ids
 from core.repositories.account_folders import (
     count_filtered_accounts,
     folder_ids_by_account,
@@ -143,9 +144,11 @@ async def _attach_signals(accounts: list[AccountRead]) -> None:
     fingerprints = await list_device_fingerprints()
     floods = await list_warming_flood_summaries()
     foreign = await list_foreign_session_counts()
+    passkeys = await list_passkey_account_ids()
     now = datetime.now(UTC)
     for account in accounts:
         account.foreign_sessions = foreign.get(account.account_id)
+        account.has_passkey = account.account_id in passkeys
         spam = spam_by_account.get(account.account_id)
         fingerprint = fingerprints.get(account.account_id)
         trust = account_trust_score_from(

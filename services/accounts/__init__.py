@@ -112,6 +112,7 @@ from services.accounts.mobile_emulator import (
     open_account_mobile,
     open_mobile_progress,
 )
+from services.accounts.own_authorizations import mark_session_ours
 from services.accounts.passkey import (
     check_account_passkey,
     check_passkey_vault,
@@ -242,6 +243,7 @@ __all__ = [
     "list_listener_accounts",
     "logout_account",
     "mark_chat_read",
+    "mark_session_ours",
     "open_account_mobile",
     "open_account_web",
     "open_mobile_progress",

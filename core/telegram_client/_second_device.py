@@ -260,9 +260,12 @@ async def authorize_second_device(request: SecondDeviceSignIn) -> SecondDeviceRe
             device_type=request.device_type,
             session_name=request.session_name,
             receive_updates=False,
+            # A brand-new key: it may use the new API, recorded with the fingerprint.
+            new_key=True,
         ),
         device=fingerprint,
     )
+    fingerprint = profile.device
     # A file already at that name is an orphan or another account's credential:
     # never sign in over it, and never delete it on the way out.
     if await AsyncPath(f"{profile.session_path}.session").exists():

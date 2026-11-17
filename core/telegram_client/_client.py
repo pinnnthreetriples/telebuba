@@ -11,8 +11,10 @@ from core.config import settings
 from core.db import fetch_account, fetch_account_proxy_settings, fetch_device_fingerprint
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.device_fingerprint_android import ANDROID_LANG_PACK
+from core.instance import require_fleet_owner
 from core.logging import register_log_secrets
 from core.secure_paths import make_private_dir
+from core.telegram_client._api_credentials import api_credentials, new_api_id
 from core.telegram_client._guarded_client import GuardedTelegramClient
 from schemas.accounts import FORBIDDEN_SESSION_NAME_PARTS
 from schemas.device_fingerprint import (
@@ -34,6 +36,10 @@ if TYPE_CHECKING:
 # Stable codes for a device the client cannot be built for; the SPA translates them.
 DEVICE_MISSING: DeviceRefusalCode = "device_missing"
 MOBILE_API_NOT_CONFIGURED: DeviceRefusalCode = "mobile_api_not_configured"
+
+
+class ProxyRequiredError(ConnectionError):
+    """The account has no proxy: it is not connected from this computer's own IP."""
 
 
 class DeviceUnavailableError(ValueError):
@@ -202,6 +208,9 @@ async def prepare_telegram_client_profile(
         device_type = resolve_device(account, request.device_type or _device_of(account, request))
         device = await _device_fingerprint(request.account_id, device_type)
         request = request.model_copy(update={"device_type": device_type})
+    if request.new_key and device.device_type == "desktop" and (new_id := new_api_id()):
+        # A new key may be made with the new API; recorded once the sign-in succeeds.
+        device = device.model_copy(update={"api_id": new_id})
     proxy = await fetch_account_proxy_settings(request.account_id)
     if proxy is not None:
         register_log_secrets(proxy.username, proxy.password)
@@ -238,17 +247,25 @@ async def _ensure_session_dir() -> None:
 
 
 def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
+    # Before anything else: a computer that is not the fleet owner never connects a key.
+    require_fleet_owner()
+    proxy = _proxy_config(profile)
+    if proxy is None and not settings.telegram.allow_direct_connection:
+        # Every flow builds its client here, so no path can connect a proxyless account.
+        # A ConnectionError: callers already read it as "account unreachable".
+        msg = "the account has no proxy (TELEGRAM__ALLOW_DIRECT_CONNECTION is off)"
+        raise ProxyRequiredError(msg)
     device = profile.device
     mobile = device.device_type == "mobile"
-    proxy = _proxy_config(profile)
     # Passed only when set: an explicit ``proxy=None`` is not what a proxy-less
     # client was ever built with.
     proxy_option: dict[str, Any] = {"proxy": proxy} if proxy is not None else {}
     # Guarded: a request never ends in Telethon's own cancellation (see the module).
+    api_id, api_hash = api_credentials(device)
     client = GuardedTelegramClient(
         profile.session_path,
-        settings.telegram.mobile_api_id if mobile else settings.telegram.api_id,
-        settings.telegram.mobile_api_hash if mobile else settings.telegram.api_hash,
+        api_id,
+        api_hash,
         device_model=device.device_model,
         system_version=device.system_version,
         app_version=device.app_version,

@@ -148,6 +148,24 @@ test('a row whose last session audit found foreign sessions says how many', () =
   expect(screen.queryByText(/Чужих сессий: 0/)).toBeNull();
 });
 
+test('a row without a stored passkey says so; unknown stays quiet', () => {
+  render(
+    <AccountsTable
+      data={[
+        { ...ACCOUNTS[0]!, has_passkey: false },
+        { ...ACCOUNTS[1]!, has_passkey: true },
+        { account_id: 'acc-3', status: 'alive', created_at: 'now', updated_at: 'now' },
+      ]}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+
+  expect(screen.getAllByText('без passkey')).toHaveLength(1);
+});
+
 test('fires the row actions for the clicked account', async () => {
   const onCheck = vi.fn();
   const onDelete = vi.fn();

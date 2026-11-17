@@ -30,20 +30,23 @@ from typing import TYPE_CHECKING
 from core.logging import log_event
 from core.repositories.account_own_authorizations import (
     fetch_own_authorizations,
+    forget_own_authorization,
     save_own_authorizations,
 )
 from core.repositories.session_audits import fetch_session_audit, save_session_audit
 from core.telegram_client import SessionAuditGatewayError, read_account_sessions
 from services.accounts._result import AccountActionError
 from services.accounts._session_classify import with_own
+from services.accounts.lifecycle import require_account
 from services.accounts.session_audit import account_audit_lock, require_proxied_account
 
 if TYPE_CHECKING:
     from core.web_login.browser import WebWindow
-    from schemas.session_audit import AccountSession, AuthorizationList
+    from schemas.session_audit import AccountSession, AccountSessionAudit, AuthorizationList
 
 __all__ = [
     "forget_login_baseline",
+    "mark_session_ours",
     "record_own_web_login",
     "remember_login_baseline",
 ]
@@ -154,3 +157,58 @@ async def _refresh_snapshot(account_id: str, own: dict[str, str]) -> None:
     updated = with_own(saved, own)
     if updated.foreign_count != saved.foreign_count:
         await save_session_audit(updated)
+
+
+_MANUAL = "manual"
+
+
+async def mark_session_ours(
+    account_id: str, session_hash: str, *, ours: bool
+) -> AccountSessionAudit:
+    """The operator's word that a listed session is ours (or, for such a mark, is not).
+
+    For what Telebuba cannot prove itself: an orphan of a failed sign-in, a login made by
+    hand, a web login from before they were recorded. Marked, the session no longer counts
+    as foreign (no badge, no alert) and a close refuses it. Nothing is closed here and
+    Telegram is not asked. Only a mark made here can be taken back; a device of ours or a
+    recorded web login is ours by proof. Refused (``session_not_listed``) for a session the
+    saved audit does not list, the asking session itself, or one already ours by proof.
+    """
+    await require_account(account_id)
+    async with account_audit_lock(account_id):
+        saved = await fetch_session_audit(account_id)
+        known = await fetch_own_authorizations(account_id)
+        session = (
+            next((s for s in saved.sessions if s.hash == session_hash), None) if saved else None
+        )
+        manual = known.get(session_hash) == _MANUAL
+        if (
+            saved is None
+            or session is None
+            or session.is_current
+            or (session.is_ours and not manual)
+        ):
+            code = "session_not_listed"
+            raise AccountActionError(code)
+        if ours and not manual:
+            await save_own_authorizations(
+                account_id, [session_hash], kind=_MANUAL, recorded_at=datetime.now(UTC).isoformat()
+            )
+        elif not ours and manual:
+            await forget_own_authorization(account_id, session_hash)
+        own = await fetch_own_authorizations(account_id)
+        updated = with_own(_unmarked(saved, own), own)
+        await save_session_audit(updated)
+    await log_event("INFO", "own_session_marked", account_id=account_id, extra={"ours": ours})
+    return updated
+
+
+def _unmarked(audit: AccountSessionAudit, own: dict[str, str]) -> AccountSessionAudit:
+    """``audit`` with a manual mark that is no longer recorded turned back into foreign."""
+    sessions = [
+        session.model_copy(update={"is_ours": False, "kind": None})
+        if session.kind == _MANUAL and session.hash not in own
+        else session
+        for session in audit.sessions
+    ]
+    return audit.model_copy(update={"sessions": sessions})

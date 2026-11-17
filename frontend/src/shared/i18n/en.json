@@ -81,7 +81,8 @@
       "device": "Device",
       "trust": "Trust",
       "actions": "Actions",
-      "foreignSessions": "Foreign sessions: {{count}}"
+      "foreignSessions": "Foreign sessions: {{count}}",
+      "noPasskey": "no passkey"
     },
     "stats": {
       "total": "Total",
@@ -443,7 +444,10 @@
         "word": "END",
         "logoutConfirm": "Log out",
         "resetConfirm": "Reset"
-      }
+      },
+      "sessionsMarkOurs": "This session is ours",
+      "sessionsUnmarkOurs": "Not ours",
+      "sessionsManualBadge": "marked by hand"
     },
     "actions": {
       "add": "Account",
@@ -1227,7 +1231,8 @@
         "password_invalid": "Wrong password",
         "flood_wait": "Telegram asks to wait {{seconds}} s — try again later",
         "connection_failed": "Could not reach Telegram — check the proxy and try again",
-        "generic": "Could not sign in by QR code"
+        "generic": "Could not sign in by QR code",
+        "session_not_dead": "Check the account first: a QR sign-in replaces its session and is allowed only once that session is known not to work."
       },
       "sendCode": "Send code",
       "sending": "Sending…",
@@ -1699,7 +1704,9 @@
       "rekey_failed": "Telegram refused the new login — nothing was changed.",
       "rekey_incomplete": "The re-key did not finish: no session was ended and a copy of the old file is kept. The account needs a manual check.",
       "rekey_old_key_none": "There is no old session to close: it is already closed, or the account was never re-keyed.",
-      "logout_unconfirmed": "Telegram did not confirm the logout. Nothing was changed: the session, its file and the second device are as they were. Check the proxy and try again."
+      "logout_unconfirmed": "Telegram did not confirm the logout. Nothing was changed: the session, its file and the second device are as they were. Check the proxy and try again.",
+      "proxy_required": "The account has no proxy: Telebuba does not connect it to Telegram without one (it would use your own IP). Assign a proxy.",
+      "session_not_listed": "The last check does not list this session, or it is ours by proof: no mark needed."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -2282,7 +2289,11 @@
     "session_old_key_close_requested": "The operator is closing the old session",
     "account_session_dead": "The account's session no longer works",
     "session_death_suspected": "The account's key looks dead: checking the session",
-    "session_guard_stalled": "The session guard stopped or went silent"
+    "session_guard_stalled": "The session guard stopped or went silent",
+    "session_vault_off": "Session copies are off: SESSION_VAULT__KEY is not set",
+    "session_backup_failed": "Could not store a session copy",
+    "instance_not_fleet_owner": "This computer is not the fleet owner: Telegram connections are refused",
+    "own_session_marked": "The operator marked a session as ours (or took the mark back)"
   },
   "logEventReason": {
     "freed": "the account became free",

@@ -74,6 +74,11 @@ _FINISH_LOCKS: dict[str, asyncio.Lock] = {}
 _FINISHED: dict[str, AccountRead] = {}
 _UNKNOWN_ACCOUNT: QrLoginErrorCode = "unknown_account"
 _ALREADY_SIGNED_IN: QrLoginErrorCode = "already_signed_in"
+_SESSION_NOT_DEAD: QrLoginErrorCode = "session_not_dead"
+_PLACEHOLDER_PREFIX = "qr-"
+# The statuses that say the account's own key no longer works: only then may a QR sign-in
+# write over its session file.
+_DEAD_STATUSES = frozenset({"unauthorized", "session_error"})
 _ACCOUNT_EXISTS: QrLoginErrorCode = "account_exists"
 _NO_QR_LOGIN: QrLoginErrorCode = "no_qr_login"
 
@@ -124,6 +129,10 @@ async def begin_qr_login(account_id: str) -> QrLoginView:
         raise QrLoginError(_UNKNOWN_ACCOUNT)
     if account.status == "alive":
         raise QrLoginError(_ALREADY_SIGNED_IN)
+    if not account_id.startswith(_PLACEHOLDER_PREFIX) and account.status not in _DEAD_STATUSES:
+        # An imported account (``new``, never checked, or failing for another reason): its
+        # session may hold a live key. Its own session check comes first.
+        raise QrLoginError(_SESSION_NOT_DEAD)
     assert_device_configured(account.session_device)
     # Accounts Telebuba already holds: Telegram must not offer them this QR.
     ignored = [
@@ -136,6 +145,8 @@ async def begin_qr_login(account_id: str) -> QrLoginView:
             account_id=account_id,
             session_name=account.session_name,
             ignored_user_ids=ignored,
+            # A placeholder or a key known dead (checked above): a new authorization.
+            new_key=True,
         ),
     )
     return await _view(state)

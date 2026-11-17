@@ -183,6 +183,9 @@ class AccountRead(BaseModel):
     # Sessions of the account that are not ours, as the last audit saw them; ``None``
     # until one ran (``services.accounts.session_audit``). List page only.
     foreign_sessions: int | None = Field(default=None, ge=0)
+    # Whether a passkey is stored: with it a dead key can be signed in again without an
+    # SMS or a code (``services.accounts.passkey``). List page only; ``None`` elsewhere.
+    has_passkey: bool | None = None
     # The account's folders (``schemas.account_folders``) in tab order; enriched by
     # the list page only, empty elsewhere and for an account in no folder.
     folder_ids: list[str] = Field(default_factory=list)

@@ -18,6 +18,7 @@ _ALLOWED_TABLES = frozenset(
         "account_rekeys",
         "accounts",
         "bulk_runs",
+        "device_fingerprints",
         "account_proxies",
         "warming_account_state",
         "warming_channels",
