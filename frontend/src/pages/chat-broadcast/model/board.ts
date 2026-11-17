@@ -23,6 +23,19 @@ type Context = {
 
 const LIVE = new Set(['running', 'stopping']);
 
+// The campaign ended (its "stop after N messages / N hours" fired) before this chat
+// played all its rounds. Not paused: nothing will resume it, the run is over.
+export function cutShort(row: ChatBroadcastBoardRow, status: string): boolean {
+  const planned = row.planned_total ?? null;
+  return (
+    status === 'done' &&
+    row.state !== 'skipped' &&
+    row.state !== 'done' &&
+    planned !== null &&
+    row.sent_total < planned
+  );
+}
+
 function skipLabel(t: TFunction, row: ChatBroadcastBoardRow, approvalHours: number): string {
   const reason = row.skip_reason ?? 'error';
   return t(`chatBroadcast.skip.${reason}`, { hours: approvalHours });
@@ -45,6 +58,16 @@ export function rowView(t: TFunction, row: ChatBroadcastBoardRow, ctx: Context):
       label: t('chatBroadcast.status.skipped', { reason: skipLabel(t, row, ctx.approvalHours) }),
       tone: 'danger',
       when: at === null ? '—' : t('chatBroadcast.when.skippedAt', { time: time(at) }),
+    };
+  }
+  if (cutShort(row, status)) {
+    return {
+      label: t('chatBroadcast.status.cut'),
+      tone: 'warning',
+      when:
+        row.last_sent_at === null || row.last_sent_at === undefined
+          ? '—'
+          : t('chatBroadcast.when.sentAt', { time: time(row.last_sent_at) }),
     };
   }
   if (row.state === 'done' || (status === 'done' && row.state === 'round_done')) {
@@ -171,15 +194,18 @@ export function priority(row: ChatBroadcastBoardRow): number {
   }
 }
 
-export type GroupId = 'attention' | 'writing' | 'joining' | 'waiting' | 'rest' | 'ok' | 'skipped';
+export type GroupId =
+  'attention' | 'writing' | 'joining' | 'waiting' | 'rest' | 'ok' | 'cut' | 'skipped';
 
 export const ACTIVE_GROUPS: GroupId[] = ['attention', 'writing', 'joining', 'waiting', 'rest'];
-export const DONE_GROUPS: GroupId[] = ['ok', 'skipped'];
+export const DONE_GROUPS: GroupId[] = ['ok', 'cut', 'skipped'];
 
-export function inGroup(row: ChatBroadcastBoardRow, group: GroupId): boolean {
+export function inGroup(row: ChatBroadcastBoardRow, group: GroupId, status = ''): boolean {
   switch (group) {
     case 'ok':
-      return row.state !== 'skipped';
+      return row.state !== 'skipped' && !cutShort(row, status);
+    case 'cut':
+      return cutShort(row, status);
     case 'skipped':
       return row.state === 'skipped';
     default:
@@ -211,6 +237,12 @@ export function allResting(rows: ChatBroadcastBoardRow[]): boolean {
 
 // An opened chat shows only its newest history entries until the operator asks for all.
 export const HISTORY_PREVIEW = 6;
+
+// A chat reads as its handle: the "https://t.me/" every link starts with only widens
+// the table.
+export function chatLabel(row: ChatBroadcastBoardRow): string {
+  return row.title ?? row.raw.replace(/^(?:https?:\/\/)?t\.me\//i, '');
+}
 
 export type HistoryLine = {
   text: string;

@@ -33,6 +33,7 @@ import {
   DONE_GROUPS,
   HISTORY_PREVIEW,
   historyLine,
+  chatLabel,
   inGroup,
   orderOf,
   rowView,
@@ -268,7 +269,7 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
       header: t('chatBroadcast.board.columns.chat'),
       cell: ({ row }) => (
         <span className="inline-flex items-center gap-2 whitespace-nowrap">
-          {row.original.title ?? row.original.raw}
+          {chatLabel(row.original)}
           {row.original.message_deleted ? (
             <span title={t('chatBroadcast.board.deletedHint')}>
               <Badge tone="danger">{t('chatBroadcast.board.deleted')}</Badge>
@@ -315,7 +316,7 @@ function columnsOf(t: TFunction, shared: Shared): ColumnDef<Row>[] {
             {total === null || total === 0 ? null : (
               <ProgressBar value={item.sent_total} max={total} className="w-full" />
             )}
-            <div className="mt-1 whitespace-nowrap type-small tabular-nums">
+            <div className="mt-1 type-small tabular-nums">
               {total === null || rounds === null
                 ? t('chatBroadcast.board.leftEndless', { sent: item.sent_total, round: item.round })
                 : t('chatBroadcast.board.left', {
@@ -390,10 +391,16 @@ export function BoardCard({
   const [showResting, setShowResting] = useState(false);
   const inTab = tab === 'active' ? active : done;
   const groups = (tab === 'active' ? ACTIVE_GROUPS : DONE_GROUPS)
-    .map((id) => ({ id, count: inTab.filter((row) => inGroup(row, id)).length }))
+    .map((id) => ({
+      id,
+      count: inTab.filter((row) => inGroup(row, id, board.campaign.status)).length,
+    }))
     .filter((item) => item.count > 0);
   const picked = groups.find((item) => item.id === group);
-  const shown = picked === undefined ? inTab : inTab.filter((row) => inGroup(row, picked.id));
+  const shown =
+    picked === undefined
+      ? inTab
+      : inTab.filter((row) => inGroup(row, picked.id, board.campaign.status));
   const resting = tab === 'active' && board.phase === 'resting' && allResting(active);
   const draft = board.phase === 'draft' && rows.length === 0;
 
