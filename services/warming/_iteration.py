@@ -13,6 +13,7 @@ from core.repositories.warming import load_warming_settings
 from core.repositories.warming_marks import store_cycle_progress
 from schemas._warming_visits import CycleMarks, VisitPlan
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult, spam_block_known
+from services.spam_intel import decision_status
 from services.warming import _loop, _seams
 from services.warming._cadence import visit_budget
 from services.warming._local_day import _local_date
@@ -97,12 +98,13 @@ async def _gate_spam(
     """The spam step on the cached reading; returns the reading the cycle goes on with."""
     spam = await get_spam_status(account_id)
     if record is None:
-        return spam
+        return await decision_status(account_id, spam)
     gated, asked = await _spam_step(account_id, record, spam, now, run_id=run_id)
     if gated is not None:
         return gated
-    # @SpamBot was asked, so the stored reading moved on: score trust from that one.
-    return await get_spam_status(account_id) if asked else spam
+    # @SpamBot was asked, so the stored reading moved on: score trust from that one. The cadence
+    # above reads the stored row; what trust and readiness read is the decision view.
+    return await decision_status(account_id, await get_spam_status(account_id) if asked else spam)
 
 
 async def _plan_iteration(

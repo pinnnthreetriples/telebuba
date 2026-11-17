@@ -25,6 +25,7 @@ from core.repositories.warming_floods import (
 )
 from schemas.trust import TrustBand, TrustScore, TrustSignals
 from schemas.warming import spam_block_known
+from services.spam_intel import decision_status
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -208,7 +209,7 @@ async def account_trust_score(account_id: str) -> TrustScore:
             reasons=["unknown account"],
         )
     record = await fetch_warming_state(account_id)
-    spam = await get_spam_status(account_id)
+    spam = await decision_status(account_id, await get_spam_status(account_id))
     fingerprint = await fetch_device_fingerprint(account_id)
     return account_trust_score_from(
         account=account,

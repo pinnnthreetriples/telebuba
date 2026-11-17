@@ -33,6 +33,7 @@ from core.logging import log_event
 from schemas.warming import spam_block_known
 from services import _account_owner
 from services.dialogues import assign_pairs
+from services.spam_intel import decision_status
 from services.trust import account_trust_score
 from services.warming import _exclusion, _mobile_prep, _seams
 from services.warming._exclusion import assert_no_discovery_run, assert_not_cooling
@@ -40,11 +41,7 @@ from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
 from services.warming._start_state import assert_on_warmed_card, carry_or_restamp, journal_start
 from services.warming._state import _current_card, _set_state
-from services.warming.pacing import (
-    _now_iso,
-    _proxy_snapshot,
-    evaluate_readiness,
-)
+from services.warming.pacing import _now_iso, _proxy_snapshot, evaluate_readiness
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -259,7 +256,7 @@ async def _evaluate_account_readiness(
     return evaluate_readiness(
         account,
         channel_count,
-        spam=await get_spam_status(account_id),
+        spam=await decision_status(account_id, await get_spam_status(account_id)),
         trust_score=await account_trust_score(account_id),
         spam_block_known=spam_block_known(await fetch_warming_state(account_id)),
     )

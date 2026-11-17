@@ -38,6 +38,7 @@ from schemas.warming import (
     warming_health,
 )
 from services.accounts.mobile_emulator import container_name, phone_activity
+from services.spam_intel import decision_statuses
 from services.survival import load_account_survivals
 from services.trust import account_trust_score_from
 from services.warming._cadence import cadence_preview
@@ -63,6 +64,7 @@ from services.warming.settings_store import load_settings
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceType
+    from schemas.spam_status import SpamStatusVerdict
     from schemas.survival import AccountSurvival
     from schemas.warming import WarmingReadiness, WarmingStateRecord
 
@@ -164,6 +166,11 @@ def _to_card(
     )
 
 
+async def _spam_by_account(accounts: list[AccountRead]) -> dict[str, SpamStatusVerdict]:
+    """Every stored spam status, as a decision reads it (``spam_intel.decision_statuses``)."""
+    return await decision_statuses([a.account_id for a in accounts], await list_spam_statuses())
+
+
 async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, WarmingSettings]:
     """Build one enriched card per account, unfiltered.
 
@@ -178,7 +185,7 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
     masked = await load_settings()
     # Bulk-load the per-account health signals once (was an N+1: every card
     # re-fetched account/state/spam/fingerprint via account_trust_score).
-    spam_by_account = await list_spam_statuses()
+    spam_by_account = await _spam_by_account(accounts.accounts)
     fingerprints = await list_device_fingerprints()
     floods_by_account = await list_warming_flood_summaries()
     survivals = await load_account_survivals(accounts.accounts)

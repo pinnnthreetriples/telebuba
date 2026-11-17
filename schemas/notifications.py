@@ -22,6 +22,7 @@ NotificationKind = Literal[
     "quarantine",
     "fleet_dm_paused",
     "spam_limited",
+    "account_frozen",
     "spam_blocked",
     "error",
     "warmed",

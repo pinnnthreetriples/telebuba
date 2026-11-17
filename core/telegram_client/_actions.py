@@ -44,6 +44,7 @@ from core.telegram_client._react import dispatch_react_to_message, dispatch_reac
 from core.telegram_client._read_comments import _resolve_linked_group_entity
 from core.telegram_client._read_feed import dispatch_read_channel
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
+from core.telegram_client._signals import signal_frozen, signal_peer_flood, signal_success
 from core.telegram_client._twofa import dispatch_twofa_action, twofa_log_extra
 from core.telegram_client._util import event_name, sent_message_id
 from schemas.telegram_actions import (
@@ -136,6 +137,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
             account_id, action, status="premium_wait", seconds=exc.seconds, domain=domain
         )
     except errors.PeerFloodError:
+        signal_peer_flood(account_id, action.action_type)
         return await _flood_action_result(
             account_id, action, status="peer_flood", seconds=None, domain=domain
         )
@@ -145,6 +147,9 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
     # honest without waiting for the next manual session check; frozen is a
     # permanent state, so it is recorded for EVERY action family.
     except (errors.FrozenMethodInvalidError, errors.FrozenParticipantMissingError) as exc:
+        signal_frozen(
+            account_id, source="execute", operation=action.action_type, error=type(exc).__name__
+        )
         await _mark_account_status(account_id, "frozen")
         frozen = ProfileGatewayError("account_frozen")
         frozen.__cause__ = exc  # same chain ``raise ... from exc`` would build
@@ -219,6 +224,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
         account_id=account_id,
         extra=extra,
     )
+    signal_success(account_id, action.action_type)
     return _ok_result(account_id, action, outcome)
 
 

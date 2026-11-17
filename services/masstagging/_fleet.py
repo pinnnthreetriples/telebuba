@@ -24,6 +24,7 @@ from core.repositories.neuroshilling import list_running_campaign_account_names
 from core.repositories.spam_status import list_spam_statuses_by_ids
 from services import _account_owner
 from services.masstagging.pace import AccountView, day_of, in_ramp
+from services.spam_intel import decision_statuses
 
 if TYPE_CHECKING:
     from schemas.masstagging import MasstaggingPace
@@ -51,7 +52,7 @@ async def fleet_of(account_ids: list[str]) -> dict[str, FleetAccount]:
     accounts = {
         item.account_id: item for item in (await list_accounts_by_ids(account_ids)).accounts
     }
-    spam = await list_spam_statuses_by_ids(account_ids)
+    spam = await decision_statuses(account_ids, await list_spam_statuses_by_ids(account_ids))
     fleet: dict[str, FleetAccount] = {}
     for account_id in account_ids:
         account = accounts.get(account_id)

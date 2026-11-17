@@ -16,6 +16,7 @@ from core.telegram_client._pool import (
     TelegramClientUnavailableError,
     get_client,
 )
+from core.telegram_client._signals import signal_freeze_config, signal_frozen, signal_me
 from core.telegram_client._util import optional_bool, optional_str
 from schemas.telegram_session import TelegramSessionCheckResult
 
@@ -80,6 +81,7 @@ async def check_telegram_session(
                 result = _status_session_check_result(profile, status="unauthorized")
             else:
                 me = await client.get_me()
+                signal_me(profile.account_id, me)
                 # A frozen account keeps an authorized session and get_me() succeeds,
                 # so probe the app config for a freeze signal before declaring alive.
                 result = await _frozen_session_check_result(
@@ -98,6 +100,9 @@ async def check_telegram_session(
     # Frozen errors subclass FloodError (420) / BadRequestError (400); classify
     # them above FloodWaitError so the broader flood clause cannot swallow them.
     except (errors.FrozenMethodInvalidError, errors.FrozenParticipantMissingError) as exc:
+        signal_frozen(
+            profile.account_id, source="session_check", operation=None, error=type(exc).__name__
+        )
         result = _error_session_check_result(profile, exc, status="frozen")
     except errors.FloodWaitError as exc:
         result = _error_session_check_result(
@@ -235,6 +240,7 @@ async def _frozen_session_check_result(
         fields = {entry.key: getattr(entry.value, "value", None) for entry in config.config.value}
     except Exception:  # noqa: BLE001 - the probe is best-effort; the check must still classify.
         return None
+    signal_freeze_config(profile.account_id, fields)
     freeze_since = fields.get("freeze_since_date")
     if not freeze_since:
         return None

@@ -17,6 +17,7 @@ from core.repositories.outreach_rests import list_outreach_rests, record_outreac
 from core.repositories.spam_status import list_spam_statuses_by_ids
 from core.repositories.warming_floods import list_warming_flood_summaries
 from schemas.outreach_protection import OutreachRest, SkippedAccount
+from services.spam_intel import decision_statuses
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -66,7 +67,11 @@ async def skipped_accounts(
     if not account_ids or not (protection.rest_after_limit or protection.skip_injured):
         return []
     rests = await list_outreach_rests(account_ids)
-    spam = await list_spam_statuses_by_ids(list(account_ids)) if protection.skip_injured else {}
+    spam = (
+        await decision_statuses(account_ids, await list_spam_statuses_by_ids(list(account_ids)))
+        if protection.skip_injured
+        else {}
+    )
     floods = await list_warming_flood_summaries() if protection.skip_injured else {}
     since = now - _INJURY_WINDOW
     skipped: list[SkippedAccount] = []

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 UNRECOGNIZED_DETAIL = "unrecognized_reply"
 AMBIGUOUS_DETAIL = "ambiguous_reply"
-_CHECKING_DETAIL = "account is being checked"
+CHECKING_DETAIL = "account is being checked"
 
 # Substring markers, lowercased, ordered by check priority. ``@SpamBot`` localises its reply
 # to the account's interface language, so the same verdict can land in EN, RU, or anything
@@ -115,7 +115,7 @@ def _classify_reply_text(text: str) -> tuple[SpamStatusKind, str | None] | None:
     if any(marker in lowered for marker in _CLEAN_MARKERS):
         return "clean", None
     if any(marker in lowered for marker in _BEING_CHECKED_MARKERS):
-        return "unknown", _CHECKING_DETAIL
+        return "unknown", CHECKING_DETAIL
     if any(marker in lowered for marker in _LIMITED_MARKERS):
         return "limited", extract_until(text)
     return None
@@ -132,7 +132,7 @@ def _classify_by_heuristic(text: str) -> tuple[SpamStatusKind, str | None]:
         return "limited", extract_until(text) or date
     lowered = text.lower()
     if any(marker in lowered for marker in _AUTOMATED_MARKERS):
-        return "unknown", _CHECKING_DETAIL
+        return "unknown", CHECKING_DETAIL
     return "clean", None
 
 
@@ -176,14 +176,14 @@ def classify_strict(  # noqa: PLR0911 - one flat ladder of verdicts, read top to
     if clean:
         return "clean", None
     if any(marker in lowered for marker in _BEING_CHECKED_MARKERS):
-        return "unknown", _CHECKING_DETAIL
+        return "unknown", CHECKING_DETAIL
     if limited:
         return "limited", extract_until(text)
     date = find_date(text)
     if date is not None:
         return "limited", extract_until(text) or date
     if any(marker in lowered for marker in _AUTOMATED_MARKERS):
-        return "unknown", _CHECKING_DETAIL
+        return "unknown", CHECKING_DETAIL
     return "unknown", UNRECOGNIZED_DETAIL
 
 

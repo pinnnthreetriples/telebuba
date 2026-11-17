@@ -56,8 +56,11 @@ from services.spam_intel._answers import (
     outcome_label,
     unasked,
 )
+from services.spam_intel._evidence import record_reading
 from services.spam_intel._policy import ProbeRequest, backoff_until, parse_moment
 from services.spam_intel._policy import decide as _decide
+from services.spam_intel._served import evidence_hint, forget_served
+from services.spam_intel._shadow import fold_before, record_comparison
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -102,6 +105,7 @@ def reset_for_tests() -> None:
     global _STARTED  # noqa: PLW0603 - one process-wide start instant, reset between tests
     _INFLIGHT.clear()
     forget_logged()
+    forget_served()
     _STARTED = datetime.now(UTC) - timedelta(days=1)
 
 
@@ -171,6 +175,7 @@ async def _probe(
         )
     )
     clock = time.monotonic()
+    before = await fold_before(account.account_id)  # shadow comparison: the fold's word first
     try:
         outcome = await spam_status.probe_and_store(account.account_id, previous=cached)
     except BaseException as exc:
@@ -199,6 +204,12 @@ async def _probe(
             "duration_ms": duration_ms,
         },
     )
+    if outcome.error is None:
+        # The reading is evidence too (``spambot_*``): the fold and the stored projection see it.
+        await record_reading(
+            account.account_id, outcome.verdict.status, outcome.verdict.detail, ended.at
+        )
+        await record_comparison(account.account_id, before, outcome.verdict.status)
     await _prune()
     return outcome.verdict.model_copy(update={"served_from": "probe"})
 
@@ -217,8 +228,18 @@ async def _ask_once(req: Ask) -> SpamStatusVerdict:
             detail="account not found",
         )
     cached = await get_spam_status(account_id)
-    if not req.force and cached is not None and spam_status.is_reading_fresh(cached.checked_at, at):
+    # Empty unless ``passive_decisions`` is on (``_served``): then the evidence may say the
+    # cache cannot be trusted (``recheck``) or answer without a probe (``answer``).
+    hint = await evidence_hint(req, cached, at)
+    if (
+        not req.force
+        and not hint.recheck
+        and cached is not None
+        and spam_status.is_reading_fresh(cached.checked_at, at)
+    ):
         return cached.model_copy(update={"served_from": "cache"})
+    if hint.answer is not None:
+        return hint.answer
     intel = settings.spam_intel
     snapshot = await load_budget_snapshot(
         account_id, account.proxy_id, (at - timedelta(hours=24)).isoformat()

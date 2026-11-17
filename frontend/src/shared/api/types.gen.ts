@@ -7684,7 +7684,7 @@ export type SpamStatusVerdict = {
   /**
    * Served From
    */
-  served_from?: 'cache' | 'probe' | 'coalesced' | 'deferred' | 'refused' | null;
+  served_from?: 'cache' | 'probe' | 'coalesced' | 'evidence' | 'deferred' | 'refused' | null;
   /**
    * Retry At
    */
