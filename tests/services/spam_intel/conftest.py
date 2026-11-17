@@ -15,7 +15,7 @@ from schemas.accounts import AccountCreate
 from schemas.proxy import ProxyCreate
 from schemas.spam_status import SpamStatusProbe
 from services import _account_owner, spam_status
-from services.spam_intel import _answers, _evidence, _gateway, _history
+from services.spam_intel import _answers, _evidence, _gateway, _history, _served, _shadow
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -112,7 +112,7 @@ def events(monkeypatch: pytest.MonkeyPatch) -> Events:
     ) -> None:
         recorded.rows.append((level, event, dict(extra or {})))
 
-    for module in (_gateway, _answers, spam_status, _history, _evidence):
+    for module in (_gateway, _answers, spam_status, _history, _evidence, _served, _shadow):
         monkeypatch.setattr(module, "log_event", _record)
     return recorded
 

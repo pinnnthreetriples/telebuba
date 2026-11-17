@@ -117,3 +117,13 @@ def parse_limit_expiry(text: str | None) -> datetime | None:
     if named is None:
         return None
     return datetime(named.year, named.month, named.day, tzinfo=UTC) + HOLD
+
+
+def end_date(expiry: datetime | None) -> date | None:
+    """The calendar day a limit ending at ``expiry`` was named for (``expiry`` minus the hold)."""
+    return None if expiry is None else (expiry - HOLD).date()
+
+
+def limit_end_date(text: str | None) -> date | None:
+    """The day a reply says a limit ends, or ``None`` when it names none."""
+    return end_date(parse_limit_expiry(text))

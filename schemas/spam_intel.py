@@ -16,8 +16,9 @@ Purpose = Literal["routine", "decision", "measurement", "operator"]
 # How an answer reached the caller. ``cache``: a stored reading inside the TTL. ``probe``: a
 # real question to @SpamBot just now. ``coalesced``: another caller's reading or failure,
 # younger than the coalescing window. ``deferred``: the budget says later (``retry_at``).
-# ``refused``: it will not be asked (``reason``).
-ServedFrom = Literal["cache", "probe", "coalesced", "deferred", "refused"]
+# ``refused``: it will not be asked (``reason``). ``evidence``: the fold of passive evidence
+# answered, nothing was asked (only with ``SPAM_INTEL__PASSIVE_DECISIONS``).
+ServedFrom = Literal["cache", "probe", "coalesced", "evidence", "deferred", "refused"]
 
 DeferralReason = Literal[
     "backoff",
@@ -124,3 +125,16 @@ class ReplySample(BaseModel):
     first_seen_at: str
     last_seen_at: str
     seen_count: int = Field(default=1, ge=1)
+
+
+class ShadowAgreement(BaseModel):
+    """How often the stored fold matched the real @SpamBot answer (the shadow comparison).
+
+    ``rows`` counts each (fold status before the reading, real status) pair; ``agree`` and
+    ``total`` are the sums the owner reads. Built from the ``spam_intel_shadow_comparison``
+    log events, so reading it sends nothing to Telegram.
+    """
+
+    total: int = Field(default=0, ge=0)
+    agree: int = Field(default=0, ge=0)
+    rows: dict[str, int] = Field(default_factory=dict)

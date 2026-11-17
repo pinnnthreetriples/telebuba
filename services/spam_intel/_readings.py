@@ -18,7 +18,7 @@ from schemas.spam_evidence import Evidence, EvidenceKind, Verdict
 from schemas.spam_status import SpamStatusKind  # noqa: TC001 - annotation read by pydantic.
 from services._spam_parse import AMBIGUOUS_DETAIL, CHECKING_DETAIL, UNRECOGNIZED_DETAIL
 from services.spam_intel._evidence_policy import KIND_POLICY, default_expiry
-from services.spam_intel._limit_date import HOLD, parse_limit_expiry
+from services.spam_intel._limit_date import end_date, parse_limit_expiry
 
 SPAMBOT_SOURCE = "spambot"
 LEGACY_SOURCE = "legacy_status"
@@ -46,7 +46,8 @@ def reading_evidence(
         kind = "spambot_clean"
     elif status == "limited":
         expires_at = parse_limit_expiry(detail)
-        stored = None if expires_at is None else (expires_at - HOLD).date().isoformat()
+        ends = end_date(expires_at)
+        stored = None if ends is None else ends.isoformat()
         kind = "peer_flood_send" if detail == _PEER_FLOOD_DETAIL else "spambot_limited"
     elif detail == CHECKING_DETAIL:
         kind = "spambot_reviewing"

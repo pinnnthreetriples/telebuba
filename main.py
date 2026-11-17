@@ -37,6 +37,7 @@ from core.db import run_db_maintenance_loop
 from core.gemini import close_gemini_client
 from core.logging import log_event, setup_logging
 from core.openai import close_openai_client
+from core.spam_signals import drain_signals
 from core.telegram_client import shutdown_qr_logins, shutdown_telegram_pool
 from services.accounts import (
     close_orphaned_web_windows,
@@ -72,7 +73,7 @@ from services.neuroshilling import (
 from services.notifications import shutdown_notifications, start_notifications
 from services.scheduled_posts import shutdown_scheduled_posts, start_scheduled_posts
 from services.session_guard import shutdown_session_guard, start_session_guard
-from services.spam_intel import shutdown_history_sweep, start_history_sweep
+from services.spam_intel import install_signal_sink, shutdown_history_sweep, start_history_sweep
 from services.survival import shutdown_survival_probes, start_survival_probes
 from services.user_parser import (
     reconcile_user_parser_on_startup,
@@ -163,6 +164,20 @@ async def _shutdown_spambot_tasks() -> None:
     await shutdown_history_sweep()
 
 
+def _setup_process() -> None:
+    """Logging, and the port core reports passive spam signals through, before any Telegram call."""
+    setup_logging()
+    install_signal_sink()
+
+
+async def _shutdown_pool() -> None:
+    """The pool, then the signals its last callers raised (before notifications close)."""
+    try:
+        await shutdown_telegram_pool()
+    finally:
+        await drain_signals()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Start/stop the in-process runtimes around the server's lifetime.
@@ -180,7 +195,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     account serving a campaign?", "is it the running listener?") are answered from the
     database whether its reconcile has run or not.
     """
-    setup_logging()
+    _setup_process()
     await cleanup_stale_uploads()
     # Before any window of this run can open: whatever answers now is a leftover.
     await close_orphaned_web_windows()
@@ -240,7 +255,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _shutdown_step("inbox", shutdown_inbox_runtime)
         # Before the pool: an open QR sign-in owns a client and the account's auth lock.
         await _shutdown_step("qr_login", shutdown_qr_logins)
-        await _shutdown_step("telegram_pool", shutdown_telegram_pool)
+        await _shutdown_step("telegram_pool", _shutdown_pool)
         # After every runtime has drained, so their last events can still notify.
         await _shutdown_step("notifications", shutdown_notifications)
         await _shutdown_step("web_login", shutdown_web_login)

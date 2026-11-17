@@ -49,6 +49,7 @@ from services._soft_start import soft_day
 from services.neurocomment import _filters, _reply_wait, _seams, _state
 from services.neurocomment._pins import serving_accounts
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
+from services.spam_intel import decision_statuses
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -261,7 +262,7 @@ async def _load_selection_pool(
         for r in (await list_channel_readiness(campaign_id, channel, account_ids)).readiness
     }
     states = {rec.account_id: rec for rec in await list_warming_states_by_ids(account_ids)}
-    spam = await list_spam_statuses_by_ids(account_ids)
+    spam = await decision_statuses(account_ids, await list_spam_statuses_by_ids(account_ids))
     fingerprints = await list_device_fingerprints_by_ids(account_ids)
 
     overrides = await load_account_limit_overrides(account_ids)

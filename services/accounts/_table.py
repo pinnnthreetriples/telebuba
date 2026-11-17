@@ -31,6 +31,7 @@ from schemas.accounts import (
     AccountStatus,
     health_for_status,
 )
+from services.spam_intel import decision_statuses
 from services.trust import account_trust_score_from
 
 if TYPE_CHECKING:
@@ -140,7 +141,9 @@ async def _attach_signals(accounts: list[AccountRead]) -> None:
     if not accounts:
         return
     records = {record.account_id: record for record in await list_warming_states()}
-    spam_by_account = await list_spam_statuses()
+    spam_by_account = await decision_statuses(
+        [account.account_id for account in accounts], await list_spam_statuses()
+    )
     fingerprints = await list_device_fingerprints()
     floods = await list_warming_flood_summaries()
     foreign = await list_foreign_session_counts()

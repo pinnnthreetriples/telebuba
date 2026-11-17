@@ -259,7 +259,10 @@ async def test_a_passive_clean_never_lifts_a_spam_block(
     await spam_intel.record_evidence("a1", "peer_flood_send", source="execute")
     clock.advance(hours=1)
     await spam_intel.record_evidence("a1", "dm_stranger_ok", source="outreach")
-    assert (await spam_intel.verdicts_for(["a1"]))["a1"].status == "clean"
+    # The reading that named the limit (stored before evidence existed) is part of the fold: a
+    # delivered first message does not supersede an @SpamBot limit, it asks for a new answer.
+    verdict = (await spam_intel.verdicts_for(["a1"]))["a1"]
+    assert (verdict.status, verdict.contradiction, verdict.needs_probe) == ("limited", True, True)
 
     assert await spam_block_lift.lift_from_stored_answer("a1") is False
     record = await fetch_warming_state("a1")

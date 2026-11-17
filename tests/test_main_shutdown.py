@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 import main
+from core.spam_signals import emit_signal
+from services.spam_intel import _signals
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -201,3 +203,28 @@ async def test_the_failure_is_reported_by_type_and_never_by_text(
         ),
     ]
     assert "hunter2" not in str(harness["events"])
+
+
+@pytest.mark.asyncio
+async def test_the_lifespan_registers_the_spam_signal_receiver_and_drains_it_on_shutdown(
+    harness: dict[str, Any],  # noqa: ARG001 - only its patches matter.
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``core`` reports into a port that stays empty until the app registers its receiver.
+
+    The signal is raised inside the run and the check happens after the lifespan exits, so
+    it also pins that shutdown waits for what is still in flight.
+    """
+    seen: list[str] = []
+
+    async def spy(account_id: str, kind: str, **_kwargs: object) -> None:
+        await asyncio.sleep(0)
+        seen.append(f"{account_id}:{kind}")
+
+    monkeypatch.setattr(_signals._evidence, "record_evidence", spy)
+
+    async with main.lifespan(main.app):
+        emit_signal("a1", "peer_flood_send", source="execute")
+        assert seen == []
+
+    assert seen == ["a1:peer_flood_send"]

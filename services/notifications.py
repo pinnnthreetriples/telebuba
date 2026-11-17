@@ -21,13 +21,14 @@ import time
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_account
+from core.db import fetch_account, fetch_warming_state
 from core.events import subscribe
 from core.logging import log_event
 from core.notify_bot import send_bot_message
 from core.repositories.notification_settings import load_notification_settings
 from schemas.notifications import BotMessage, NotificationKind
 from services._notification_messages import account_label, compose_message, notification_kind
+from services._notification_spam import is_passive_peer_flood, limited_notice
 
 if TYPE_CHECKING:
     from schemas.logs import LogEntry
@@ -38,6 +39,11 @@ logger = logging.getLogger(__name__)
 _SECONDS_PER_HOUR = 3600
 
 _ThrottleKey = tuple[str | None, NotificationKind]
+
+# A warming account whose loop is running already hears about its own PeerFlood: the cycle result
+# sends the ``quarantine`` notification, so the verdict turning limited from that same PeerFlood
+# would only repeat it.
+_WARMING_LOOP_STATES = frozenset({"active", "sleeping", "flood_wait", "quarantine"})
 
 
 class _Runtime:
@@ -75,6 +81,14 @@ async def _label(account_id: str | None) -> str:
     return account_label(account)
 
 
+async def _warming_covers(entry: LogEntry) -> bool:
+    """A passive PeerFlood limit on an account in a running warming loop: ``quarantine`` says it."""
+    if entry.account_id is None or not is_passive_peer_flood(entry):
+        return False
+    record = await fetch_warming_state(entry.account_id)
+    return record is not None and record.state in _WARMING_LOOP_STATES
+
+
 async def handle_log_entry(entry: LogEntry) -> None:
     """Send the notification ``entry`` asks for, if any, enabled and not throttled."""
     kind = notification_kind(entry)
@@ -83,9 +97,12 @@ async def handle_log_entry(entry: LogEntry) -> None:
     config = await load_notification_settings()
     if not (config.enabled and config.bot_token and config.chat_id):
         return
+    if kind == "spam_limited" and await _warming_covers(entry):
+        return
     if not _claim_slot((entry.account_id, kind)):
         return
-    text = compose_message(kind, await _label(entry.account_id))
+    notice = limited_notice(entry) if kind == "spam_limited" else None
+    text = compose_message(kind, await _label(entry.account_id), notice)
     result = await send_bot_message(
         BotMessage(bot_token=config.bot_token, chat_id=config.chat_id, text=text),
     )

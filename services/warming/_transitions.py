@@ -16,6 +16,7 @@ from core.db import get_spam_status, list_warming_channels
 from core.logging import log_event
 from schemas.warming import WarmingCycleResult, is_parked, spam_block_known
 from services.lifecycle_journal import record_lifecycle_event
+from services.spam_intel import decision_status
 from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._local_day import _next_local_wake
@@ -121,7 +122,7 @@ async def _gate_readiness(  # noqa: PLR0913 - explicit readiness signals read cl
         channel_count, spam = len(snapshot.channels), snapshot.spam
     else:
         channel_count = len((await list_warming_channels()).channels)
-        spam = await get_spam_status(account_id)
+        spam = await decision_status(account_id, await get_spam_status(account_id))
     readiness = evaluate_readiness(
         account,
         channel_count,

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 from core.config import settings
 from core.logging import log_event
@@ -30,21 +30,24 @@ from core.repositories.spam_evidence import list_evidence, prune_evidence
 from core.repositories.spam_evidence import record_evidence as store_evidence
 from core.repositories.spam_status import list_projections_by_ids, store_projection
 from core.repositories.spam_status import upsert_spam_status as write_legacy_status
-from schemas.spam_evidence import DETAIL_MAX_CHARS, Evidence, Verdict
+from schemas.spam_evidence import DETAIL_MAX_CHARS, Evidence, EvidenceKind, Verdict
 from schemas.spam_status import SpamStatusVerdict
 from services.spam_intel._evidence_policy import KIND_POLICY, SPAMBOT_KINDS, default_expiry
 from services.spam_intel._fold import fold
+from services.spam_intel._limit_date import end_date
 from services.spam_intel._readings import LEGACY_SOURCE, expire, reading_evidence
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from schemas.spam_evidence import EvidenceKind, StoredProjection
+    from schemas.spam_evidence import StoredProjection
     from schemas.spam_status import SpamStatusKind
 
 logger = logging.getLogger(__name__)
 
 _NAME_MAX_CHARS = 64
+# What ``_legacy_view`` writes into the legacy ``detail``: an evidence kind, or a state of ours.
+_MIRROR_DETAILS = frozenset(get_args(EvidenceKind)) | {"frozen", "limit_expired"}
 
 
 def now() -> datetime:
@@ -139,11 +142,49 @@ async def _store(item: Evidence) -> None:
     await _refold(item.account_id, at)
 
 
+def _stamp(moment: str) -> datetime:
+    parsed = datetime.fromisoformat(moment)
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _mirrored(legacy: SpamStatusVerdict) -> bool:
+    """The legacy row is a passive verdict written through (``_mirror``), not a reading."""
+    return legacy.detail in _MIRROR_DETAILS
+
+
+async def _fold_inputs(account_id: str, legacy: SpamStatusVerdict | None) -> list[Evidence]:
+    """The account's evidence, plus its pre-evidence @SpamBot reading while no real one is on file.
+
+    Every reading the gateway stores is recorded as evidence, but an account's last reading from
+    before the evidence layer exists only in the legacy columns. Without it the first PeerFlood or
+    flag would fold an account that was ``limited`` into one with no history, and a delivered first
+    message could then read ``clean`` over a limit @SpamBot had named.
+    """
+    items = await list_evidence(account_id)
+    if legacy is None or _mirrored(legacy) or any(item.kind in SPAMBOT_KINDS for item in items):
+        return items
+    seed = reading_evidence(
+        account_id, legacy.status, legacy.detail, _stamp(legacy.checked_at), source=LEGACY_SOURCE
+    )
+    return items if seed is None else [*items, seed]
+
+
+def _previous(stored: StoredProjection | None, at: datetime) -> Verdict | None:
+    """What the account read before this fold: its projection, else its stored reading's fold."""
+    if stored is None:
+        return None
+    if stored.verdict is not None or stored.legacy is None:
+        return stored.verdict
+    return _from_legacy(stored, at)
+
+
 async def _refold(account_id: str, at: datetime) -> None:
     intel = settings.spam_intel
-    verdict = fold(await list_evidence(account_id), at, intel)
     stored = (await list_projections_by_ids([account_id])).get(account_id)
-    previous = None if stored is None else stored.verdict
+    verdict = fold(
+        await _fold_inputs(account_id, None if stored is None else stored.legacy), at, intel
+    )
+    previous = _previous(stored, at)
     await store_projection(account_id, verdict, at)
     if previous is None or (previous.status, previous.primary_kind) != (
         verdict.status,
@@ -158,11 +199,19 @@ async def _refold(account_id: str, at: datetime) -> None:
                 "to": verdict.status,
                 "primary_kind": verdict.primary_kind,
                 "reason": verdict.reason,
+                # The day the limit ends (ISO), derived here, never a reply's own words;
+                # none = no end date. The operator notification names it.
+                "until": _day(verdict),
                 "shadow": not intel.passive_decisions,
             },
         )
     if intel.passive_decisions:
         await _mirror(account_id, verdict, None if stored is None else stored.legacy, at)
+
+
+def _day(verdict: Verdict) -> str | None:
+    ends = end_date(verdict.valid_until)
+    return None if ends is None else ends.isoformat()
 
 
 def _legacy_view(verdict: Verdict) -> tuple[SpamStatusKind, str] | None:
@@ -207,10 +256,12 @@ def _from_legacy(row: StoredProjection, at: datetime) -> Verdict:
     legacy = row.legacy
     evidence = None
     if legacy is not None:
-        stamp = datetime.fromisoformat(legacy.checked_at)
-        stamp = stamp if stamp.tzinfo is not None else stamp.replace(tzinfo=UTC)
         evidence = reading_evidence(
-            legacy.account_id, legacy.status, legacy.detail, stamp, source=LEGACY_SOURCE
+            legacy.account_id,
+            legacy.status,
+            legacy.detail,
+            _stamp(legacy.checked_at),
+            source=LEGACY_SOURCE,
         )
     return fold([] if evidence is None else [evidence], at, settings.spam_intel)
 
@@ -221,9 +272,7 @@ def _newer_legacy(row: StoredProjection) -> bool:
         return False
     if row.verdict is None or row.folded_at is None:
         return True
-    stamp = datetime.fromisoformat(row.legacy.checked_at)
-    stamp = stamp if stamp.tzinfo is not None else stamp.replace(tzinfo=UTC)
-    return stamp > row.folded_at
+    return _stamp(row.legacy.checked_at) > row.folded_at
 
 
 def _read(row: StoredProjection | None, at: datetime) -> Verdict:
@@ -241,6 +290,22 @@ def _read(row: StoredProjection | None, at: datetime) -> Verdict:
         if stored.status == "frozen":
             return stored
     return expire(derived, at)
+
+
+async def current_view(account_id: str) -> tuple[Verdict, list[Evidence]]:
+    """The account's verdict re-aged to now, and the evidence it was folded from.
+
+    ``verdicts_for`` hands back the projection as folded (its confidence is as old as the
+    last write); a decision that serves an answer from evidence needs the confidence NOW, so
+    this folds again. An account the evidence layer has not seen reads from its legacy
+    reading (no evidence list).
+    """
+    at = now()
+    row = (await list_projections_by_ids([account_id])).get(account_id)
+    if row is None or row.verdict is None or _newer_legacy(row):
+        return _read(row, at), []
+    items = await _fold_inputs(account_id, row.legacy)
+    return fold(items, at, settings.spam_intel), items
 
 
 async def verdicts_for(account_ids: Iterable[str]) -> dict[str, Verdict]:

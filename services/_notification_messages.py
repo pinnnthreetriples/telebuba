@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from services._notification_spam import SPAM_ONLY_EVENTS, SpamNotice, spam_kind
+
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.logs import LogEntry
@@ -20,7 +22,6 @@ if TYPE_CHECKING:
 
 # A cycle that hit PeerFlood parks the account in quarantine (``_transitions``).
 _CYCLE_EVENT = "warming_cycle_completed"
-_SPAM_STATUS_EVENT = "spam_status_refreshed"
 # The fixed-name events; ``warming_dm_fleet_paused`` is fleet-wide (no account).
 _EVENT_KINDS: dict[str, NotificationKind] = {
     "warming_quarantine_extended": "quarantine",
@@ -48,7 +49,12 @@ _PREFIX = "Telebuba · "
 _TEMPLATES: dict[NotificationKind, str] = {
     "quarantine": "{label}: спам-блок (PeerFlood), аккаунт на карантине прогрева.",
     "fleet_dm_paused": "Прогрев: личные сообщения между аккаунтами приостановлены для всего парка.",
-    "spam_limited": "{label}: @SpamBot сообщает об ограничениях аккаунта.",
+    # ``{until}`` is "до 29.10.2026" or "бессрочно"; ``{source}`` is " Источник: ..." or empty.
+    "spam_limited": "{label}: аккаунт ограничен за спам — {until}.{source}",
+    "account_frozen": (
+        "{label}: Telegram заморозил аккаунт — сообщения и вступления с него недоступны, "
+        "пока заморозка не снята. Проверьте аккаунт в приложении Telegram."
+    ),
     "spam_blocked": (
         "{label}: @SpamBot подтвердил спамблок — прогрев остановлен. "
         "Решите на карточке аккаунта: удалить или оставить."
@@ -88,11 +94,14 @@ def notification_kind(entry: LogEntry) -> NotificationKind | None:
     """The notification a log row asks for, or ``None`` for every other row."""
     if entry.event == _CYCLE_EVENT:
         return "quarantine" if entry.extra.get("status") == "peer_flood" else None
-    if entry.event == _SPAM_STATUS_EVENT:
-        # Only the news: an account already limited (a kept spam block is permanent)
-        # answers "limited" at every scheduled check and must not ping each time.
-        news = entry.extra.get("previous") != "limited"
-        return "spam_limited" if entry.extra.get("status") == "limited" and news else None
+    # Only the news: an account already limited (a kept spam block is permanent) answers
+    # "limited" at every scheduled check and must not ping each time; a freeze is told once,
+    # whichever of the session check and the fold finds it first (they share one throttle slot).
+    spam = spam_kind(entry)
+    if spam is not None:
+        return spam
+    if entry.event in SPAM_ONLY_EVENTS:
+        return None
     return _EVENT_KINDS.get(entry.event)
 
 
@@ -112,6 +121,8 @@ def account_label(account: AccountRead | None) -> str:
     return name or handle or _usable(account.label) or UNNAMED_ACCOUNT
 
 
-def compose_message(kind: NotificationKind, label: str) -> str:
-    """The full message text for one notification."""
-    return _PREFIX + _TEMPLATES[kind].format(label=label)
+def compose_message(kind: NotificationKind, label: str, notice: SpamNotice | None = None) -> str:
+    """The full message text for one notification (``notice``: what a spam message names)."""
+    until = "бессрочно" if notice is None or notice.until is None else f"до {notice.until:%d.%m.%Y}"
+    source = f" Источник: {notice.source}." if notice is not None and notice.source else ""
+    return _PREFIX + _TEMPLATES[kind].format(label=label, until=until, source=source)

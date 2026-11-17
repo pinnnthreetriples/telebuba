@@ -20,9 +20,12 @@ _PROFILE = settings(max_examples=150, deadline=None)
 
 @st.composite
 def _item(draw: st.DrawFn, kinds: tuple[str, ...] = _KINDS) -> Evidence:
-    expiry = draw(st.one_of(st.none(), st.floats(min_value=-60, max_value=60)))
+    kind = draw(st.sampled_from(kinds))
+    # Only a dated limit carries an expiry the program set; a clean reading's end is policy.
+    dated = KIND_POLICY[kind].direction == "limited"  # ty: ignore[invalid-argument-type]
+    expiry = draw(st.one_of(st.none(), st.floats(min_value=-60, max_value=60))) if dated else None
     return ev(
-        draw(st.sampled_from(kinds)),  # ty: ignore[invalid-argument-type]
+        kind,  # ty: ignore[invalid-argument-type]
         draw(st.floats(min_value=0, max_value=900)),
         expires_in_hours=expiry,
         source=draw(st.sampled_from(["a", "b"])),

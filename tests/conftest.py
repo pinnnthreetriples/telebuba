@@ -15,9 +15,11 @@ from telethon.client.telegrambaseclient import TelegramBaseClient
 
 from core.config import settings
 from core.db import configure_database
+from core.spam_signals import reset_signals_for_tests
 from core.web_login.fingerprint import note_installed_browser
 from services import _account_owner, _join_lock, pacing
 from services.neuroshilling import _state as neuroshilling_state
+from services.spam_intel import _signals as spam_signal_receiver
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -230,3 +232,18 @@ def _reset_neuroshilling_generation() -> Iterator[None]:
     neuroshilling_state.reset_for_tests()
     yield
     neuroshilling_state.reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def _reset_spam_signals() -> Iterator[None]:
+    """Remove the passive-signal receiver and its shadow throttle around EVERY test.
+
+    The app registers the receiver at startup (``main.lifespan``), and the registration is
+    process state: one left behind by a test that ran the lifespan would turn every later
+    PeerFlood in the suite into a database write on a loop that may be gone.
+    """
+    reset_signals_for_tests()
+    spam_signal_receiver.reset_for_tests()
+    yield
+    reset_signals_for_tests()
+    spam_signal_receiver.reset_for_tests()

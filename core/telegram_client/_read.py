@@ -49,6 +49,7 @@ from core.telegram_client._read_stories import (
     dispatch_list_pinned_stories,
 )
 from core.telegram_client._read_user_parser import dispatch_user_parser_read
+from core.telegram_client._signals import signal_read_peer_flood
 from core.telegram_client._twofa import dispatch_get_twofa_status
 from schemas.telegram_actions import (
     BanCheckResult,
@@ -181,6 +182,7 @@ async def execute_read_many(
     except errors.PeerFloodError as exc:
         # A 400, not a 420, and no duration on the wire: same verdict and the same
         # spelling rule, but the wait is left to the caller's no-duration default.
+        signal_read_peer_flood(account_id)
         reason = type(exc).__name__.removesuffix("Error")
         raise TelegramReadError(reason, kind="flood_wait") from exc
     except errors.RPCError as exc:

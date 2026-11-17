@@ -2284,6 +2284,8 @@
     "spam_intel_history_sweep_failed": "Reading old @SpamBot dialogs failed",
     "spam_intel_evidence": "Spam evidence recorded for the account",
     "spam_intel_verdict_changed": "The spam verdict folded from evidence changed",
+    "spam_intel_shadow_comparison": "The spam fold was compared with a real @SpamBot answer",
+    "spam_intel_served_from_evidence": "Spam status answered from evidence, @SpamBot not asked",
     "telegram_spam_history_failed": "Could not read the @SpamBot dialog",
     "warming_quarantine_recheck_deferred": "Quarantine re-check postponed: @SpamBot probe budget",
     "account_logout_unconfirmed": "Telegram did not confirm the logout — nothing changed",

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, BinaryIO, Protocol, Self, cast
 
 from telethon import errors
 
+from core.spam_signals import emit_signal
 from core.telegram_client._chat_common import (
     ChatGatewayError,
     _entity,
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from telethon import hints
 
     from schemas.chats import ChatMediaKind, ChatMessage, ChatPeerType, ChatUpload
+    from schemas.spam_evidence import EvidenceKind
 
 
 class _PermissionClient(Protocol):
@@ -84,6 +86,23 @@ async def _ensure_writable(
         raise ChatGatewayError("chat_write_forbidden")  # noqa: EM101
 
 
+def _signal_refusal(account_id: str, exc: Exception) -> None:
+    """A send refusal that says something about the account: PeerFlood, or a channel ban.
+
+    A plain flood wait, a forbidden chat and a privacy refusal say nothing, and report nothing.
+    """
+    kind: EvidenceKind
+    if isinstance(exc, errors.PeerFloodError):
+        kind = "peer_flood_send"
+    elif isinstance(exc, errors.UserBannedInChannelError):
+        kind = "user_banned_in_channel"
+    else:
+        return
+    emit_signal(
+        account_id, kind, source="chat_gateway", operation="send_message", detail=type(exc).__name__
+    )
+
+
 @_translate_errors
 async def send_message(  # noqa: PLR0913
     account_id: str,
@@ -136,8 +155,12 @@ async def send_message(  # noqa: PLR0913
         errors.UserBannedInChannelError,
         errors.UserPrivacyRestrictedError,
     ) as exc:
+        _signal_refusal(account_id, exc)
         raise ChatGatewayError("chat_write_forbidden") from exc  # noqa: EM101
-    except errors.FloodWaitError as exc:
+    except (errors.FloodWaitError, errors.PeerFloodError) as exc:
+        # The answer ``_translate_errors`` gives both; PeerFlood is also reported, as the one
+        # thing only this frame knows: it happened on a send.
+        _signal_refusal(account_id, exc)
         raise ChatGatewayError("chat_flood_wait") from exc  # noqa: EM101
     except (errors.ChannelPrivateError, errors.PeerIdInvalidError, ValueError) as exc:
         raise ChatGatewayError("chat_not_found") from exc  # noqa: EM101

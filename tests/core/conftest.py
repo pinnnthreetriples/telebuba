@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import pytest
@@ -8,6 +9,7 @@ from sqlalchemy import create_engine
 
 from core.gemini import close_gemini_client
 from core.openai import close_openai_client
+from core.spam_signals import set_signal_sink
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Iterator
@@ -67,3 +69,32 @@ def legacy_engine(tmp_path: Path) -> Iterator[_EngineFactory]:
     yield _make
     for engine in engines:
         engine.dispose()
+
+
+@dataclass
+class Recorder:
+    """A passive-signal receiver that keeps what ``core`` handed it (``core.spam_signals``)."""
+
+    seen: list[tuple[str, str, dict[str, object]]] = field(default_factory=list)
+
+    async def __call__(
+        self,
+        account_id: str,
+        kind: str,
+        *,
+        source: str,
+        operation: str | None = None,
+        detail: str | None = None,
+    ) -> None:
+        self.seen.append((account_id, kind, {"source": source, "op": operation, "detail": detail}))
+
+    def kinds(self) -> list[str]:
+        return [kind for _account, kind, _extra in self.seen]
+
+
+@pytest.fixture
+def recorder() -> Recorder:
+    """The receiver registered with the port; the suite-wide reset removes it afterwards."""
+    rec = Recorder()
+    set_signal_sink(rec)
+    return rec

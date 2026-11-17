@@ -79,6 +79,15 @@ class SpamIntelSettings(BaseSettings):
     evidence_max_per_account: int = Field(default=50, ge=5)
     evidence_coalesce_minutes: float = Field(default=10.0, ge=0.0)
 
+    # Adaptive routine interval (D2), only with ``passive_decisions``: warming asks every
+    # ``warming.spam_check_interval_hours`` (72 h); an account with this many clean readings in
+    # a row and no limiting evidence since is asked only every ``routine_mid_hours``, and
+    # every ``routine_long_hours`` after more. Any limiting evidence resets it.
+    routine_mid_hours: float = Field(default=120.0, gt=0.0)
+    routine_long_hours: float = Field(default=168.0, gt=0.0)
+    routine_mid_after_clean: int = Field(default=3, ge=1)
+    routine_long_after_clean: int = Field(default=5, ge=1)
+
     # Ledger and sample bounds.
     attempts_retention_days: int = Field(default=90, ge=1)
     attempts_max_rows: int = Field(default=5000, ge=100)
@@ -92,6 +101,12 @@ class SpamIntelSettings(BaseSettings):
             raise ValueError(msg)
         if self.fleet_soft_cap > self.fleet_hard_cap:
             msg = "fleet_soft_cap must not exceed fleet_hard_cap"
+            raise ValueError(msg)
+        if self.routine_mid_hours > self.routine_long_hours:
+            msg = "routine_mid_hours must not exceed routine_long_hours"
+            raise ValueError(msg)
+        if self.routine_mid_after_clean > self.routine_long_after_clean:
+            msg = "routine_mid_after_clean must not exceed routine_long_after_clean"
             raise ValueError(msg)
         if self.backoff_base_hours > self.backoff_max_hours:
             msg = "backoff_base_hours must not exceed backoff_max_hours"
