@@ -299,6 +299,11 @@ def test_only_the_spam_gateway_may_probe_or_write_the_spam_verdict() -> None:
         "core.db.upsert_spam_status": ("core/", *_SPAM_GATEWAY),
         "core.repositories.spam_status.upsert_spam_status": ("core/", *_SPAM_GATEWAY),
         "core.repositories.spam_probe_ledger": ("core/", "services/spam_intel/"),
+        # Stage 2: evidence and the folded projection are the gateway's; everyone else records
+        # through ``services.spam_intel.record_evidence`` and reads ``verdicts_for``.
+        "core.repositories.spam_evidence": ("core/", "services/spam_intel/"),
+        "core.repositories.spam_status.store_projection": ("core/", "services/spam_intel/"),
+        "core.repositories.spam_status.list_projections_by_ids": ("core/", "services/spam_intel/"),
     }
     assert _spam_gateway_violations(forbidden) == []
 

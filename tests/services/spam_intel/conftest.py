@@ -15,7 +15,7 @@ from schemas.accounts import AccountCreate
 from schemas.proxy import ProxyCreate
 from schemas.spam_status import SpamStatusProbe
 from services import _account_owner, spam_status
-from services.spam_intel import _answers, _gateway, _history
+from services.spam_intel import _answers, _evidence, _gateway, _history
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -81,6 +81,7 @@ class Events:
 def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     fake = Clock()
     monkeypatch.setattr(_gateway, "now", fake.now)
+    monkeypatch.setattr(_evidence, "now", fake.now)
     return fake
 
 
@@ -111,7 +112,7 @@ def events(monkeypatch: pytest.MonkeyPatch) -> Events:
     ) -> None:
         recorded.rows.append((level, event, dict(extra or {})))
 
-    for module in (_gateway, _answers, spam_status, _history):
+    for module in (_gateway, _answers, spam_status, _history, _evidence):
         monkeypatch.setattr(module, "log_event", _record)
     return recorded
 

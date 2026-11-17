@@ -286,6 +286,19 @@ _account_spam_status = Table(
     Column("status", String, nullable=False),
     Column("detail", String, nullable=True),
     Column("checked_at", String, nullable=False),
+    # The folded projection of the account's spam evidence (migration 116, additive; see
+    # ``services.spam_intel``). The three columns above stay what the pre-evidence readers
+    # expect; a row with an empty ``checked_at`` exists only to carry this projection.
+    Column("confidence", String, nullable=True),
+    Column("valid_until", String, nullable=True),
+    Column("primary_kind", String, nullable=True),
+    Column("last_spambot_at", String, nullable=True),
+    Column("needs_probe", Integer, nullable=True),
+    Column("fold_status", String, nullable=True),
+    Column("fold_reason", String, nullable=True),
+    Column("tos_restricted", Integer, nullable=True),
+    Column("tos_reason", String, nullable=True),
+    Column("folded_at", String, nullable=True),
 )
 _users = Table(
     "users",

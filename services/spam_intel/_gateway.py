@@ -56,6 +56,7 @@ from services.spam_intel._answers import (
     outcome_label,
     unasked,
 )
+from services.spam_intel._evidence import record_reading
 from services.spam_intel._policy import ProbeRequest, backoff_until, parse_moment
 from services.spam_intel._policy import decide as _decide
 
@@ -199,6 +200,11 @@ async def _probe(
             "duration_ms": duration_ms,
         },
     )
+    if outcome.error is None:
+        # The reading is evidence too (``spambot_*``): the fold and the stored projection see it.
+        await record_reading(
+            account.account_id, outcome.verdict.status, outcome.verdict.detail, ended.at
+        )
     await _prune()
     return outcome.verdict.model_copy(update={"served_from": "probe"})
 

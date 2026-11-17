@@ -64,6 +64,21 @@ class SpamIntelSettings(BaseSettings):
     # A busy account (another feature runs on it) is asked again after this long.
     busy_retry_minutes: float = Field(default=10.0, gt=0.0)
 
+    # Passive evidence (Stage 2). ``passive_signals``: record what the accounts' normal work
+    # shows (PeerFlood, freeze, a delivered first message) and fold it into a projection that
+    # only SHOWS. ``passive_decisions``: let that fold write the legacy ``status`` for
+    # non-clean verdicts (limited, frozen, an expired limit); off, the fold is a shadow and
+    # only a real @SpamBot answer writes it. A passive clean never writes it either way.
+    passive_signals: bool = True
+    passive_decisions: bool = False
+    # A limit with no end date is rechecked after this long.
+    limited_recheck_days: float = Field(default=5.0, gt=0.0)
+    # Evidence bounds: kept this long, at most this many rows per account, and the same
+    # account/kind/source inside this window is one row with a count.
+    evidence_retention_days: int = Field(default=30, ge=1)
+    evidence_max_per_account: int = Field(default=50, ge=5)
+    evidence_coalesce_minutes: float = Field(default=10.0, ge=0.0)
+
     # Ledger and sample bounds.
     attempts_retention_days: int = Field(default=90, ge=1)
     attempts_max_rows: int = Field(default=5000, ge=100)

@@ -8,15 +8,24 @@ functions are re-exported by ``core.db`` so callers are unaffected.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import insert, select, update
 
 from core.db import _account_spam_status, _get_engine, _optional_str
+from schemas.spam_evidence import StoredProjection, Verdict
 from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+
+# A row that exists only to carry the folded projection (no @SpamBot reading has been stored
+# for the account) has this ``checked_at``. Every reader below skips it, so the pre-evidence
+# code sees exactly the rows it saw before: no reading, no row.
+_PROJECTION_ONLY = ""
+_VISIBLE = _account_spam_status.c.checked_at != _PROJECTION_ONLY
 
 
 def _row_to_spam_status(mapping: Mapping[str, object]) -> SpamStatusVerdict:
@@ -31,6 +40,7 @@ def _row_to_spam_status(mapping: Mapping[str, object]) -> SpamStatusVerdict:
 def _get_spam_status(account_id: str) -> SpamStatusVerdict | None:
     statement = select(_account_spam_status).where(
         _account_spam_status.c.account_id == account_id,
+        _VISIBLE,
     )
     with _get_engine().connect() as connection:
         row = connection.execute(statement).mappings().first()
@@ -46,7 +56,7 @@ async def get_spam_status(account_id: str) -> SpamStatusVerdict | None:
 
 def _list_spam_statuses() -> dict[str, SpamStatusVerdict]:
     with _get_engine().connect() as connection:
-        rows = connection.execute(select(_account_spam_status)).mappings().all()
+        rows = connection.execute(select(_account_spam_status).where(_VISIBLE)).mappings().all()
     return {
         str(row["account_id"]): _row_to_spam_status(cast("Mapping[str, object]", row))
         for row in rows
@@ -63,6 +73,7 @@ def _list_spam_statuses_by_ids(account_ids: list[str]) -> dict[str, SpamStatusVe
         return {}
     statement = select(_account_spam_status).where(
         _account_spam_status.c.account_id.in_(account_ids),
+        _VISIBLE,
     )
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
@@ -99,3 +110,100 @@ def _upsert_spam_status(verdict: SpamStatusVerdict) -> SpamStatusVerdict:
 async def upsert_spam_status(verdict: SpamStatusVerdict) -> SpamStatusVerdict:
     """Insert or update one account's cached spam-status verdict."""
     return await asyncio.to_thread(_upsert_spam_status, verdict)
+
+
+def _stamp(value: object) -> datetime | None:
+    if value is None:
+        return None
+    parsed = datetime.fromisoformat(str(value))
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _row_to_projection(mapping: Mapping[str, object]) -> StoredProjection:
+    legacy = None if mapping["checked_at"] == _PROJECTION_ONLY else _row_to_spam_status(mapping)
+    verdict = None
+    if mapping.get("fold_status") is not None:
+        reason = mapping.get("fold_reason")
+        verdict = Verdict.model_validate(
+            {
+                "status": mapping["fold_status"],
+                "confidence": mapping.get("confidence") or "low",
+                "valid_until": _stamp(mapping.get("valid_until")),
+                "primary_kind": mapping.get("primary_kind"),
+                "last_spambot_at": _stamp(mapping.get("last_spambot_at")),
+                "needs_probe": bool(mapping.get("needs_probe")),
+                "contradiction": reason == "contradiction",
+                "reason": reason,
+                "tos_restricted": bool(mapping.get("tos_restricted")),
+                "tos_reason": _optional_str(mapping.get("tos_reason")),
+            }
+        )
+    return StoredProjection(
+        account_id=str(mapping["account_id"]),
+        verdict=verdict,
+        folded_at=_stamp(mapping.get("folded_at")),
+        legacy=legacy,
+    )
+
+
+def _list_projections_by_ids(account_ids: list[str]) -> dict[str, StoredProjection]:
+    if not account_ids:
+        return {}
+    statement = select(_account_spam_status).where(
+        _account_spam_status.c.account_id.in_(account_ids),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return {
+        str(row["account_id"]): _row_to_projection(cast("Mapping[str, object]", row))
+        for row in rows
+    }
+
+
+async def list_projections_by_ids(account_ids: list[str]) -> dict[str, StoredProjection]:
+    """What the table holds for each account: the folded projection and the legacy reading."""
+    return await asyncio.to_thread(_list_projections_by_ids, account_ids)
+
+
+def _store_projection(account_id: str, verdict: Verdict, folded_at: datetime) -> None:
+    values = {
+        "confidence": verdict.confidence,
+        "valid_until": None if verdict.valid_until is None else verdict.valid_until.isoformat(),
+        "primary_kind": verdict.primary_kind,
+        "last_spambot_at": (
+            None if verdict.last_spambot_at is None else verdict.last_spambot_at.isoformat()
+        ),
+        "needs_probe": int(verdict.needs_probe),
+        "fold_status": verdict.status,
+        "fold_reason": verdict.reason,
+        "tos_restricted": int(verdict.tos_restricted),
+        "tos_reason": verdict.tos_reason,
+        "folded_at": folded_at.isoformat(),
+    }
+    with _get_engine().begin() as connection:
+        updated = connection.execute(
+            update(_account_spam_status)
+            .where(_account_spam_status.c.account_id == account_id)
+            .values(**values),
+        )
+        if updated.rowcount == 0:
+            # ``status`` and ``checked_at`` are NOT NULL: a projection-only row carries a
+            # neutral ``unknown`` and the marker ``checked_at`` the readers skip.
+            connection.execute(
+                insert(_account_spam_status).values(
+                    account_id=account_id,
+                    status="unknown",
+                    detail=None,
+                    checked_at=_PROJECTION_ONLY,
+                    **values,
+                ),
+            )
+
+
+async def store_projection(account_id: str, verdict: Verdict, folded_at: datetime) -> None:
+    """Write the folded projection of an account, leaving ``status``/``detail``/``checked_at``.
+
+    An account with no stored reading gets a projection-only row that the legacy readers
+    (``get_spam_status`` and the lists) do not see.
+    """
+    await asyncio.to_thread(_store_projection, account_id, verdict, folded_at)
