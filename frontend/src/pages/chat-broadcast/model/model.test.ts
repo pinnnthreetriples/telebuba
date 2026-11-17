@@ -3,7 +3,16 @@ import type { ChatBroadcastBoard } from '@/shared/api';
 
 import { i18n } from '@/shared/i18n';
 
-import { allResting, applyOrder, historyLine, inGroup, orderOf, priority, rowView } from './board';
+import {
+  allResting,
+  applyOrder,
+  chatLabel,
+  historyLine,
+  inGroup,
+  orderOf,
+  priority,
+  rowView,
+} from './board';
 import {
   bodyOf,
   DEFAULT_SETTINGS,
@@ -108,6 +117,27 @@ test('row views name the state, the time and the tone', () => {
     board: board({ campaign: { ...ctx.board.campaign, status: 'stopped' } }),
   };
   expect(rowView(t, row({ state: 'waiting' }), stopped).label).toBe('Пауза');
+  // The run's stop fired before the chat played its rounds: over, not paused.
+  const finished = {
+    ...ctx,
+    board: board({ campaign: { ...ctx.board.campaign, status: 'done' } }),
+  };
+  const cut = row({ state: 'writing', sent_total: 1, last_sent_at: '2026-10-06T04:11:00Z' });
+  expect(rowView(t, cut, finished)).toEqual({
+    label: 'Не дописан: стоп рассылки',
+    tone: 'warning',
+    when: 'отправлено 04:11',
+  });
+  expect(rowView(t, row({ state: 'round_done', sent_total: 2 }), finished).label).toBe(
+    'Не дописан: стоп рассылки',
+  );
+  expect(rowView(t, row({ state: 'round_done', sent_total: 6 }), finished).label).toBe('Готово');
+  expect(inGroup(cut, 'cut', 'done')).toBe(true);
+  expect(inGroup(cut, 'ok', 'done')).toBe(false);
+  // Endless rounds have no plan to fall short of: the stop is how they end.
+  expect(rowView(t, row({ state: 'writing', planned_total: null }), finished).label).not.toBe(
+    'Не дописан: стоп рассылки',
+  );
   const kept = row({
     state: 'skipped',
     skip_reason: 'deleted',
@@ -188,6 +218,9 @@ test('rows are ordered by importance once, and groups split them', () => {
   expect(inGroup(row({ state: 'skipped' }), 'skipped')).toBe(true);
   expect(inGroup(row({ state: 'done' }), 'ok')).toBe(true);
   expect(allResting([row({ state: 'round_done' })])).toBe(true);
+  expect(chatLabel(row({ raw: 'https://t.me/SpaceTeamVeriff' }))).toBe('SpaceTeamVeriff');
+  expect(chatLabel(row({ raw: 't.me/+AbC' }))).toBe('+AbC');
+  expect(chatLabel(row({ raw: '@alpha', title: 'Alpha' }))).toBe('Alpha');
   expect(allResting([])).toBe(false);
 });
 

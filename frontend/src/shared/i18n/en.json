@@ -4466,6 +4466,7 @@
         "waiting": "Waiting",
         "rest": "Rest and queue",
         "ok": "Done",
+        "cut": "Cut short",
         "skipped": "Skipped"
       },
       "columns": {
@@ -4550,6 +4551,7 @@
       "roundDone": "Round done",
       "done": "Done",
       "paused": "Paused",
+      "cut": "Cut short: broadcast stop",
       "kept": "Back next round",
       "skipped": "Skipped: {{reason}}"
     },
