@@ -1,7 +1,7 @@
 ---
 name: runtime-chat-broadcast
 description: Chat broadcast campaigns, joins into lists, chains, rounds and the board by chat.
-last_updated: 2026-11-10
+last_updated: 2026-11-18
 edges:
   - target: context/runtime-neuroshilling.md
     condition: the run lifecycle it copies, or the account-ownership registry
@@ -67,7 +67,9 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
   and the rests under way are redrawn from their own start.
 - The run ends only when no chat is left in play, checked together with the write that
   marks the campaign done, so a chat kept from the board at that instant is never
-  dropped. A volume stop (messages or time) ends the run in any state.
+  dropped. A volume stop (messages or time) ends the run in any state; the board shows
+  chats it left short of their plan as cut short (`cutShort`), never as paused — a done
+  campaign resumes nothing.
 - A deletion is an admin's signal the operator may overrule: a kept chat still records
   deletions but is skipped only for a ban. `chat_kind` tells the deletion check whether
   message ids are shared (megagroup) or per account (basic group).
