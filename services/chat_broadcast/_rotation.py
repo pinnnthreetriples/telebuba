@@ -48,7 +48,10 @@ _DAY = 86_400
 _BANNED_IN_CHAT: Final = "UserBannedInChannelError"
 # How a chat refuses a muted member — and a chat closed to all members alike.
 _MUTE_ERRORS: Final = frozenset({"ChatWriteForbiddenError", "ChatRestrictedError"})
-SPAM_REASONS: Final = frozenset({"peer_flood", _BANNED_IN_CHAT})
+# The rest a spam block takes, whether Telegram just refused a send (PeerFlood) or the block was
+# already known and the account is rested before it can be discovered by sending.
+BLOCK_REST_REASON: Final = "peer_flood"
+SPAM_REASONS: Final = frozenset({BLOCK_REST_REASON, _BANNED_IN_CHAT})
 LIMIT_REASONS: Final = frozenset({"hour_limit", "day_limit"})
 # Halts a new Start or Continue does not undo: the account itself is gone or full. Any
 # other halt (errors in a row, a spam block still standing, a pre-rotation flood) gets
@@ -189,6 +192,24 @@ async def _place_chats(ctx: RunContext, account_id: str, seconds: int) -> int:
         return 0
     return await _moves.hand_over(
         ctx, account_id, others, only_unjoined=seconds <= limits.handover_rest_seconds
+    )
+
+
+async def rest_known_block(
+    ctx: RunContext, account_id: str, target: TargetRecord
+) -> Resting | None:
+    """A spam block the account is already KNOWN to carry rests it, as a PeerFlood would.
+
+    The stored status only (``_seams.known_spam_status``, no Telegram), asked before the
+    account joins or writes anything, so the block is not discovered by sending. The rest is the
+    one a PeerFlood takes (``spam_rest_seconds``, the same reason): at its end @SpamBot is asked
+    (``sit_out``), a postponed answer keeps the account resting and a block still standing takes
+    it out. An unknown status does not rest the account.
+    """
+    if await _seams.known_spam_status(account_id) != "limited":
+        return None
+    return await rest_for(
+        ctx, account_id, settings.chat_broadcast.spam_rest_seconds, BLOCK_REST_REASON, target
     )
 
 

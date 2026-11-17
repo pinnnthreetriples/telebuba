@@ -130,6 +130,7 @@ def _row_to_projection(mapping: Mapping[str, object]) -> StoredProjection:
                 "confidence": mapping.get("confidence") or "low",
                 "valid_until": _stamp(mapping.get("valid_until")),
                 "primary_kind": mapping.get("primary_kind"),
+                "primary_observed_at": _stamp(mapping.get("primary_observed_at")),
                 "last_spambot_at": _stamp(mapping.get("last_spambot_at")),
                 "needs_probe": bool(mapping.get("needs_probe")),
                 "contradiction": reason == "contradiction",
@@ -170,6 +171,9 @@ def _store_projection(account_id: str, verdict: Verdict, folded_at: datetime) ->
         "confidence": verdict.confidence,
         "valid_until": None if verdict.valid_until is None else verdict.valid_until.isoformat(),
         "primary_kind": verdict.primary_kind,
+        "primary_observed_at": (
+            None if verdict.primary_observed_at is None else verdict.primary_observed_at.isoformat()
+        ),
         "last_spambot_at": (
             None if verdict.last_spambot_at is None else verdict.last_spambot_at.isoformat()
         ),

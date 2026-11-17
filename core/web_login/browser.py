@@ -8,13 +8,12 @@ The CDP socket is BROWSER-level and stays open for as long as the window does. T
 not an optimisation: Chrome drops every emulation override and injected script the
 moment the last DevTools client detaches, and each reload spawns a fresh MTProto worker
 that has to be dressed while it is paused on start. Closing the socket early would hand
-the operator's real machine straight to Telegram on the next reconnect.
+the operator's real machine straight to Telegram on the next reconnect. On the first open we
+also inject a document-start hook that captures WebK's own QR ``auth.loginToken`` into
+``window.__cap``; the caller accepts that token with the account's authorized session so WebK
+completes its OWN login (no storage injection).
 
-On the first open we also inject a document-start hook that captures WebK's own QR
-``auth.loginToken`` into ``window.__cap``; the caller accepts that token with the
-account's authorized session so WebK completes its OWN login (no storage injection).
-
-The primitives that drive an already-open page live in :mod:`core.web_login._page`.
+Primitives that drive an open page: ``_page``; raising or navigating one: ``_navigation``.
 """
 
 from __future__ import annotations
@@ -34,6 +33,7 @@ from core.config import settings
 from core.secure_paths import make_private_dir
 from core.web_login._cdp import CdpSession
 from core.web_login._lifetime import browser_env, tie_to_backend
+from core.web_login._navigation import WEBK_URL as _WEBK_URL
 from core.web_login._passkey import PASSKEY_HOOK, PasskeyBridge
 from core.web_login._scripts import QR_CAPTURE_HOOK
 from core.web_login._targets import TargetDriver
@@ -43,7 +43,6 @@ if TYPE_CHECKING:
     from core.web_login._passkey import PasskeySigner
     from core.web_login.fingerprint import Fingerprint
 
-_WEBK_URL = "https://web.telegram.org/k/"
 _LAUNCH_URL = "about:blank"
 _PROFILE_SUBDIR = "web_profiles"
 _CDP_READY_TIMEOUT = 20.0
@@ -58,17 +57,14 @@ _CDP_POLL_INTERVAL = 0.05
 _ACTIVE_PORT_FILE = "DevToolsActivePort"
 _ACTIVE_PORT_LINES = 2
 
-# Picking a port and spawning are one critical section, process-wide. ``_free_port``
-# binds :0 and closes again, so two accounts opening concurrently — which is the whole
-# point of the per-account locks — can be handed the SAME port. The loser then either
-# times out or, far worse, attaches to the other account's browser and re-dresses its
-# page with the wrong fingerprint.
-#
-# The lock spans the pick and the spawn ONLY. Holding it across the 20 s wait for the
-# DevTools endpoint would make one slow Chrome start delay every other account's open
-# by up to that long. What the wait actually needs is that nobody else is handed the
-# same port meanwhile, and ``_ports_in_flight`` gives exactly that: a port stays
-# reserved until its launch has finished waiting, and a collision re-rolls.
+# Picking a port and spawning are one critical section, process-wide. ``_free_port`` binds :0 and
+# closes again, so two accounts opening concurrently — which is the whole point of the per-account
+# locks — can be handed the SAME port. The loser then either times out or, far worse, attaches to
+# the other account's browser and re-dresses its page with the wrong fingerprint. The lock spans
+# the pick and the spawn ONLY: holding it across the 20 s wait for the DevTools endpoint would make
+# one slow Chrome start delay every other account's open by up to that long. What the wait needs is
+# that nobody else is handed the same port meanwhile, and ``_ports_in_flight`` gives exactly that:
+# a port stays reserved until its launch has finished waiting, and a collision re-rolls.
 _ports_in_flight: set[int] = set()
 # ``_free_port`` asks the OS for an unused port, so a collision means a port picked by
 # a launch that is still waiting; a handful of re-rolls is far more than enough.
@@ -333,13 +329,14 @@ async def _try_browser_ws(client: httpx.AsyncClient, debug_port: int) -> str | N
     return str(url) if url else None
 
 
-async def launch_account_web(
+async def launch_account_web(  # noqa: PLR0913 - one keyword per launch option.
     relay_port: int,
     *,
     profile_dir: Path,
     fingerprint: Fingerprint,
     capture_tokens: bool,
     passkey_signer: PasskeySigner | None = None,
+    start_url: str | None = None,  # another WebK address to land on, not ``/k/``
 ) -> WebWindow:
     """Launch WebK through the relay, dressed in ``fingerprint``, and return the window.
 
@@ -398,17 +395,23 @@ async def launch_account_web(
         # that kept a concurrent launch off it has done its job.
         _ports_in_flight.discard(debug_port)
     return await _attach(
-        proc, ws_url, fingerprint, capture_tokens=capture_tokens, passkey_signer=passkey_signer
+        proc,
+        ws_url,
+        fingerprint,
+        capture_tokens=capture_tokens,
+        passkey_signer=passkey_signer,
+        start_url=start_url,
     )
 
 
-async def _attach(
+async def _attach(  # noqa: PLR0913 - the launch's own context, passed once.
     proc: asyncio.subprocess.Process,
     ws_url: str,
     fingerprint: Fingerprint,
     *,
     capture_tokens: bool,
-    passkey_signer: PasskeySigner | None,
+    passkey_signer: PasskeySigner | None = None,
+    start_url: str | None = None,
 ) -> WebWindow:
     """Dress the spawned browser over CDP and navigate it; kill it if any step fails."""
     session: CdpSession | None = None
@@ -421,7 +424,9 @@ async def _attach(
         driver = TargetDriver(session, fingerprint, page_scripts=tuple(scripts))
         page = await driver.first_page_session()
         driver.start()
-        await session.send_command("Page.navigate", {"url": _WEBK_URL}, session_id=page)
+        await session.send_command(
+            "Page.navigate", {"url": start_url or _WEBK_URL}, session_id=page
+        )
     except BaseException:
         for closer in (driver, session):
             if closer is not None:
@@ -433,8 +438,3 @@ async def _attach(
     if bridge is not None:
         bridge.start()
     return WebWindow(session=session, driver=driver, page=page, process=proc, passkey=bridge)
-
-
-async def focus_window(window: WebWindow) -> None:
-    """Raise an already-open window instead of launching a second one."""
-    await window.session.send_command("Page.bringToFront", session_id=window.page)

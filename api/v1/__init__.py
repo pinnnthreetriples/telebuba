@@ -25,6 +25,7 @@ from api.v1 import (
     user_parser,
     warming,
 )
+from api.v1._accounts_spam_appeal import spam_appeal_router
 
 router = APIRouter()
 # Unprotected: auth (login/logout; /me self-guards) and the health probes —
@@ -36,6 +37,8 @@ router.include_router(health.router)
 # router mounted here cannot get the dependency without the matching contract.
 _protected = [Depends(get_current_user)]
 router.include_router(accounts.router, dependencies=_protected, responses=PROTECTED_ERRORS)
+# The hand-filed spam-block appeal (docs/spam-intel.md 5.12): the accounts' own paths, its own file.
+router.include_router(spam_appeal_router, dependencies=_protected, responses=PROTECTED_ERRORS)
 router.include_router(accounts_media.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 router.include_router(proxies.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 router.include_router(warming.router, dependencies=_protected, responses=PROTECTED_ERRORS)

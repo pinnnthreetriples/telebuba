@@ -10,6 +10,9 @@ from pydantic import AfterValidator, BaseModel, Field
 from schemas.api import Page
 from schemas.device_fingerprint import DeviceFingerprint, DeviceType, desktop_only
 from schemas.session_json import SellerSessionMeta  # noqa: TC001
+from schemas.spam_appeals import AppealStatus  # noqa: TC001
+from schemas.spam_card import SpamSource  # noqa: TC001
+from schemas.spam_evidence import ConfidenceBucket, VerdictStatus  # noqa: TC001
 from schemas.spam_status import SpamStatusKind  # noqa: TC001
 from schemas.telegram_profile_snapshot import (  # noqa: TC001
     TelegramMusicItem,
@@ -180,6 +183,27 @@ class AccountRead(BaseModel):
     trust_band: TrustBand | None = None
     spam_status: SpamStatusKind | None = None
     spam_detail: str | None = None
+    # The account card's spam block (docs/spam-intel.md 5.10), derived from the stored Stage 2
+    # projection and the probe ledger by ``services.spam_intel.card_signals``; ``None`` until a
+    # list page enriched the row. ``spam_verdict`` is the fold's verdict (it may be ``frozen``),
+    # ``spam_source`` where its deciding observation came from. ``spam_tos_restricted`` is a
+    # platform restriction BESIDE the verdict, never part of it.
+    spam_verdict: VerdictStatus | None = None
+    spam_confidence: ConfidenceBucket | None = None
+    spam_source: SpamSource | None = None
+    spam_observed_at: str | None = None
+    spam_valid_until: str | None = None
+    spam_next_probe_at: str | None = None
+    spam_last_probe_at: str | None = None
+    spam_probes_7d: int | None = Field(default=None, ge=0)
+    # A Spam-check click now would be out of turn (the last probe is under a day old).
+    spam_out_of_turn: bool | None = None
+    spam_tos_restricted: bool | None = None
+    spam_tos_reason: str | None = None
+    # The newest appeal a human filed by hand (docs/spam-intel.md 5.12): none / open / closed.
+    spam_appeal_status: AppealStatus | None = None
+    spam_appeal_filed_at: str | None = None
+    spam_appeal_filed_by: str | None = None
     # Sessions of the account that are not ours, as the last audit saw them; ``None``
     # until one ran (``services.accounts.session_audit``). List page only.
     foreign_sessions: int | None = Field(default=None, ge=0)

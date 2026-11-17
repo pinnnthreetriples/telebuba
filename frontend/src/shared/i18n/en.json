@@ -223,7 +223,75 @@
       "spam": {
         "clean": "No restrictions",
         "limited": "Restricted",
-        "unknown": "Unknown"
+        "unknown": "Unknown",
+        "frozen": "Frozen"
+      },
+      "spamCard": {
+        "confidence": "confidence: {{level}}",
+        "level": {
+          "high": "high",
+          "medium": "medium",
+          "low": "low"
+        },
+        "source": "Source",
+        "sourceName": {
+          "spambot": "@SpamBot",
+          "peer_flood": "PeerFlood",
+          "chat_ban": "Chat ban",
+          "freeze": "Freeze",
+          "none": "no data"
+        },
+        "sourceLine": "{{source}}, {{when}}",
+        "frozen": "account is frozen",
+        "limitUntil": "limited until {{date}}",
+        "limitForever": "indefinitely",
+        "nextCheck": "Next check",
+        "nextCheckAt": "possible {{when}}",
+        "probes7d": "Checks in 7 days",
+        "tos": "Telegram restriction",
+        "tosValue": "not a spam block · {{reason}}",
+        "tosNoReason": "no reason given",
+        "tipAge": "last probe: {{when}}",
+        "confirmTitle": "Out-of-turn check",
+        "confirmBody": "This account was probed {{when}}. Extra @SpamBot requests raise the risk of a limit. Check now?",
+        "confirmYes": "Check now",
+        "confirmCancel": "Cancel",
+        "held": {
+          "title": "Check not sent",
+          "coalesced": "The account was just checked — the last answer is shown.",
+          "retry": "It can be asked again {{when}}.",
+          "reason": {
+            "backoff": "After a failed answer the account is not asked for a while.",
+            "account_daily_cap": "This account has used its daily check limit.",
+            "proxy_spacing": "Another account behind the same proxy was checked a moment ago.",
+            "fleet_spacing": "A pause is kept between account checks.",
+            "fleet_soft_cap": "The fleet's daily check limit is nearly used up: scheduled checks wait.",
+            "fleet_hard_cap": "The fleet's daily check ceiling has been reached.",
+            "busy": "The account is busy with another feature right now.",
+            "startup_quiet": "Scheduled checks are not sent right after startup.",
+            "no_live_session": "The account has no open session, and it is not connected just to be checked.",
+            "account_missing": "The account was not found.",
+            "account_not_alive": "The account is not in a working state, so there is nothing to ask @SpamBot with.",
+            "no_proxy": "A proxy is required: without one the account does not connect to Telegram.",
+            "operator_daily_cap": "Your daily limit of manual checks for this account is used up.",
+            "needs_confirmation": "An out-of-turn check needs confirmation.",
+            "unknown": "The check is not being sent right now."
+          }
+        },
+        "appeal": {
+          "title": "Appeal",
+          "hint": "The operator files the appeal by hand in the account's window that opens. The program sends nothing and presses nothing for you.",
+          "open": "File an appeal",
+          "filed": "Appeal filed",
+          "noProxy": "A proxy is required: the window opens through the account's proxy.",
+          "filedBy": "Filed {{when}}, {{who}}",
+          "recheck": "Re-check: {{when}}",
+          "closed": "The last appeal was filed {{when}}, {{who}}; the limit is lifted.",
+          "confirmTitle": "Appeal filed?",
+          "confirmBody": "This is only a note on the card: the operator says the appeal was filed in the window. Nothing is sent to Telegram.",
+          "confirmYes": "Yes, filed",
+          "confirmCancel": "Not yet"
+        }
       },
       "actions": "Actions",
       "aliveTitle": "Check account",
@@ -476,6 +544,11 @@
       "closeAll": "Close all Telegram Web windows ({{count}} open)",
       "closed": "Telegram Web windows closed: {{count}}",
       "tooMany": "Telegram Web windows open: {{count}}. Each one is a separate Chrome — close the ones you no longer need."
+    },
+    "spamBudget": {
+      "title": "Many @SpamBot checks",
+      "dailyCap": "Fleet checks in the last day: {{count}} of {{cap}}. Scheduled checks are waiting.",
+      "outOfTurn": "Your out-of-turn checks in the last day: {{count}}. Each extra check raises the risk of a limit."
     },
     "deleteModal": {
       "title": "Delete account {{phone}}?",
@@ -1569,6 +1642,7 @@
       "twofa_proxy_missing": "Assign a proxy to the account first: the password cannot be checked without one.",
       "session_json_no_password": "The seller JSON has no 2FA password.",
       "web_login_no_proxy": "This account has no proxy assigned, and the browser must reach Telegram through the account's own exit. Assign a proxy and try again.",
+      "spam_appeal_not_limited": "This account has no spam block to appeal: its last @SpamBot answer is clean or the account is frozen.",
       "web_login_proxy_dead": "The account's proxy is not answering, so Telegram Web cannot load through it. Check or replace it in the proxy pool and try again.",
       "web_login_browser_failed": "The web-login browser window could not be started. Check that Chrome or Edge is installed and that no window for this account is still open.",
       "web_login_relay_failed": "The local proxy relay for the web session could not be started. Try again in a moment.",
@@ -2286,6 +2360,8 @@
     "spam_intel_verdict_changed": "The spam verdict folded from evidence changed",
     "spam_intel_shadow_comparison": "The spam fold was compared with a real @SpamBot answer",
     "spam_intel_served_from_evidence": "Spam status answered from evidence, @SpamBot not asked",
+    "spam_intel_appeal_filed": "Spam-block appeal recorded: the operator filed it by hand",
+    "spam_intel_appeal_closed": "Spam-block appeal closed: @SpamBot answered clean",
     "telegram_spam_history_failed": "Could not read the @SpamBot dialog",
     "warming_quarantine_recheck_deferred": "Quarantine re-check postponed: @SpamBot probe budget",
     "account_logout_unconfirmed": "Telegram did not confirm the logout — nothing changed",

@@ -44,6 +44,7 @@ from schemas.spam_intel import (
     Purpose,
 )
 from services import spam_status
+from services.spam_intel import _human
 from services.spam_intel._answers import (
     CALLER_PURPOSE,
     UNASKABLE,
@@ -57,7 +58,7 @@ from services.spam_intel._answers import (
     unasked,
 )
 from services.spam_intel._evidence import record_reading
-from services.spam_intel._policy import ProbeRequest, backoff_until, parse_moment
+from services.spam_intel._policy import Decision, ProbeRequest, backoff_until, parse_moment
 from services.spam_intel._policy import decide as _decide
 from services.spam_intel._served import evidence_hint, forget_served
 from services.spam_intel._shadow import fold_before, record_comparison
@@ -66,6 +67,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
 
     from schemas.accounts import AccountRead
+    from schemas.spam_intel import BudgetSnapshot
+    from schemas.spam_probe import HumanProbePlan
     from schemas.spam_status import SpamStatusVerdict
 
 logger = logging.getLogger(__name__)
@@ -158,6 +161,12 @@ async def _prune() -> None:
         logger.warning("spam attempt prune failed: %s", type(exc).__name__)
 
 
+def _human_plan() -> dict[str, HumanProbePlan]:
+    """The conversation's pauses as the executor's keyword, or nothing while the switch is off."""
+    intel = settings.spam_intel
+    return {"plan": _human.draw_plan(rng, intel)} if intel.human_sequence else {}
+
+
 async def _probe(
     account: AccountRead,
     cached: SpamStatusVerdict | None,
@@ -177,7 +186,9 @@ async def _probe(
     clock = time.monotonic()
     before = await fold_before(account.account_id)  # shadow comparison: the fold's word first
     try:
-        outcome = await spam_status.probe_and_store(account.account_id, previous=cached)
+        outcome = await spam_status.probe_and_store(
+            account.account_id, previous=cached, **_human_plan()
+        )
     except BaseException as exc:
         await _finish_quietly(attempt_id, type(exc).__name__, clock)
         raise
@@ -214,6 +225,65 @@ async def _probe(
     return outcome.verdict.model_copy(update={"served_from": "probe"})
 
 
+async def _decide_at(
+    account: AccountRead,
+    req: Ask,
+    at: datetime,
+) -> tuple[Decision, BudgetSnapshot]:
+    """The budget's word on one ask at ``at``, with the ledger snapshot it was made from."""
+    intel = settings.spam_intel
+    snapshot = await load_budget_snapshot(
+        account.account_id, account.proxy_id, (at - timedelta(hours=24)).isoformat()
+    )
+    request = ProbeRequest(
+        purpose=req.purpose,
+        now=at,
+        alive=account.status not in UNASKABLE,
+        has_proxy=account.proxy_id is not None,
+        busy=busy(account.account_id, req.holder),
+        confirmed=req.confirmed,
+        process_age=process_age(),
+        fleet_gap=timedelta(
+            seconds=rng.uniform(intel.fleet_gap_min_seconds, intel.fleet_gap_max_seconds)
+        ),
+    )
+    return _decide(snapshot, request, intel), snapshot
+
+
+def _no_live_session(at: datetime) -> Decision:
+    """A routine ask for an account with no client open: later, not a connection made to ask."""
+    retry_at = at + timedelta(minutes=settings.spam_intel.live_session_retry_minutes)
+    return Decision(action="defer", reason="no_live_session", retry_at=retry_at)
+
+
+async def _budget(
+    account: AccountRead,
+    req: Ask,
+    at: datetime,
+) -> tuple[Decision, BudgetSnapshot, datetime]:
+    """The budget's word, and when: a live-session ask is served a jittered moment into it.
+
+    With ``live_session_embedding`` off this is the budget at ``at``, nothing more. On, a ROUTINE
+    or DECISION ask the budget lets through waits a jittered moment when the account's client is
+    already connected (the budget is then asked again: the clock moved), and a ROUTINE ask for an
+    account with no live client is deferred. Neither writes a ledger row.
+    """
+    intel = settings.spam_intel
+    decision, snapshot = await _decide_at(account, req, at)
+    if decision.action != "probe":
+        return decision, snapshot, at
+    moment = _human.live_moment(req.account_id, req.purpose, intel)
+    if moment is _human.Moment.DEFER:
+        return _no_live_session(at), snapshot, at
+    if moment is _human.Moment.WAIT:
+        await _human.sleep(_human.live_delay(rng, intel))
+        at = now()
+        if req.purpose == "routine" and not _human.is_live(req.account_id):
+            return _no_live_session(at), snapshot, at  # the session ended while we waited
+        decision, snapshot = await _decide_at(account, req, at)
+    return decision, snapshot, at
+
+
 async def _ask_once(req: Ask) -> SpamStatusVerdict:
     at = now()
     account_id = req.account_id
@@ -241,22 +311,7 @@ async def _ask_once(req: Ask) -> SpamStatusVerdict:
     if hint.answer is not None:
         return hint.answer
     intel = settings.spam_intel
-    snapshot = await load_budget_snapshot(
-        account_id, account.proxy_id, (at - timedelta(hours=24)).isoformat()
-    )
-    request = ProbeRequest(
-        purpose=req.purpose,
-        now=at,
-        alive=account.status not in UNASKABLE,
-        has_proxy=account.proxy_id is not None,
-        busy=busy(account_id, req.holder),
-        confirmed=req.confirmed,
-        process_age=process_age(),
-        fleet_gap=timedelta(
-            seconds=rng.uniform(intel.fleet_gap_min_seconds, intel.fleet_gap_max_seconds)
-        ),
-    )
-    decision = _decide(snapshot, request, intel)
+    decision, snapshot, at = await _budget(account, req, at)
     if decision.action == "coalesce":
         await log_unasked(account_id, decision, req, at)
         return coalesced(account_id, cached, snapshot.state, at)
@@ -327,8 +382,10 @@ def bound_asker(holder: str | None) -> Callable[..., Awaitable[SpamStatusVerdict
 async def operator_check(account_id: str, *, confirm_out_of_turn: bool) -> SpamStatusVerdict:
     """The Spam-check button: a fresh reading if the budget allows, else what is known.
 
-    The button has no confirmation dialog yet, so its route passes ``confirm_out_of_turn=True``;
-    the 30-minute minimum, the operator's daily cap and the fleet caps still bound it.
+    ``confirm_out_of_turn``: the operator confirmed a click while the account's last probe is
+    under ``out_of_turn_hours`` old; without it such a click comes back ``refused`` with the
+    reason ``needs_confirmation`` (``services.spam_intel._card`` turns that into the route's 409).
+    The 30-minute minimum, the operator's daily cap and the fleet caps bound it either way.
 
     When the budget refuses or postpones, the stored verdict comes back with the reason, so
     the operator keeps seeing the status instead of an ``unknown``.

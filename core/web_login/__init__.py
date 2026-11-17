@@ -9,6 +9,7 @@ alias for them was one more name to keep in sync for nobody.
 from __future__ import annotations
 
 from core.web_login._lifetime import close_orphaned_browsers, remove_profile_dir
+from core.web_login._navigation import focus_window, navigate_window, spambot_dialog_url
 from core.web_login._page import (
     latest_login_token,
     page_state,
@@ -18,7 +19,6 @@ from core.web_login._page import (
 )
 from core.web_login.browser import (
     account_profile_dir,
-    focus_window,
     launch_account_web,
     token_bytes,
     web_profiles_root,
@@ -34,10 +34,12 @@ __all__ = [
     "focus_window",
     "latest_login_token",
     "launch_account_web",
+    "navigate_window",
     "page_state",
     "password_outcome",
     "release_capture",
     "remove_profile_dir",
+    "spambot_dialog_url",
     "token_bytes",
     "type_2fa_password",
     "web_profiles_root",

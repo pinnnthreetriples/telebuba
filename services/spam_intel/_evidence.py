@@ -32,6 +32,7 @@ from core.repositories.spam_status import list_projections_by_ids, store_project
 from core.repositories.spam_status import upsert_spam_status as write_legacy_status
 from schemas.spam_evidence import DETAIL_MAX_CHARS, Evidence, EvidenceKind, Verdict
 from schemas.spam_status import SpamStatusVerdict
+from services.spam_intel._appeal_close import close_on_clean
 from services.spam_intel._evidence_policy import KIND_POLICY, SPAMBOT_KINDS, default_expiry
 from services.spam_intel._fold import fold
 from services.spam_intel._limit_date import end_date
@@ -104,7 +105,13 @@ async def record_reading(
     detail: str | None,
     at: datetime,
 ) -> None:
-    """A real @SpamBot reading the gateway just stored becomes evidence (never raises)."""
+    """A real @SpamBot reading the gateway just stored becomes evidence (never raises).
+
+    A stored ``clean`` also ends the account's open appeal (design 5.12): this is the one place
+    every persisted reading passes, whether or not passive signals are on.
+    """
+    if status == "clean":
+        await close_on_clean(account_id, at)
     try:
         evidence = reading_evidence(account_id, status, detail, at)
     except Exception as exc:  # noqa: BLE001 - recording must never fail the probe.

@@ -126,6 +126,9 @@ class Verdict(BaseModel):
     confidence: ConfidenceBucket = "low"
     valid_until: datetime | None = None
     primary_kind: EvidenceKind | None = None
+    # When the deciding observation (``primary_kind``) was made; ``None`` for a projection folded
+    # before the column existed (migration 119) and for a verdict with no deciding item.
+    primary_observed_at: datetime | None = None
     last_spambot_at: datetime | None = None
     needs_probe: bool = False
     contradiction: bool = False
@@ -134,7 +137,7 @@ class Verdict(BaseModel):
     tos_reason: str | None = None
     weights_used: dict[EvidenceKind, float] = Field(default_factory=dict)
 
-    @field_validator("valid_until", "last_spambot_at")
+    @field_validator("valid_until", "last_spambot_at", "primary_observed_at")
     @classmethod
     def _aware(cls, value: datetime | None) -> datetime | None:
         return None if value is None else _utc(value)

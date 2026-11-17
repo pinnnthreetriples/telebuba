@@ -9,6 +9,7 @@ import pytest
 
 from core.db import _get_engine, _metadata, create_account, delete_account
 from core.migration_steps_spam_evidence import _add_spam_evidence
+from core.migration_steps_spam_projection_observed import _add_spam_projection_observed
 from core.migrations import MIGRATIONS
 from core.repositories.spam_evidence import list_evidence, record_evidence
 from core.repositories.spam_status import store_projection
@@ -79,6 +80,8 @@ def test_created_and_migrated_schemas_match(legacy_engine: _EngineFactory, table
     for _ in range(2):  # idempotent
         with migrated.begin() as connection:
             _add_spam_evidence(connection)
+            # Migration 119 later added one more projection column to the same table.
+            _add_spam_projection_observed(connection)
     # Columns, types, nullability, defaults, primary key and index names; the foreign key
     # on ``account_spam_status.account_id`` is not part of the shape.
     assert _shape(migrated, table) == _shape(created, table)

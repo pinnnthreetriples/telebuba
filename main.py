@@ -73,7 +73,13 @@ from services.neuroshilling import (
 from services.notifications import shutdown_notifications, start_notifications
 from services.scheduled_posts import shutdown_scheduled_posts, start_scheduled_posts
 from services.session_guard import shutdown_session_guard, start_session_guard
-from services.spam_intel import install_signal_sink, shutdown_history_sweep, start_history_sweep
+from services.spam_intel import (
+    install_signal_sink,
+    shutdown_appeal_recheck,
+    shutdown_history_sweep,
+    start_appeal_recheck,
+    start_history_sweep,
+)
 from services.survival import shutdown_survival_probes, start_survival_probes
 from services.user_parser import (
     reconcile_user_parser_on_startup,
@@ -152,16 +158,19 @@ async def _start_spambot_tasks() -> None:
     """The background tasks that ask @SpamBot: the survival probes, and the history sweep.
 
     The sweep is a one-off, read-only pass over each account's old @SpamBot dialog and stays
-    off unless the owner switches it on (``SPAM_INTEL__HISTORY_SWEEP``).
+    off unless the owner switches it on (``SPAM_INTEL__HISTORY_SWEEP``). The appeal re-check asks
+    the gateway (a decision under the shared budget) about accounts the operator appealed for.
     """
     await start_survival_probes()
     await start_history_sweep()
+    await start_appeal_recheck()
 
 
 async def _shutdown_spambot_tasks() -> None:
     """Stop both before the pool goes: each may be mid-request on a pooled client."""
     await shutdown_survival_probes()
     await shutdown_history_sweep()
+    await shutdown_appeal_recheck()
 
 
 def _setup_process() -> None:

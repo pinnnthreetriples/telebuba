@@ -82,6 +82,7 @@ def expire(verdict: Verdict, at: datetime) -> Verdict:
             "confidence": "low",
             "valid_until": None,
             "primary_kind": None,
+            "primary_observed_at": None,
             "needs_probe": True,
             "contradiction": False,
             "reason": "limit_expired",

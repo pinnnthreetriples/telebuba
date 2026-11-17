@@ -20,13 +20,21 @@ SpamStatusKind = Literal["clean", "limited", "unknown"]
 
 
 class SpamStatusProbe(BaseModel):
-    """Raw result of the gateway probe — unparsed bot text + restriction flags."""
+    """Raw result of the gateway probe — unparsed bot text + restriction flags.
+
+    The last three fields are filled only by the human-like conversation (``n_messages`` > 0):
+    every message of the bot with text, whether any carried buttons, and how many there were.
+    ``reply_text`` is then those texts joined, so a reader that knows one text still sees it.
+    """
 
     account_id: str = Field(min_length=1)
     reply_text: str | None = None
     restricted: bool = False
     restriction_reason: str | None = None
     error: str | None = None
+    texts: list[str] = Field(default_factory=list)
+    has_markup: bool = False
+    n_messages: int = Field(default=0, ge=0)
 
 
 class SpamStatusVerdict(BaseModel):

@@ -32,6 +32,18 @@ const IGNORED = new Map([
       reason: 'zod 3: build-time only via steiger, validating our own config; no zod 3 patch',
     },
   ],
+  [
+    // picomatch (ReDoS на повторяющихся extglob-шаблонах): уязвимы ВСЕ версии (range `*`),
+    // патча нет. Пакет приходит только транзитивно через dev-инструменты (vite, vitest,
+    // storybook, tinyglobby) и матчит наши собственные glob-шаблоны во время сборки и
+    // тестов; в продакшен-зависимостях его нет (`npm ls picomatch --omit=dev` пуст).
+    // Убрать, как только выйдет исправленный picomatch.
+    'GHSA-fc5q-39xc-vjpf',
+    {
+      under: 'node_modules/',
+      reason: 'picomatch: dev tooling only (vite/vitest/storybook), our own globs, no patch exists',
+    },
+  ],
 ]);
 
 function runAudit() {

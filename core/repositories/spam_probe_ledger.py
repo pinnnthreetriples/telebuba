@@ -11,11 +11,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core._schema_spam_intel import _spam_probe_attempts, _spam_probe_state
 from core.db import _get_engine
+from schemas.spam_card import ProbeActivity
 from schemas.spam_intel import BudgetSnapshot, ProbeAttemptFinish, ProbeAttemptStart, ProbeState
 
 if TYPE_CHECKING:
@@ -157,6 +158,59 @@ async def load_budget_snapshot(
     ``since`` is the ISO start of the rolling 24 h window.
     """
     return await asyncio.to_thread(_load_budget_snapshot, account_id, proxy_key, since)
+
+
+def _list_probe_states(account_ids: list[str]) -> dict[str, ProbeState]:
+    if not account_ids:
+        return {}
+    statement = select(_spam_probe_state).where(_spam_probe_state.c.account_id.in_(account_ids))
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).all()
+    return {row._mapping["account_id"]: _state_from_row(row) for row in rows}  # noqa: SLF001
+
+
+async def list_probe_states(account_ids: list[str]) -> dict[str, ProbeState]:
+    """The probe state of each given account that has one (one query)."""
+    return await asyncio.to_thread(_list_probe_states, account_ids)
+
+
+def _probe_activity(account_ids: list[str], since: str) -> dict[str, ProbeActivity]:
+    if not account_ids:
+        return {}
+    table = _spam_probe_attempts
+    recent = func.sum(case((table.c.started_at >= since, 1), else_=0))
+    statement = (
+        select(table.c.account_id, func.max(table.c.started_at), recent)
+        .where(table.c.kind == _PROBE, table.c.account_id.in_(account_ids))
+        .group_by(table.c.account_id)
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).all()
+    return {
+        str(account): ProbeActivity(last_started_at=str(last), count_7d=int(count or 0))
+        for account, last, count in rows
+    }
+
+
+async def probe_activity(account_ids: list[str], since: str) -> dict[str, ProbeActivity]:
+    """Each account's newest real probe and how many started since ``since`` (one query)."""
+    return await asyncio.to_thread(_probe_activity, account_ids, since)
+
+
+def _fleet_use(since: str) -> tuple[int, int]:
+    table = _spam_probe_attempts
+    window = (table.c.kind == _PROBE, table.c.started_at >= since)
+    with _get_engine().connect() as connection:
+        total = connection.execute(select(func.count()).where(*window)).scalar()
+        operator = connection.execute(
+            select(func.count()).where(*window, table.c.purpose == _OPERATOR)
+        ).scalar()
+    return int(total or 0), int(operator or 0)
+
+
+async def fleet_probe_use(since: str) -> tuple[int, int]:
+    """``(every real probe, the operator's own)`` started since ``since`` across the fleet."""
+    return await asyncio.to_thread(_fleet_use, since)
 
 
 def _prune_attempts(before: str, max_rows: int) -> int:

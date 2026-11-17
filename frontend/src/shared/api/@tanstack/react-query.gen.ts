@@ -120,6 +120,7 @@ import {
   getQrLogin,
   getReadiness,
   getSessionGuardStatus,
+  getSpamAppeal,
   getUserParserRun,
   getWarmingBoard,
   getWarmingSettings,
@@ -156,6 +157,7 @@ import {
   listPhones,
   listProxies,
   listSmsInbox,
+  listSpamAppeals,
   listUserParserAccounts,
   listUserParserBases,
   listUserParserBaseUsers,
@@ -173,8 +175,10 @@ import {
   manualInputPhoneOtp,
   markAccountChatRead,
   markAccountSessionOurs,
+  markSpamAppealFiled,
   openAccountMobile,
   openAccountWeb,
+  openSpamAppealWindow,
   type Options,
   postAccountStory,
   previewWarmingStart,
@@ -230,6 +234,7 @@ import {
   setNeurocommentListener,
   setNeuroshillingScenario,
   skipNeurocommentPair,
+  spamBudgetStatus,
   spamCheckAccount,
   startCampaignDiscovery,
   startChatBroadcastCampaign,
@@ -602,6 +607,9 @@ import type {
   GetSessionGuardStatusData,
   GetSessionGuardStatusError,
   GetSessionGuardStatusResponse,
+  GetSpamAppealData,
+  GetSpamAppealError,
+  GetSpamAppealResponse,
   GetUserParserRunData,
   GetUserParserRunError,
   GetUserParserRunResponse,
@@ -710,6 +718,9 @@ import type {
   ListSmsInboxData,
   ListSmsInboxError,
   ListSmsInboxResponse,
+  ListSpamAppealsData,
+  ListSpamAppealsError,
+  ListSpamAppealsResponse,
   ListUserParserAccountsData,
   ListUserParserAccountsError,
   ListUserParserAccountsResponse,
@@ -761,12 +772,18 @@ import type {
   MarkAccountSessionOursData,
   MarkAccountSessionOursError,
   MarkAccountSessionOursResponse,
+  MarkSpamAppealFiledData,
+  MarkSpamAppealFiledError,
+  MarkSpamAppealFiledResponse,
   OpenAccountMobileData,
   OpenAccountMobileError,
   OpenAccountMobileResponse,
   OpenAccountWebData,
   OpenAccountWebError,
   OpenAccountWebResponse,
+  OpenSpamAppealWindowData,
+  OpenSpamAppealWindowError,
+  OpenSpamAppealWindowResponse,
   PostAccountStoryData,
   PostAccountStoryError,
   PostAccountStoryResponse,
@@ -929,6 +946,9 @@ import type {
   SkipNeurocommentPairData,
   SkipNeurocommentPairError,
   SkipNeurocommentPairResponse,
+  SpamBudgetStatusData,
+  SpamBudgetStatusError,
+  SpamBudgetStatusResponse,
   SpamCheckAccountData,
   SpamCheckAccountError,
   SpamCheckAccountResponse,
@@ -1387,35 +1407,6 @@ export const checkAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await checkAccount({
-        ...options,
-        ...fnOptions,
-        throwOnError: true,
-      });
-      return data;
-    },
-  };
-  return mutationOptions;
-};
-
-/**
- * Spam Check Account
- *
- * Re-probe @SpamBot for one account within the shared probe budget; return the verdict.
- */
-export const spamCheckAccountMutation = (
-  options?: Partial<Options<SpamCheckAccountData>>,
-): UseMutationOptions<
-  SpamCheckAccountResponse,
-  SpamCheckAccountError,
-  Options<SpamCheckAccountData>
-> => {
-  const mutationOptions: UseMutationOptions<
-    SpamCheckAccountResponse,
-    SpamCheckAccountError,
-    Options<SpamCheckAccountData>
-  > = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await spamCheckAccount({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -3519,6 +3510,66 @@ export const markAccountSessionOursMutation = (
   return mutationOptions;
 };
 
+export const spamBudgetStatusQueryKey = (options?: Options<SpamBudgetStatusData>) =>
+  createQueryKey('spamBudgetStatus', options);
+
+/**
+ * Spam Budget Status
+ *
+ * The fleet's @SpamBot probes over the last 24 h against the caps, for the page warning.
+ */
+export const spamBudgetStatusOptions = (options?: Options<SpamBudgetStatusData>) =>
+  queryOptions<
+    SpamBudgetStatusResponse,
+    SpamBudgetStatusError,
+    SpamBudgetStatusResponse,
+    ReturnType<typeof spamBudgetStatusQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await spamBudgetStatus({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: spamBudgetStatusQueryKey(options),
+  });
+
+/**
+ * Spam Check Account
+ *
+ * Re-probe @SpamBot for one account within the shared probe budget; return the verdict.
+ *
+ * Out of turn (the last probe is past the 30-minute window but under a day old) the click is
+ * refused with 409 ``needs_confirmation`` unless ``confirm_out_of_turn`` is true. A held or
+ * refused check answers 200 with ``served_from``, ``reason`` and ``retry_at`` instead.
+ */
+export const spamCheckAccountMutation = (
+  options?: Partial<Options<SpamCheckAccountData>>,
+): UseMutationOptions<
+  SpamCheckAccountResponse,
+  SpamCheckAccountError,
+  Options<SpamCheckAccountData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SpamCheckAccountResponse,
+    SpamCheckAccountError,
+    Options<SpamCheckAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await spamCheckAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
 /**
  * Set Account Registered At
  *
@@ -4432,6 +4483,125 @@ export const accountMobileProgressOptions = (options: Options<AccountMobileProgr
     },
     queryKey: accountMobileProgressQueryKey(options),
   });
+
+export const listSpamAppealsQueryKey = (options?: Options<ListSpamAppealsData>) =>
+  createQueryKey('listSpamAppeals', options);
+
+/**
+ * List Spam Appeals
+ *
+ * The open appeals of every account, with the time each is re-checked.
+ */
+export const listSpamAppealsOptions = (options?: Options<ListSpamAppealsData>) =>
+  queryOptions<
+    ListSpamAppealsResponse,
+    ListSpamAppealsError,
+    ListSpamAppealsResponse,
+    ReturnType<typeof listSpamAppealsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listSpamAppeals({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listSpamAppealsQueryKey(options),
+  });
+
+export const getSpamAppealQueryKey = (options: Options<GetSpamAppealData>) =>
+  createQueryKey('getSpamAppeal', options);
+
+/**
+ * Get Spam Appeal
+ *
+ * What the card shows: the newest appeal (none, open or closed) and its re-check time.
+ */
+export const getSpamAppealOptions = (options: Options<GetSpamAppealData>) =>
+  queryOptions<
+    GetSpamAppealResponse,
+    GetSpamAppealError,
+    GetSpamAppealResponse,
+    ReturnType<typeof getSpamAppealQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getSpamAppeal({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getSpamAppealQueryKey(options),
+  });
+
+/**
+ * Open Spam Appeal Window
+ *
+ * Open the account's own web window on @SpamBot's dialog (the operator appeals by hand).
+ *
+ * The account's proxy and fingerprint, refused without a proxy exactly like the plain open.
+ * If the dialog does not open, the window is still on Telegram Web and the operator searches
+ * for the bot there.
+ */
+export const openSpamAppealWindowMutation = (
+  options?: Partial<Options<OpenSpamAppealWindowData>>,
+): UseMutationOptions<
+  OpenSpamAppealWindowResponse,
+  OpenSpamAppealWindowError,
+  Options<OpenSpamAppealWindowData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    OpenSpamAppealWindowResponse,
+    OpenSpamAppealWindowError,
+    Options<OpenSpamAppealWindowData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await openSpamAppealWindow({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Mark Spam Appeal Filed
+ *
+ * Record that the signed-in operator filed the appeal by hand.
+ *
+ * Nothing is inferred from the window. A second press while the appeal is open changes
+ * nothing; a clean account has no block to appeal (400).
+ */
+export const markSpamAppealFiledMutation = (
+  options?: Partial<Options<MarkSpamAppealFiledData>>,
+): UseMutationOptions<
+  MarkSpamAppealFiledResponse,
+  MarkSpamAppealFiledError,
+  Options<MarkSpamAppealFiledData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    MarkSpamAppealFiledResponse,
+    MarkSpamAppealFiledError,
+    Options<MarkSpamAppealFiledData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await markSpamAppealFiled({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 export const listProxiesQueryKey = (options?: Options<ListProxiesData>) =>
   createQueryKey('listProxies', options);

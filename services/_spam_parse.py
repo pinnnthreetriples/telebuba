@@ -11,8 +11,16 @@ between the two classifiers by ``settings.spam_intel.strict_parser``.
   a clean and a limited marker is ``unknown`` (``ambiguous_reply``). It never reads
   ``getFullUser.restricted``: Telegram documents that flag as a platform restriction, not
   a spam limit.
+* :func:`classify_transcript` reads what the human-like probe collected: several messages.
 
-Marker lexicons for more languages are added only from captured replies (docs/spam-intel.md).
+The order of a reading (docs/spam-intel.md 5.8): an error is ``unknown``; a structural read that
+does not depend on the language (a date, in any form, means a time-bounded limit); the
+per-language lexicons (``services._spam_lexicon``); anything else is unrecognised. "Limited" is
+checked before "clean" across a transcript, and a text that matches both is ambiguous. A
+multi-message transcript and markup on a message are RECORDED (the sample's structural flags) but
+decide nothing yet: no captured reply shows what they mean.
+
+Marker lexicons for more languages are added only from captured replies (``_spam_lexicon``).
 """
 
 from __future__ import annotations
@@ -21,56 +29,20 @@ import hashlib
 import re
 from typing import TYPE_CHECKING
 
-from schemas.spam_status import SpamStatusKind, SpamStatusProbe  # noqa: TC001
+from schemas.spam_status import SpamStatusKind, SpamStatusProbe
+from services._spam_lexicon import (
+    AUTOMATED_MARKERS,
+    BEING_CHECKED_MARKERS,
+    CLEAN_MARKERS,
+    LIMITED_MARKERS,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
 UNRECOGNIZED_DETAIL = "unrecognized_reply"
 AMBIGUOUS_DETAIL = "ambiguous_reply"
 CHECKING_DETAIL = "account is being checked"
-
-# Substring markers, lowercased, ordered by check priority. ``@SpamBot`` localises its reply
-# to the account's interface language, so the same verdict can land in EN, RU, or anything
-# else; matching by short stems lets one rule cover several inflections of one language.
-# Clean is checked first because the Russian clean reply ("не применены ограничения")
-# legitimately contains a substring shared with the limited markers.
-_CLEAN_MARKERS = (
-    # EN — "Good news, no limits are currently applied to your account."
-    "no limits",
-    "good news",
-    # RU — long form: "Хорошие новости, ... не применены никакие ограничения."
-    "хорошие новости",
-    "не применены",
-    # RU — short form: "Ваш аккаунт свободен от каких-либо ограничений."
-    # Has to be matched explicitly because the substring "ограничен" appears in
-    # both the clean ("ограничений") and limited ("наложены ограничения") forms
-    # and is therefore not a safe limited-marker.
-    "свободен от",
-)
-_BEING_CHECKED_MARKERS = (
-    # EN — "Your account is being checked."
-    "being checked",
-    "is checked",
-    # RU — "Ваш аккаунт сейчас проверяется автоматизированной системой."
-    "сейчас проверя",
-    "автоматизирован",
-)
-_LIMITED_MARKERS = (
-    # EN — "Your account is now limited until …"
-    "limited",
-    "restricted",
-    # RU — Russian limited reply consistently contains the "наложены" stem.
-    # We deliberately do NOT match the "ограничен" stem here: it also appears
-    # in the Russian *clean* reply ("свободен от каких-либо ограничений") and
-    # would cause a false-positive limited verdict. "Наложены" is specific to
-    # limited replies and is the only safe Russian discriminator.
-    "наложены",
-)
-# Latin stem covers en/de/fr/it/pt/es ("automated", "automatisch", "automatique",
-# "automatizzato", "automatizado"); Cyrillic stem covers ru. Anything else with this stem
-# in @SpamBot's reply means automated review is in progress.
-_AUTOMATED_MARKERS = ("automat", "автомат")
 
 # Date patterns — language-agnostic signal that the reply describes a time-bounded
 # limitation ("until <date>"). A clean reply carries no date on any locale we have seen.
@@ -112,11 +84,11 @@ def extract_until(text: str) -> str | None:
 def _classify_reply_text(text: str) -> tuple[SpamStatusKind, str | None] | None:
     """Match the reply against the explicit keyword markers; ``None`` = none matched."""
     lowered = text.lower()
-    if any(marker in lowered for marker in _CLEAN_MARKERS):
+    if any(marker in lowered for marker in CLEAN_MARKERS):
         return "clean", None
-    if any(marker in lowered for marker in _BEING_CHECKED_MARKERS):
+    if any(marker in lowered for marker in BEING_CHECKED_MARKERS):
         return "unknown", CHECKING_DETAIL
-    if any(marker in lowered for marker in _LIMITED_MARKERS):
+    if any(marker in lowered for marker in LIMITED_MARKERS):
         return "limited", extract_until(text)
     return None
 
@@ -131,7 +103,7 @@ def _classify_by_heuristic(text: str) -> tuple[SpamStatusKind, str | None]:
     if date is not None:
         return "limited", extract_until(text) or date
     lowered = text.lower()
-    if any(marker in lowered for marker in _AUTOMATED_MARKERS):
+    if any(marker in lowered for marker in AUTOMATED_MARKERS):
         return "unknown", CHECKING_DETAIL
     return "clean", None
 
@@ -169,22 +141,58 @@ def classify_strict(  # noqa: PLR0911 - one flat ladder of verdicts, read top to
     if not text.strip():
         return "unknown", None
     lowered = text.lower()
-    clean = any(marker in lowered for marker in _CLEAN_MARKERS)
-    limited = any(marker in lowered for marker in _LIMITED_MARKERS)
+    clean = any(marker in lowered for marker in CLEAN_MARKERS)
+    limited = any(marker in lowered for marker in LIMITED_MARKERS)
     if clean and limited:
         return "unknown", AMBIGUOUS_DETAIL
     if clean:
         return "clean", None
-    if any(marker in lowered for marker in _BEING_CHECKED_MARKERS):
+    if any(marker in lowered for marker in BEING_CHECKED_MARKERS):
         return "unknown", CHECKING_DETAIL
     if limited:
         return "limited", extract_until(text)
     date = find_date(text)
     if date is not None:
         return "limited", extract_until(text) or date
-    if any(marker in lowered for marker in _AUTOMATED_MARKERS):
+    if any(marker in lowered for marker in AUTOMATED_MARKERS):
         return "unknown", CHECKING_DETAIL
     return "unknown", UNRECOGNIZED_DETAIL
+
+
+def classify_transcript(
+    texts: Sequence[str],
+    *,
+    strict: bool,
+) -> tuple[SpamStatusKind, str | None]:
+    """The verdict for everything @SpamBot said in one conversation.
+
+    Each message is read on its own, by the strict classifier when ``strict`` and by the legacy
+    one otherwise, then the readings are combined: any ``limited`` message is ``limited`` (the
+    first one's detail); else a ``clean`` message beside one that is ambiguous or says "being
+    checked" is ``unknown`` (``ambiguous_reply``); else ``clean`` if any message is; else the most
+    telling ``unknown`` (ambiguous, then being checked, then unrecognised). No text at all is
+    ``unknown`` with no detail. ``getFullUser.restricted`` plays no part: the conversation does
+    not read it.
+    """
+    classify = classify_strict if strict else classify_legacy
+    readings = [
+        classify(SpamStatusProbe(account_id="transcript", reply_text=text))
+        for text in texts
+        if text.strip()
+    ]
+    if not readings:
+        return "unknown", None
+    for reading in readings:
+        if reading[0] == "limited":
+            return reading
+    unknown_details = {detail for status, detail in readings if status == "unknown"}
+    unsettled = AMBIGUOUS_DETAIL in unknown_details or CHECKING_DETAIL in unknown_details
+    if any(status == "clean" for status, _ in readings):
+        return ("unknown", AMBIGUOUS_DETAIL) if unsettled else ("clean", None)
+    for detail in (AMBIGUOUS_DETAIL, CHECKING_DETAIL):
+        if detail in unknown_details:
+            return "unknown", detail
+    return readings[0]
 
 
 # Redaction of stored samples: everything that names an account goes before a reply is kept.
