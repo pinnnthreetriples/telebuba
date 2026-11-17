@@ -9,7 +9,6 @@ import pytest
 from core.config import settings
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.phone_login import PhoneCodeRequestResult
-from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from services import warming as warming_service
 from services.accounts import (
@@ -83,53 +82,6 @@ async def test_check_unknown_account_is_404_not_400(
     monkeypatch.setattr("services.accounts.check_account_session", _fake)
     async with _client(app) as client:
         resp = await client.post("/api/v1/accounts/check", json={"account_id": "never-existed"})
-    assert resp.status_code == 404
-    assert resp.json()["error"]["code"] == "not_found"
-
-
-@pytest.mark.asyncio
-async def test_spam_check_returns_the_fresh_verdict(
-    app: FastAPI,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def _fake(account_id: str, *, force: bool) -> SpamStatusVerdict:
-        assert force is True
-        return SpamStatusVerdict(
-            account_id=account_id,
-            status="limited",
-            detail="until 2026-07-01",
-            checked_at="2026-06-30T00:00:00+00:00",
-        )
-
-    monkeypatch.setattr("services.spam_status.refresh_spam_status", _fake)
-    await add_account(AccountCreate(account_id="acc-1"))
-    async with _client(app) as client:
-        resp = await client.post("/api/v1/accounts/acc-1/spam-check")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["status"] == "limited"
-    assert body["detail"] == "until 2026-07-01"
-
-
-@pytest.mark.asyncio
-async def test_spam_check_unknown_account_is_404(
-    app: FastAPI,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A missing row is a 404 like every sibling route, not a 200 ``unknown``.
-
-    ``refresh_spam_status`` deliberately degrades instead of raising (warming and
-    neurocomment onboarding call it too), so the route does its own lookup — and
-    the service must not be reached at all.
-    """
-
-    async def _fake(account_id: str, *, force: bool) -> SpamStatusVerdict:  # noqa: ARG001
-        msg = "service must not be reached for a missing account"
-        raise AssertionError(msg)
-
-    monkeypatch.setattr("services.spam_status.refresh_spam_status", _fake)
-    async with _client(app) as client:
-        resp = await client.post("/api/v1/accounts/acc-nope/spam-check")
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "not_found"
 

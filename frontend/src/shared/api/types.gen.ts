@@ -7658,6 +7658,11 @@ export type SolverToggleRequest = {
  * SpamStatusVerdict
  *
  * Parsed, cacheable spam-status verdict for one account.
+ *
+ * The last three fields are never stored: the gateway fills them on an answer so the
+ * caller can tell "not asked, the budget says later" (``deferred``, ``retry_at``) and
+ * "will not be asked" (``refused``, ``reason``) from a reading that came back
+ * unreadable. ``None`` everywhere means a plain stored reading, as before the gateway.
  */
 export type SpamStatusVerdict = {
   /**
@@ -7676,6 +7681,32 @@ export type SpamStatusVerdict = {
    * Checked At
    */
   checked_at: string;
+  /**
+   * Served From
+   */
+  served_from?: 'cache' | 'probe' | 'coalesced' | 'deferred' | 'refused' | null;
+  /**
+   * Retry At
+   */
+  retry_at?: string | null;
+  /**
+   * Reason
+   */
+  reason?:
+    | 'backoff'
+    | 'account_daily_cap'
+    | 'proxy_spacing'
+    | 'fleet_spacing'
+    | 'fleet_soft_cap'
+    | 'fleet_hard_cap'
+    | 'busy'
+    | 'startup_quiet'
+    | 'account_missing'
+    | 'account_not_alive'
+    | 'no_proxy'
+    | 'operator_daily_cap'
+    | 'needs_confirmation'
+    | null;
 };
 
 /**

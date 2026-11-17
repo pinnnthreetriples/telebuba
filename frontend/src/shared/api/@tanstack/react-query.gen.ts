@@ -1400,7 +1400,7 @@ export const checkAccountMutation = (
 /**
  * Spam Check Account
  *
- * Re-probe @SpamBot for one account and return the fresh, cached verdict.
+ * Re-probe @SpamBot for one account within the shared probe budget; return the verdict.
  */
 export const spamCheckAccountMutation = (
   options?: Partial<Options<SpamCheckAccountData>>,

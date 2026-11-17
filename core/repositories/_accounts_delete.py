@@ -160,6 +160,7 @@ def _delete_account(account_id: str) -> None:
         _masstagging_accounts,
     )
     from core.repositories.neuroshilling._tables import _neuroshilling_accounts  # noqa: PLC0415
+    from core.repositories.spam_probe_ledger import delete_account_ledger  # noqa: PLC0415
 
     with _get_engine().begin() as connection:
         _delete_scheduled_posts(connection, account_id)
@@ -222,6 +223,8 @@ def _delete_account(account_id: str) -> None:
             delete(_account_passkeys).where(_account_passkeys.c.account_id == account_id),
         )
         _delete_session_audits(connection, account_id)
+        # The spam-intel ledger: no FK, but per-account data all the same.
+        delete_account_ledger(connection, account_id)
         connection.execute(
             delete(_device_fingerprints).where(
                 _device_fingerprints.c.account_id == account_id,

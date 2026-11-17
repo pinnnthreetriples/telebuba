@@ -35,6 +35,8 @@ _EVENT_KINDS: dict[str, NotificationKind] = {
     "session_audit_foreign_found": "foreign_session",
     # The watch found that Telegram no longer lists the account's stored passkey.
     "session_watch_passkey_missing": "passkey_missing",
+    # The shared @SpamBot budget ran past its daily cap (``services.spam_intel``).
+    "spam_intel_budget_exceeded": "spam_budget",
     # A session check found the account's key gone (journalled once per death).
     "account_session_dead": "session_dead",
     # The session guard failed a step or stopped making passes.
@@ -60,6 +62,10 @@ _TEMPLATES: dict[NotificationKind, str] = {
     "passkey_missing": (
         "{label}: ключ доступа аккаунта пропал из Telegram — "
         "в настройках безопасности аккаунта был кто-то ещё."
+    ),
+    "spam_budget": (
+        "Опросы @SpamBot: превышен суточный лимит по парку, проверки откладываются. "
+        "Откройте журнал событий (spam_intel_*): частые опросы выглядят как автоматизация."
     ),
     "session_dead": (
         "{label}: сессия аккаунта больше не работает. "

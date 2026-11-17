@@ -19,7 +19,7 @@ import time
 from asyncio import sleep
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from core.config import settings
 from core.gemini import generate_text as _generate_text
@@ -124,17 +124,33 @@ async def solve_challenge(account_id: str, chat: str, group_id: int) -> Challeng
     return outcome
 
 
-async def spam_verdict(account_id: str) -> SpamStatusKind:
-    """Ask @SpamBot afresh; a probe that failed reads ``unknown``.
+@contextmanager
+def spam_caller(label: str) -> Iterator[None]:
+    """Name this domain's reason for a @SpamBot question (events, ledger rows)."""
+    from services.spam_intel import caller_scope  # noqa: PLC0415 - import cycle
 
-    Never the cache: a ``clean`` from yesterday says nothing about the refusal the
-    account just got.
+    with caller_scope(label):
+        yield
+
+
+async def spam_verdict(account_id: str) -> SpamStatusKind | Literal["deferred"]:
+    """Ask @SpamBot afresh; a probe that failed reads ``unknown``, a postponed one ``deferred``.
+
+    Never the cache: a ``clean`` from yesterday says nothing about the refusal the account
+    just got. A reading younger than the gateway's coalescing window is still handed back,
+    and the budget may say "later" (``deferred``): that is NOT a failed probe, so the run
+    keeps the account resting instead of treating it as a block.
     """
-    from services.spam_status import refresh_spam_status  # noqa: PLC0415 - import cycle
+    from schemas.spam_status import is_unasked  # noqa: PLC0415 - import cycle
+    from services.spam_intel import ask  # noqa: PLC0415 - import cycle
 
     assert_live_run()
-    verdict = await refresh_spam_status(account_id, force=True)
+    verdict = await ask(account_id, force=True, holder=_DOMAIN)
     assert_live_run()
+    if verdict.served_from == "deferred":
+        return "deferred"
+    if is_unasked(verdict):
+        return "unknown"
     return verdict.status
 
 
@@ -159,5 +175,6 @@ __all__ = [
     "run_scope",
     "sleep",
     "solve_challenge",
+    "spam_caller",
     "spam_verdict",
 ]

@@ -936,7 +936,7 @@ export const checkAccount = <ThrowOnError extends boolean = false>(
 /**
  * Spam Check Account
  *
- * Re-probe @SpamBot for one account and return the fresh, cached verdict.
+ * Re-probe @SpamBot for one account within the shared probe budget; return the verdict.
  */
 export const spamCheckAccount = <ThrowOnError extends boolean = false>(
   options: Options<SpamCheckAccountData, ThrowOnError>,

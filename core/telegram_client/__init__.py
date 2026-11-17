@@ -110,7 +110,7 @@ from core.telegram_client._second_device import authorize_second_device, remove_
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._session_audit import SessionAuditGatewayError, read_account_sessions
 from core.telegram_client._session_close import close_sessions
-from core.telegram_client._spam import check_spam_status
+from core.telegram_client._spam import check_spam_status, read_spambot_history
 from core.telegram_client._story_image import is_known_collage_layout
 from core.telegram_client._web_login import WebLoginTransientError, accept_web_login_token
 
@@ -163,6 +163,7 @@ __all__ = [
     "read_account_sessions",
     "read_history",
     "read_qr_login",
+    "read_spambot_history",
     "refresh_account_avatar",
     "register_passkey",
     "rekey_session",

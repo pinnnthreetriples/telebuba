@@ -27,6 +27,7 @@ NotificationKind = Literal[
     "warmed",
     "foreign_session",
     "passkey_missing",
+    "spam_budget",
     "session_dead",
     "session_guard",
 ]
