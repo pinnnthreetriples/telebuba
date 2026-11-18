@@ -35,7 +35,7 @@ from core.telegram_client import read_spambot_history
 from schemas.spam_intel import ProbeAttemptFinish, ProbeAttemptStart
 from services.spam_intel import _gateway
 from services.spam_intel._admission import gate
-from services.spam_intel._answers import ASKABLE, busy
+from services.spam_intel._answers import ASKABLE, TRANSIENT, busy
 from services.spam_intel._attempts import finish_quietly
 from services.spam_intel._policy import ProbeRequest, decide_history
 from services.spam_status import store_reply_sample
@@ -83,7 +83,8 @@ async def _wait_for_budget(account: AccountRead) -> int | None:
             request = ProbeRequest(
                 purpose="routine",
                 now=at,
-                alive=account.status in ASKABLE,
+                alive=account.status in ASKABLE | TRANSIENT,
+                transient=account.status in TRANSIENT,
                 has_proxy=account.proxy_id is not None,
                 busy=busy(account.account_id, None),
                 confirmed=False,
@@ -106,6 +107,8 @@ async def _wait_for_budget(account: AccountRead) -> int | None:
                         started_at=at.isoformat(),
                     )
                 )
+        if decision.reason == "account_status_transient":
+            return None  # the session check clears it; the next run reads this account
         if decision.retry_at is None or decision.retry_at - at > _MAX_WAIT:
             return None
         await _sleep((decision.retry_at - at).total_seconds())

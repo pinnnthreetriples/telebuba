@@ -21,12 +21,15 @@ if TYPE_CHECKING:
     from schemas.spam_intel import AttemptOutcome, BudgetSnapshot, Purpose, Reason, ServedFrom
     from services.spam_intel._policy import Decision
 
-# The only statuses an account may be ASKED in (design 5.5 rule 1: anything but ``alive`` is
-# refused). ``new`` is an account no session check has judged yet, which nothing says is dead;
-# every other status is a session that cannot answer (production showed five probes of a
-# revoked one) or a transient fault (flood wait, proxy or network error) a probe would only
-# repeat and count as an unreadable answer.
+# The statuses an account may be ASKED in (design 5.5 rule 1). ``new`` is an account no session
+# check has judged yet, which nothing says is dead.
 ASKABLE = frozenset({"new", "alive"})
+# Faults the session check sets and clears by itself (a flood wait, a proxy or network error): the
+# account is not asked NOW, but it is not refused either. A refusal would be counted by a caller
+# (warming's quarantine) as an unreadable answer; a deferral with ``retry_at`` is not one.
+TRANSIENT = frozenset({"flood_wait", "proxy_error", "network_error", "unknown_error"})
+# Every other status is a session that cannot answer (production showed five probes of a
+# revoked one): refused.
 
 # What each named caller is asking for. A caller not listed is a DECISION when it forces
 # and ROUTINE otherwise.

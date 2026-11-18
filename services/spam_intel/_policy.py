@@ -5,8 +5,8 @@ caller drew, the settings — so every rule is a table-driven test and nothing h
 Telegram, the database or ``random``. The order of the rules is part of the contract
 (``docs/spam-intel.md`` section 5.5): who may be asked at all, then the coalescing window, then
 the account's own cap, backoff, the proxy and fleet spacing, the fleet caps, and last the busy
-account and the quiet start. The order decides which reason an ask is turned away with, never
-whether it goes.
+account, the quiet start and the local night. The order decides which reason an ask is turned
+away with, never whether it goes.
 """
 
 from __future__ import annotations
@@ -40,6 +40,11 @@ class ProbeRequest:
     process_age: timedelta
     # The gap the caller drew for this ask; the spacing rule compares against it.
     fleet_gap: timedelta
+    # The account's status is a transient fault (flood wait, proxy or network error): not dead
+    # (``alive`` stays true), but not to be asked now.
+    transient: bool = False
+    # When the account's local night ends, if the ask is made inside it (``_night``).
+    night_until: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -189,6 +194,31 @@ def _occupancy_rule(
     return None
 
 
+def _transient_status(request: ProbeRequest, cfg: SpamIntelSettings) -> Decision | None:
+    """A transient account status defers every purpose, the operator's click included.
+
+    The session check clears it by itself, so this is a wait, not a refusal. The operator is held
+    too, conservatively: a human can look at the account's status on the card, and a check sent
+    through a flood wait or a failing proxy would mostly come back unreadable and cost a streak.
+    """
+    if not request.transient:
+        return None
+    retry = request.now + timedelta(minutes=cfg.account_status_retry_minutes)
+    return _defer("account_status_transient", retry)
+
+
+def _night_rule(
+    snapshot: BudgetSnapshot,  # noqa: ARG001 - the shape every rule shares
+    request: ProbeRequest,
+    cfg: SpamIntelSettings,  # noqa: ARG001 - the shape every rule shares
+) -> Decision | None:
+    """Rule 13 (D13): a ROUTINE ask waits out the account's local night; no other purpose does."""
+    until = request.night_until
+    if request.purpose == "routine" and until is not None and until > request.now:
+        return _defer("local_night", until)
+    return None
+
+
 def _gate(
     snapshot: BudgetSnapshot,
     request: ProbeRequest,
@@ -202,7 +232,7 @@ def _gate(
     last = _later(snapshot.last_attempt_started_at, timedelta(minutes=cfg.coalesce_minutes))
     if last is not None and last > request.now:
         return Decision(action="coalesce")
-    return None
+    return _transient_status(request, cfg)
 
 
 def _go(snapshot: BudgetSnapshot, cfg: SpamIntelSettings) -> Decision:
@@ -211,7 +241,7 @@ def _go(snapshot: BudgetSnapshot, cfg: SpamIntelSettings) -> Decision:
     return Decision(action="probe", warning="soft_cap" if over else None)
 
 
-# Rules 4-12 for a routine, decision or measurement ask, in the order of design 5.5.
+# Rules 4-13 for a routine, decision or measurement ask, in the order of design 5.5.
 _RULES = (
     _account_cap,
     _backoff_rule,
@@ -219,6 +249,7 @@ _RULES = (
     _hard_cap,
     _soft_cap,
     _occupancy_rule,
+    _night_rule,
 )
 
 
@@ -256,6 +287,8 @@ def decide_history(
         return Decision(action="refuse", reason="account_not_alive")
     if not request.has_proxy:
         return Decision(action="refuse", reason="no_proxy")
+    if (transient := _transient_status(request, cfg)) is not None:
+        return transient
     if request.busy:
         return _defer("busy", request.now + timedelta(minutes=cfg.busy_retry_minutes))
     return _spacing_rule(snapshot, request, cfg) or Decision(action="probe")

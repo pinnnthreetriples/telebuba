@@ -30,6 +30,8 @@ DeferralReason = Literal[
     "busy",
     "startup_quiet",
     "no_live_session",
+    "account_status_transient",
+    "local_night",
 ]
 RefusalReason = Literal[
     "account_missing",
@@ -48,6 +50,8 @@ Reason = Literal[
     "busy",
     "startup_quiet",
     "no_live_session",
+    "account_status_transient",
+    "local_night",
     "account_missing",
     "account_not_alive",
     "no_proxy",

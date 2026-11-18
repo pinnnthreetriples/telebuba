@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.repositories.spam_probe_ledger import start_attempt
 from schemas.spam_intel import ProbeAttemptStart
-from services.spam_intel._answers import ASKABLE, log_unasked, unasked
+from services.spam_intel._answers import ASKABLE, TRANSIENT, log_unasked, unasked
 from services.spam_intel._policy import Decision
 
 if TYPE_CHECKING:
@@ -63,19 +65,42 @@ class Admission:
     attempt_id: int | None = None
 
 
-def refusal_reason(account: AccountRead) -> Reason | None:
-    """Why the account is never asked (rules 1 and 2), or ``None`` when it may be."""
-    if account.status not in ASKABLE:
-        return "account_not_alive"
-    return "no_proxy" if account.proxy_id is None else None
+# Why an account is not asked before any budget is read, and until when (``None``: for good).
+Held = tuple["Reason", "datetime | None"]
 
 
-async def refuse(
-    req: Ask, reason: Reason, at: datetime, *, detail: str | None = None
+def unaskable(account: AccountRead, at: datetime) -> Held | None:
+    """Rules 1 and 2: a dead session or no proxy is refused; a transient status is deferred.
+
+    ``None`` when the account may be asked.
+    """
+    if account.status not in ASKABLE | TRANSIENT:
+        return "account_not_alive", None
+    if account.proxy_id is None:
+        return "no_proxy", None
+    if account.status in TRANSIENT:
+        retry = at + timedelta(minutes=settings.spam_intel.account_status_retry_minutes)
+        return "account_status_transient", retry
+    return None
+
+
+async def hold(
+    req: Ask, held: Held, at: datetime, *, detail: str | None = None
 ) -> SpamStatusVerdict:
-    """The refused answer for a guard that fired before any budget was read, and its event."""
-    await log_unasked(req.account_id, Decision(action="refuse", reason=reason), req, at)
-    return unasked(req.account_id, served_from="refused", reason=reason, at=at, detail=detail)
+    """The deferred or refused answer for a guard that fired before any budget, and its event."""
+    reason, retry_at = held
+    decision = Decision(
+        action="refuse" if retry_at is None else "defer", reason=reason, retry_at=retry_at
+    )
+    await log_unasked(req.account_id, decision, req, at)
+    return unasked(
+        req.account_id,
+        served_from="refused" if retry_at is None else "deferred",
+        reason=reason,
+        at=at,
+        retry_at=retry_at,
+        detail=detail,
+    )
 
 
 async def reserve(account: AccountRead, req: Ask, at: datetime) -> int:

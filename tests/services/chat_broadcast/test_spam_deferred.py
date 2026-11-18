@@ -1,4 +1,4 @@
-"""A postponed @SpamBot check keeps the account resting; only a real non-clean answer halts it."""
+"""A postponed, refused or failed @SpamBot check keeps the account resting; a block halts it."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def _answer(status: str, served_from: ServedFrom | None) -> SpamStatusVerdict:
         (_answer("limited", "coalesced"), "limited"),
         (_answer("unknown", "probe"), "unknown"),
         (_answer("unknown", "deferred"), "deferred"),
-        (_answer("unknown", "refused"), "unknown"),
+        (_answer("unknown", "refused"), "refused"),
         (_answer("clean", None), "clean"),
     ],
 )
@@ -90,7 +90,42 @@ async def test_a_postponed_check_at_the_end_of_the_rest_keeps_resting_instead_of
 
 
 @pytest.mark.asyncio
-async def test_a_real_failed_check_at_the_end_of_the_rest_still_halts_the_account(
+async def test_a_transport_failure_inside_the_gateway_is_a_failed_check_not_a_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _ask(_account_id: str, **_kwargs: object) -> SpamStatusVerdict:
+        raise TimeoutError
+
+    monkeypatch.setattr("services.spam_intel.ask", _ask)
+    assert await _seams.spam_verdict("a1") == "unknown"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed", ["unknown", "refused"])
+async def test_a_failed_or_refused_check_at_the_end_of_the_rest_keeps_resting_never_halts(
+    telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch, failed: str
+) -> None:
+    """D9: a transport failure (or a refusal) is no reading, so it is never counted as a block."""
+    campaign_id = await seed(accounts=("a1",), targets=("@alpha", "@beta"), messages=("Hi",))
+    telegram.send_answers["a1"] = [refused("peer_flood")]
+    script = iter([failed, failed, "clean"])
+
+    async def _verdict(account_id: str) -> str:
+        telegram.spam_checks.append(account_id)
+        return next(script)
+
+    monkeypatch.setattr(_seams, "spam_verdict", _verdict)
+
+    await run_to_end(campaign_id)
+
+    roster = await repository.list_roster(campaign_id)
+    assert (roster[0].state, roster[0].halted_reason) == ("active", None)
+    assert telegram.spam_checks == ["a1", "a1", "a1"]
+    assert len(telegram.sent) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_confirmed_block_at_the_end_of_the_rest_still_halts_the_account(
     telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     campaign_id = await seed(accounts=("a1",), targets=("@alpha", "@beta"), messages=("Hi",))
@@ -98,7 +133,7 @@ async def test_a_real_failed_check_at_the_end_of_the_rest_still_halts_the_accoun
 
     async def _verdict(account_id: str) -> str:
         telegram.spam_checks.append(account_id)
-        return "unknown"
+        return "limited"
 
     monkeypatch.setattr(_seams, "spam_verdict", _verdict)
 

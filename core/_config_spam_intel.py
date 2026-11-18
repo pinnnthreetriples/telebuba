@@ -89,6 +89,18 @@ class SpamIntelSettings(BaseSettings):
     startup_quiet_minutes: float = Field(default=10.0, ge=0.0)
     # A busy account (another feature runs on it) is asked again after this long.
     busy_retry_minutes: float = Field(default=10.0, gt=0.0)
+    # An account whose status is a transient fault (flood wait, proxy or network error: the session
+    # check sets and clears them) is not asked now and is asked again after this long.
+    account_status_retry_minutes: float = Field(default=30.0, gt=0.0)
+    # D13: a ROUTINE probe waits out the account's local night (never a decision, a measurement or
+    # the operator's click; an account whose timezone is unknown is never held). The night is the
+    # local hours ``[start, end)``, wrapping midnight when start > end; start == end switches the
+    # window off. The morning is staggered per account by up to ``spread`` minutes. On by default:
+    # it only delays routine probes.
+    local_night_defer: bool = True
+    local_night_start_hour: int = Field(default=0, ge=0, le=23)
+    local_night_end_hour: int = Field(default=7, ge=0, le=23)
+    local_night_spread_minutes: float = Field(default=90.0, ge=0.0)
 
     # The probe as a person (Stage 3, design 5.7). ``human_sequence``: ask @SpamBot by opening
     # the dialog, pausing, "typing", pausing, sending ``/start``, collecting EVERY message of

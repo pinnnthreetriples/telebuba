@@ -40,6 +40,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+type SpamVerdict = SpamStatusKind | Literal["deferred", "refused"]
+
 _DOMAIN = "chat_broadcast"
 _RUN_CURRENT: ContextVar[Callable[[], bool] | None] = ContextVar(
     "chat_broadcast_run_current", default=None
@@ -133,24 +135,30 @@ def spam_caller(label: str) -> Iterator[None]:
         yield
 
 
-async def spam_verdict(account_id: str) -> SpamStatusKind | Literal["deferred"]:
-    """Ask @SpamBot afresh; a probe that failed reads ``unknown``, a postponed one ``deferred``.
+async def spam_verdict(account_id: str) -> SpamVerdict:
+    """Ask @SpamBot afresh and say what the answer IS: a block is told from "no answer".
+
+    ``clean`` / ``limited`` are real readings (``limited`` is the only confirmed block);
+    ``unknown`` is a probe that failed or read nothing (a transport failure included, never
+    raised); ``deferred`` is the budget saying "later" and ``refused`` the guard saying "not this
+    account": neither asked anything. Only ``limited`` may take an account out of a run (D9).
 
     Never the cache: a ``clean`` from yesterday says nothing about the refusal the account
-    just got. A reading younger than the gateway's coalescing window is still handed back,
-    and the budget may say "later" (``deferred``): that is NOT a failed probe, so the run
-    keeps the account resting instead of treating it as a block.
+    just got. A reading younger than the gateway's coalescing window is still handed back.
     """
     from schemas.spam_status import is_unasked  # noqa: PLC0415 - import cycle
     from services.spam_intel import ask  # noqa: PLC0415 - import cycle
 
     assert_live_run()
-    verdict = await ask(account_id, force=True, holder=_DOMAIN)
-    assert_live_run()
-    if verdict.served_from == "deferred":
-        return "deferred"
-    if is_unasked(verdict):
+    try:
+        verdict = await ask(account_id, force=True, holder=_DOMAIN)
+    except Exception as exc:  # noqa: BLE001 - a failed question is no reading, never a block.
+        logger.warning("spam check failed for %s: %s", account_id, type(exc).__name__)
+        assert_live_run()
         return "unknown"
+    assert_live_run()
+    if is_unasked(verdict):
+        return "deferred" if verdict.served_from == "deferred" else "refused"
     return verdict.status
 
 

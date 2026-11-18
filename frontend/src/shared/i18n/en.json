@@ -270,6 +270,8 @@
             "busy": "The account is busy with another feature right now.",
             "startup_quiet": "Scheduled checks are not sent right after startup.",
             "no_live_session": "The account has no open session, and it is not connected just to be checked.",
+            "account_status_transient": "The account is in a temporary state (a Telegram limit or a connection error), so it is not checked now.",
+            "local_night": "It is night where the account lives: scheduled checks wait for the morning.",
             "account_missing": "The account was not found.",
             "account_not_alive": "The account is not in a working state, so there is nothing to ask @SpamBot with.",
             "no_proxy": "A proxy is required: without one the account does not connect to Telegram.",
@@ -2378,6 +2380,8 @@
   "logEventReason": {
     "account_not_alive": "the account is not in a working state, @SpamBot was not asked",
     "no_proxy": "the account has no proxy, @SpamBot was not asked",
+    "account_status_transient": "the account is in a temporary state, @SpamBot will be asked again later",
+    "local_night": "night at the account's place, the scheduled check waits for the morning",
     "freed": "the account became free",
     "retry": "automatic retry after a pause",
     "restart": "back in after a start",

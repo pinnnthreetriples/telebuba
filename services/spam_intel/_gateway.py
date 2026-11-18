@@ -32,14 +32,16 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import fetch_account, get_spam_status
 from core.logging import log_event
+from core.phone_geo import timezone_for_phone
 from core.repositories.spam_probe_ledger import finish_attempt, load_budget_snapshot
 from schemas.spam_intel import ProbeAttemptFinish, Purpose
 from services import spam_status
 from services.spam_intel import _admission, _human
-from services.spam_intel._admission import Admission, refusal_reason, refuse, reserve
+from services.spam_intel._admission import Admission, hold, reserve, unaskable
 from services.spam_intel._answers import (
     ASKABLE,
     CALLER_PURPOSE,
+    TRANSIENT,
     Ask,
     Ended,
     busy,
@@ -53,6 +55,7 @@ from services.spam_intel._attempts import finish_quietly, prune, remember
 from services.spam_intel._evidence import record_reading
 from services.spam_intel._flight import INFLIGHT as _INFLIGHT
 from services.spam_intel._flight import close_flight, join, open_flight
+from services.spam_intel._night import night_until
 from services.spam_intel._policy import Decision, ProbeRequest, parse_moment
 from services.spam_intel._policy import decide as _decide
 from services.spam_intel._served import evidence_hint, forget_served
@@ -183,7 +186,9 @@ async def _decide_at(
     request = ProbeRequest(
         purpose=req.purpose,
         now=at,
-        alive=account.status in ASKABLE,
+        alive=account.status in ASKABLE | TRANSIENT,
+        transient=account.status in TRANSIENT,
+        night_until=night_until(at, timezone_for_phone(account.phone), account.account_id, intel),
         has_proxy=account.proxy_id is not None,
         busy=busy(account.account_id, req.holder),
         confirmed=req.confirmed,
@@ -255,7 +260,7 @@ async def _ask_once(req: Ask) -> SpamStatusVerdict:
     account = await fetch_account(account_id)
     if account is None:
         # Guard, don't probe: see ``spam_status.refresh_spam_status``.
-        return await refuse(req, "account_missing", at, detail="account not found")
+        return await hold(req, ("account_missing", None), at, detail="account not found")
     cached = await get_spam_status(account_id)
     # Empty unless ``passive_decisions`` is on (``_served``): then the evidence may say the
     # cache cannot be trusted (``recheck``) or answer without a probe (``answer``).
@@ -287,12 +292,12 @@ async def _legacy(req: Ask) -> SpamStatusVerdict:
     at = now()
     account = await fetch_account(req.account_id)
     if account is None:
-        return await refuse(req, "account_missing", at, detail="account not found")
-    reason = refusal_reason(account)
-    if reason is not None:
+        return await hold(req, ("account_missing", None), at, detail="account not found")
+    held = unaskable(account, at)
+    if held is not None:
         stored = await get_spam_status(req.account_id)
         if req.force or stored is None or not spam_status.is_reading_fresh(stored.checked_at, at):
-            return await refuse(req, reason, at)
+            return await hold(req, held, at)
     return await spam_status.refresh_spam_status(req.account_id, force=req.force)
 
 
