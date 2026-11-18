@@ -24,14 +24,20 @@ def now() -> datetime:
     return datetime.now(UTC)
 
 
-async def close_on_clean(account_id: str, at: datetime | None = None) -> bool:
+async def close_on_clean(
+    account_id: str, at: datetime | None = None, *, appeal_id: int | None = None
+) -> bool:
     """A persisted @SpamBot ``clean`` ends the account's open appeal. Never raises.
 
     Called from the gateway's store path. Nothing else closes an appeal, and closing one lifts
-    nothing: the block's lift is ``services.spam_block_lift``, on the same answer.
+    nothing: the block's lift is ``services.spam_block_lift``, on the same answer. The clean
+    closes only an appeal filed at or before it (``at``): a deferred call that carries an older
+    answer cannot end a newer appeal. ``appeal_id`` names the appeal a catch-up means.
     """
     try:
-        closed = await close_open_appeal(account_id, closed_at=at or now(), kind=CLOSED_BY_CLEAN)
+        closed = await close_open_appeal(
+            account_id, closed_at=at or now(), kind=CLOSED_BY_CLEAN, appeal_id=appeal_id
+        )
         if closed:
             await log_event(
                 "INFO",

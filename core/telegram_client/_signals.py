@@ -22,9 +22,12 @@ if TYPE_CHECKING:
 
     from schemas.spam_evidence import EvidenceKind
 
-# Actions that send a message to another peer: a PeerFlood on one is a verdict on sending.
-_SEND_ACTIONS = frozenset(
+# Actions that send a message to another peer: a PeerFlood on one is a verdict on sending. Kept
+# in step with the union of ``TelegramAction`` by ``tests/core/test_spam_send_family.py``: an
+# action that is in neither this set nor the test's reviewed non-sending list fails the build.
+SEND_ACTIONS = frozenset(
     {
+        "channel_post_publish",
         "post_comment",
         "comment_on_post",
         "send_dm",
@@ -54,7 +57,7 @@ _FALLBACK_CODE = "restricted"
 
 def signal_peer_flood(account_id: str, action_type: str) -> None:
     """``execute`` met PeerFlood on ``action_type``."""
-    kind: EvidenceKind = "peer_flood_send" if action_type in _SEND_ACTIONS else "peer_flood_other"
+    kind: EvidenceKind = "peer_flood_send" if action_type in SEND_ACTIONS else "peer_flood_other"
     emit_signal(account_id, kind, source="execute", operation=action_type, detail="PeerFlood")
 
 

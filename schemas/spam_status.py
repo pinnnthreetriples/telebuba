@@ -29,6 +29,8 @@ class SpamStatusProbe(BaseModel):
 
     account_id: str = Field(min_length=1)
     reply_text: str | None = None
+    # The platform (terms of service) flag of ``get_me``, carried as data only: no classifier
+    # reads it, because it says nothing about a spam limit (docs/spam-intel.md D4, 5.8).
     restricted: bool = False
     restriction_reason: str | None = None
     error: str | None = None

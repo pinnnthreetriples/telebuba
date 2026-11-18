@@ -14,10 +14,10 @@ News only, per account: a verdict that was already limited, or that is only endi
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
-from services.spam_intel import limit_end_date
+from services.spam_intel import limit_end_date, limit_has_ended
 
 if TYPE_CHECKING:
     from schemas.logs import LogEntry
@@ -60,10 +60,32 @@ def _day(value: object) -> date | None:
         return None
 
 
-def _status_notice(entry: LogEntry) -> SpamNotice | None:
-    """A real @SpamBot reading that is news: limited, and not limited before."""
+def _moment(entry: LogEntry) -> datetime:
+    """When the row was written (an unreadable stamp: now, the row is handled as it arrives)."""
+    try:
+        at = datetime.fromisoformat(entry.created_at)
+    except ValueError:
+        return datetime.now(UTC)
+    return at if at.tzinfo is not None else at.replace(tzinfo=UTC)
+
+
+def _was_limited(entry: LogEntry) -> bool:
+    """The reading before this one was a limit still on (not one whose date had passed)."""
     extra = entry.extra
-    if extra.get("status") != "limited" or extra.get("previous") == "limited":
+    if extra.get("previous") != "limited":
+        return False
+    detail = extra.get("previous_detail")
+    return not (isinstance(detail, str) and limit_has_ended(detail, _moment(entry)))
+
+
+def _status_notice(entry: LogEntry) -> SpamNotice | None:
+    """A real @SpamBot reading that is news: limited, and not limited before.
+
+    "Before" is the limit as it stood at this reading: a previous limit whose date had passed
+    was over, so a new limit after it is news and not a repeat.
+    """
+    extra = entry.extra
+    if extra.get("status") != "limited" or _was_limited(entry):
         return None
     detail = extra.get("detail")
     return SpamNotice(

@@ -7,10 +7,16 @@ budget. A change takes effect after a restart; nothing needs a deploy.
 
 from __future__ import annotations
 
+import math
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# The largest interval, in the field's own unit (minutes, hours, seconds or days): about 114
+# years of hours. Anything beyond it is no schedule, and ``timedelta``/``datetime`` arithmetic
+# on it would overflow.
+_MAX_INTERVAL = 1_000_000.0
 
 # (min, max) field pairs of the Stage 3 ranges: each minimum must not exceed its maximum.
 _RANGES = tuple(
@@ -29,7 +35,11 @@ _RANGES = tuple(
 class SpamIntelSettings(BaseSettings):
     """Gateway switches, the probe budget and the reply-sample caps."""
 
-    model_config = SettingsConfigDict(env_prefix="SPAM_INTEL__", extra="ignore")
+    # ``allow_inf_nan=False``: an interval of ``inf`` or ``nan`` is a typo that would otherwise
+    # surface as an ``OverflowError`` at the first ask, long after startup.
+    model_config = SettingsConfigDict(
+        env_prefix="SPAM_INTEL__", extra="ignore", allow_inf_nan=False
+    )
 
     # Master switch. Off: every caller reaches @SpamBot exactly as before the gateway
     # (the legacy cache/force semantics, no ledger, no budget).
@@ -151,6 +161,20 @@ class SpamIntelSettings(BaseSettings):
     attempts_max_rows: int = Field(default=5000, ge=100)
     samples_max_rows: int = Field(default=200, ge=1)
     sample_max_chars: int = Field(default=1000, ge=100)
+    # A stored reply sample is dropped once it was last seen this long ago.
+    sample_max_age_days: int = Field(default=90, ge=1)
+
+    @model_validator(mode="after")
+    def _usable_intervals(self) -> Self:
+        """Every interval and range is finite, not negative, and small enough to add to a date."""
+        for name, field in type(self).model_fields.items():
+            if field.annotation is not float:
+                continue
+            value = getattr(self, name)
+            if not (math.isfinite(value) and 0.0 <= value <= _MAX_INTERVAL):
+                msg = f"{name} must be a finite number between 0 and {_MAX_INTERVAL:g}"
+                raise ValueError(msg)
+        return self
 
     @model_validator(mode="after")
     def _ordered(self) -> Self:

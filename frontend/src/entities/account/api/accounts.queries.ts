@@ -10,6 +10,7 @@ import {
   type AccountRead,
 } from '@/shared/api';
 import {
+  getSpamAppealQueryKey,
   listAccountsQueryKey,
   listProxiesQueryKey,
   accountStatsQueryKey as statsQueryKey,
@@ -61,6 +62,16 @@ export function invalidateAccountViews(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: listAccountsQueryKey() });
   void queryClient.invalidateQueries({ queryKey: statsQueryKey() });
   void queryClient.invalidateQueries({ queryKey: listProxiesQueryKey() });
+}
+
+// The appeal card reads its own query (the re-check time is only there), and it outlives the
+// accounts list. A Spam-check can end the appeal (a stored @SpamBot `clean` closes it) or move
+// its re-check, so the open appeal an earlier fetch cached is refetched, or the card keeps
+// saying "filed" over the fresher `closed` the accounts list already carries.
+export function invalidateSpamAppeal(queryClient: QueryClient, accountId: string): void {
+  void queryClient.invalidateQueries({
+    queryKey: getSpamAppealQueryKey({ path: { account_id: accountId } }),
+  });
 }
 
 // One-shot forced live pull for the profile modal (refresh=true bypasses the

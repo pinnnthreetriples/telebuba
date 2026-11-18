@@ -47,7 +47,7 @@ from services.spam_intel._gateway import (
     parse_retry,
 )
 from services.spam_intel._history import shutdown_history_sweep, start_history_sweep
-from services.spam_intel._limit_date import end_date, limit_end_date
+from services.spam_intel._limit_date import end_date, limit_end_date, limit_has_ended
 from services.spam_intel._shadow import shadow_agreement
 from services.spam_intel._signals import install_signal_sink
 
@@ -69,6 +69,7 @@ __all__ = [
     "fold",
     "install_signal_sink",
     "limit_end_date",
+    "limit_has_ended",
     "open_appeal",
     "open_appeal_states",
     "operator_check",

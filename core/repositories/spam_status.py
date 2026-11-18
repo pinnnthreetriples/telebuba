@@ -11,8 +11,9 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import exists, insert, literal, or_, select, update
 
+from core._schema_tables import _accounts
 from core.db import _account_spam_status, _get_engine, _optional_str
 from schemas.spam_evidence import StoredProjection, Verdict
 from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
@@ -166,7 +167,8 @@ async def list_projections_by_ids(account_ids: list[str]) -> dict[str, StoredPro
     return await asyncio.to_thread(_list_projections_by_ids, account_ids)
 
 
-def _store_projection(account_id: str, verdict: Verdict, folded_at: datetime) -> None:
+def _store_projection(account_id: str, verdict: Verdict, folded_at: datetime) -> bool:
+    folded = folded_at.astimezone(UTC).isoformat(timespec="microseconds")
     values = {
         "confidence": verdict.confidence,
         "valid_until": None if verdict.valid_until is None else verdict.valid_until.isoformat(),
@@ -182,32 +184,48 @@ def _store_projection(account_id: str, verdict: Verdict, folded_at: datetime) ->
         "fold_reason": verdict.reason,
         "tos_restricted": int(verdict.tos_restricted),
         "tos_reason": verdict.tos_reason,
-        "folded_at": folded_at.isoformat(),
+        "folded_at": folded,
     }
+    table = _account_spam_status
     with _get_engine().begin() as connection:
+        # A fold never overwrites a NEWER one: a write that was delayed (its evidence read
+        # before a later write landed) finds ``folded_at`` ahead of its own and does nothing.
+        newer = connection.execute(
+            select(table.c.folded_at).where(table.c.account_id == account_id)
+        ).first()
+        if newer is not None and newer.folded_at is not None and str(newer.folded_at) > folded:
+            return False
         updated = connection.execute(
-            update(_account_spam_status)
-            .where(_account_spam_status.c.account_id == account_id)
+            update(table)
+            .where(
+                table.c.account_id == account_id,
+                or_(table.c.folded_at.is_(None), table.c.folded_at <= folded),
+            )
             .values(**values),
         )
-        if updated.rowcount == 0:
+        if updated.rowcount == 0 and newer is None:
             # ``status`` and ``checked_at`` are NOT NULL: a projection-only row carries a
-            # neutral ``unknown`` and the marker ``checked_at`` the readers skip.
-            connection.execute(
-                insert(_account_spam_status).values(
-                    account_id=account_id,
-                    status="unknown",
-                    detail=None,
-                    checked_at=_PROJECTION_ONLY,
-                    **values,
-                ),
+            # neutral ``unknown`` and the marker ``checked_at`` the readers skip. Only while
+            # the account exists: a fold that outlived its account writes nothing.
+            row = {
+                "account_id": account_id,
+                "status": "unknown",
+                "detail": None,
+                "checked_at": _PROJECTION_ONLY,
+                **values,
+            }
+            source = select(*(literal(value).label(name) for name, value in row.items())).where(
+                exists().where(_accounts.c.account_id == account_id)
             )
+            return connection.execute(table.insert().from_select(list(row), source)).rowcount > 0
+    return True
 
 
-async def store_projection(account_id: str, verdict: Verdict, folded_at: datetime) -> None:
+async def store_projection(account_id: str, verdict: Verdict, folded_at: datetime) -> bool:
     """Write the folded projection of an account, leaving ``status``/``detail``/``checked_at``.
 
     An account with no stored reading gets a projection-only row that the legacy readers
-    (``get_spam_status`` and the lists) do not see.
+    (``get_spam_status`` and the lists) do not see. ``False`` when nothing was written: a NEWER
+    fold is already stored (this one was computed from older evidence), or the account is gone.
     """
-    await asyncio.to_thread(_store_projection, account_id, verdict, folded_at)
+    return await asyncio.to_thread(_store_projection, account_id, verdict, folded_at)

@@ -281,14 +281,37 @@ async def _warming(account: str, state: str) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("state", ["active", "sleeping", "flood_wait", "quarantine"])
-async def test_a_peer_flood_limit_in_a_running_warming_loop_is_left_to_quarantine(
-    bot: _Bot, state: str
+async def test_a_peer_flood_limit_on_an_account_in_quarantine_is_left_to_quarantine(
+    bot: _Bot,
 ) -> None:
-    await _warming("acc-1", state)
+    await _warming("acc-1", "quarantine")
     await _configure()
     await notifications.handle_log_entry(_changed("limited", frm="clean", kind="peer_flood_send"))
     assert bot.sent == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["active", "sleeping", "flood_wait"])
+async def test_a_running_loop_alone_does_not_hide_a_peer_flood_limit(bot: _Bot, state: str) -> None:
+    """Audit F-023: only the matching quarantine alert is a duplicate, not the loop's state."""
+    await _warming("acc-1", state)
+    await _configure()
+    await notifications.handle_log_entry(_changed("limited", frm="clean", kind="peer_flood_send"))
+    assert len(bot.sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_peer_flood_limit_after_its_quarantine_alert_is_not_told_twice(
+    bot: _Bot,
+) -> None:
+    await _warming("acc-1", "active")  # the state has not caught up with the alert yet
+    await _configure()
+    await notifications.handle_log_entry(_entry("warming_cycle_completed", status="peer_flood"))
+    assert len(bot.sent) == 1  # the quarantine alert itself
+
+    await notifications.handle_log_entry(_changed("limited", frm="clean", kind="peer_flood_send"))
+
+    assert len(bot.sent) == 1
 
 
 @pytest.mark.asyncio
@@ -308,3 +331,35 @@ async def test_an_spambot_limit_is_told_even_while_warming_runs(bot: _Bot) -> No
     await _configure()
     await notifications.handle_log_entry(_changed("limited", frm="clean", kind="spambot_limited"))
     assert len(bot.sent) == 1
+
+
+# --- a new limit after an ended one is news (audit F-023) ---------------------------------------
+
+
+def _reading(previous: str | None, previous_detail: str | None, when: str) -> LogEntry:
+    entry = _entry(
+        "spam_status_refreshed",
+        status="limited",
+        detail="until 20 Dec 2026",
+        previous=previous,
+        previous_detail=previous_detail,
+    )
+    entry.created_at = when
+    return entry
+
+
+@pytest.mark.parametrize(
+    ("entry", "kind"),
+    [
+        # The previous limit ran out before this reading: a NEW limit, told.
+        (_reading("limited", "until 29 Oct 2026", "2026-11-17T12:00:00+00:00"), "spam_limited"),
+        # Still on at this reading, or undated (it never ends by itself): a repeat, not told.
+        (_reading("limited", "until 29 Nov 2026", "2026-11-17T12:00:00+00:00"), None),
+        (_reading("limited", None, "2026-11-17T12:00:00+00:00"), None),
+        (_reading("clean", None, "2026-11-17T12:00:00+00:00"), "spam_limited"),
+    ],
+)
+def test_a_limit_after_an_ended_one_is_news_a_repeat_is_not(
+    entry: LogEntry, kind: str | None
+) -> None:
+    assert notification_kind(entry) == kind

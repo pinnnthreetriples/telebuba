@@ -362,7 +362,7 @@ async def test_with_the_gateway_off_every_forced_caller_probes_as_before(
     make_account: MakeAccount, probe: FakeProbe, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(settings.spam_intel, "enabled", False)
-    await make_account("acc-1", proxy=None)
+    await make_account("acc-1")  # with a proxy: one without is refused in both paths (F-002)
     first = await spam_intel.ask("acc-1", force=True)
     second = await spam_intel.ask("acc-1", force=True)
     assert (first.status, second.status) == ("clean", "clean")

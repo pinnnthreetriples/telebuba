@@ -105,6 +105,11 @@ class BudgetSnapshot(BaseModel):
 
     state: ProbeState | None = None
     last_attempt_started_at: str | None = None  # this account, any outcome
+    # How that newest attempt ended (``started``: it never did) and the exception class if it
+    # crashed or was cancelled. The coalescing window hands back a reading only when the
+    # attempt that opened it produced one.
+    last_attempt_outcome: AttemptOutcome | None = None
+    last_attempt_error: str | None = None
     last_fleet_started_at: str | None = None  # any account
     last_proxy_started_at: str | None = None  # accounts behind this proxy
     fleet_count_24h: int = 0

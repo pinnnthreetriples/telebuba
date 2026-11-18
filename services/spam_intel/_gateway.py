@@ -1,24 +1,26 @@
 """The gateway: the one way to ask "what is this account's spam status".
 
-A request is served, in order, from (1) a stored reading inside the cache TTL (unless the
-caller forces), (2) a probe already in flight for the account (single-flight: concurrent
-callers, forced or not, share ONE probe), (3) the last real reading or failure when it is
-younger than the coalescing window, and only then (4) a new probe, if the budget
-(``services.spam_intel._policy``) says yes. An answer the budget refused or postponed is an
-``unknown`` verdict that SAYS so (``served_from``, ``retry_at``, ``reason``), so a caller can
-tell it from a reading that came back unreadable.
+An account that does not exist, whose session is not alive or that has no proxy is never asked,
+whatever the master switch says. Then a request is served, in order, from (1) a stored reading
+inside the cache TTL (unless the caller forces, or asks for a MEASUREMENT or as the OPERATOR:
+those want a real answer), (2) a probe already in flight for the account (single-flight, see
+``_flight``: concurrent callers, forced or not, share ONE real probe), (3) the last real reading
+or failure when it is younger than the coalescing window, and only then (4) a new probe, if the
+budget (``services.spam_intel._policy``) says yes. Deciding and writing the attempt row are one
+step (``_admission``). An answer the budget refused or postponed is an ``unknown`` verdict that
+SAYS so (``served_from``, ``retry_at``, ``reason``), so a caller can tell it from a reading that
+came back unreadable.
 
 State is in the database (``spam_probe_attempts`` / ``spam_probe_state``), so the budget
 survives a restart. Only in-flight bookkeeping and log throttling live in memory, which one
 uvicorn worker makes sound.
 
-``SPAM_INTEL__ENABLED=false`` bypasses all of it: the call goes straight to the pre-gateway
-``services.spam_status.refresh_spam_status``.
+``SPAM_INTEL__ENABLED=false`` bypasses the budget and the ledger: the call goes to the
+pre-gateway ``services.spam_status.refresh_spam_status`` after the same guard.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import random
 import time
@@ -30,24 +32,14 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import fetch_account, get_spam_status
 from core.logging import log_event
-from core.repositories.spam_probe_ledger import (
-    finish_attempt,
-    load_budget_snapshot,
-    prune_attempts,
-    save_probe_state,
-    start_attempt,
-)
-from schemas.spam_intel import (
-    ProbeAttemptFinish,
-    ProbeAttemptStart,
-    ProbeState,
-    Purpose,
-)
+from core.repositories.spam_probe_ledger import finish_attempt, load_budget_snapshot
+from schemas.spam_intel import ProbeAttemptFinish, Purpose
 from services import spam_status
-from services.spam_intel import _human
+from services.spam_intel import _admission, _human
+from services.spam_intel._admission import Admission, refusal_reason, refuse, reserve
 from services.spam_intel._answers import (
+    ASKABLE,
     CALLER_PURPOSE,
-    UNASKABLE,
     Ask,
     Ended,
     busy,
@@ -57,8 +49,11 @@ from services.spam_intel._answers import (
     outcome_label,
     unasked,
 )
+from services.spam_intel._attempts import finish_quietly, prune, remember
 from services.spam_intel._evidence import record_reading
-from services.spam_intel._policy import Decision, ProbeRequest, backoff_until, parse_moment
+from services.spam_intel._flight import INFLIGHT as _INFLIGHT
+from services.spam_intel._flight import close_flight, join, open_flight
+from services.spam_intel._policy import Decision, ProbeRequest, parse_moment
 from services.spam_intel._policy import decide as _decide
 from services.spam_intel._served import evidence_hint, forget_served
 from services.spam_intel._shadow import fold_before, record_comparison
@@ -75,9 +70,10 @@ logger = logging.getLogger(__name__)
 
 _CALLER: ContextVar[str | None] = ContextVar("spam_intel_caller", default=None)
 
-# One probe per account at a time. The value is the leader's verdict, or ``None`` when the
-# leader failed or was cancelled and its waiters must ask for themselves.
-_INFLIGHT: dict[str, asyncio.Future[SpamStatusVerdict | None]] = {}
+# These asks exist to get a REAL answer (design 5.2): the survival window's product is the
+# reading itself, and the operator's button is a click for a fresh one. Neither is satisfied
+# from a stored reading, the fold or the cache; the budget alone decides whether they probe.
+_REAL_ANSWER_ONLY = frozenset({"measurement", "operator"})
 # SystemRandom: non-cryptographic jitter; avoids ruff S311. Patched by tests.
 rng = random.SystemRandom()
 _STARTED = datetime.now(UTC)
@@ -104,61 +100,13 @@ def caller_scope(label: str) -> Iterator[None]:
 
 
 def reset_for_tests() -> None:
-    """Forget in-flight bookkeeping and the log throttle; age the process (tests only)."""
+    """Forget in-flight bookkeeping, the gate and the log throttle; age the process (tests only)."""
     global _STARTED  # noqa: PLW0603 - one process-wide start instant, reset between tests
     _INFLIGHT.clear()
+    _admission.reset()
     forget_logged()
     forget_served()
     _STARTED = datetime.now(UTC) - timedelta(days=1)
-
-
-async def _remember(req: Ask, ended: Ended, previous: ProbeState | None) -> None:
-    """Fold one finished attempt into the account's state: streak, backoff, last failure."""
-    readable = ended.label in {"clean", "limited"}
-    streak = 0 if readable else (previous.fail_streak if previous else 0) + 1
-    stamp = ended.at.isoformat()
-    last_success = stamp if readable else (previous.last_success_at if previous else None)
-    next_allowed = (
-        None if readable else backoff_until(streak, ended.at, settings.spam_intel).isoformat()
-    )
-    await save_probe_state(
-        ProbeState(
-            account_id=req.account_id,
-            last_attempt_at=stamp,
-            last_success_at=last_success,
-            fail_streak=streak,
-            next_allowed_at=next_allowed,
-            last_caller=req.caller,
-            last_outcome=ended.label,
-            last_error=ended.error,
-            history_read_at=previous.history_read_at if previous else None,
-            updated_at=stamp,
-        )
-    )
-
-
-async def _finish_quietly(attempt_id: int, error: str, clock: float) -> None:
-    try:
-        await finish_attempt(
-            ProbeAttemptFinish(
-                attempt_id=attempt_id,
-                finished_at=now().isoformat(),
-                outcome="error",
-                error_type=error,
-                duration_ms=int((time.monotonic() - clock) * 1000),
-            )
-        )
-    except Exception as exc:  # noqa: BLE001 - closing a ledger row must not mask the real error.
-        logger.warning("spam attempt finish failed: %s", type(exc).__name__)
-
-
-async def _prune() -> None:
-    intel = settings.spam_intel
-    cutoff = (now() - timedelta(days=intel.attempts_retention_days)).isoformat()
-    try:
-        await prune_attempts(cutoff, intel.attempts_max_rows)
-    except Exception as exc:  # noqa: BLE001 - housekeeping must not fail a probe.
-        logger.warning("spam attempt prune failed: %s", type(exc).__name__)
 
 
 def _human_plan() -> dict[str, HumanProbePlan]:
@@ -170,27 +118,26 @@ def _human_plan() -> dict[str, HumanProbePlan]:
 async def _probe(
     account: AccountRead,
     cached: SpamStatusVerdict | None,
-    previous: ProbeState | None,
     req: Ask,
+    admitted: Admission,
+    attempt_id: int,
 ) -> SpamStatusVerdict:
-    """Ask @SpamBot for real: ledger row first, then the executor, then the state."""
-    attempt_id = await start_attempt(
-        ProbeAttemptStart(
-            account_id=account.account_id,
-            proxy_key=account.proxy_id,
-            purpose=req.purpose,
-            caller=req.caller,
-            started_at=now().isoformat(),
-        )
-    )
+    """Ask @SpamBot for real: the row is already reserved; the executor, then the state."""
     clock = time.monotonic()
-    before = await fold_before(account.account_id)  # shadow comparison: the fold's word first
+    account_id = account.account_id
     try:
-        outcome = await spam_status.probe_and_store(
-            account.account_id, previous=cached, **_human_plan()
-        )
+        if admitted.decision.warning == "soft_cap":
+            intel = settings.spam_intel
+            await log_event(
+                "WARNING",
+                "spam_intel_budget_exceeded",
+                account_id=account_id,
+                extra={"cap": "soft", "limit": intel.fleet_soft_cap, "caller": req.caller},
+            )
+        before = await fold_before(account_id)  # shadow comparison: the fold's word first
+        outcome = await spam_status.probe_and_store(account_id, previous=cached, **_human_plan())
     except BaseException as exc:
-        await _finish_quietly(attempt_id, type(exc).__name__, clock)
+        await finish_quietly(attempt_id, type(exc).__name__, now(), clock)
         raise
     ended = Ended(outcome_label(outcome.verdict, outcome.error), outcome.error, now())
     duration_ms = int((time.monotonic() - clock) * 1000)
@@ -203,11 +150,11 @@ async def _probe(
             duration_ms=duration_ms,
         )
     )
-    await _remember(req, ended, previous)
+    await remember(req, ended)
     await log_event(
         "INFO",
         "spam_intel_probe",
-        account_id=account.account_id,
+        account_id=account_id,
         extra={
             "caller": req.caller,
             "purpose": req.purpose,
@@ -217,11 +164,9 @@ async def _probe(
     )
     if outcome.error is None:
         # The reading is evidence too (``spambot_*``): the fold and the stored projection see it.
-        await record_reading(
-            account.account_id, outcome.verdict.status, outcome.verdict.detail, ended.at
-        )
-        await record_comparison(account.account_id, before, outcome.verdict.status)
-    await _prune()
+        await record_reading(account_id, outcome.verdict.status, outcome.verdict.detail, ended.at)
+        await record_comparison(account_id, before, outcome.verdict.status)
+    await prune(ended.at)
     return outcome.verdict.model_copy(update={"served_from": "probe"})
 
 
@@ -238,7 +183,7 @@ async def _decide_at(
     request = ProbeRequest(
         purpose=req.purpose,
         now=at,
-        alive=account.status not in UNASKABLE,
+        alive=account.status in ASKABLE,
         has_proxy=account.proxy_id is not None,
         busy=busy(account.account_id, req.holder),
         confirmed=req.confirmed,
@@ -256,32 +201,52 @@ def _no_live_session(at: datetime) -> Decision:
     return Decision(action="defer", reason="no_live_session", retry_at=retry_at)
 
 
-async def _budget(
-    account: AccountRead,
-    req: Ask,
-    at: datetime,
-) -> tuple[Decision, BudgetSnapshot, datetime]:
-    """The budget's word, and when: a live-session ask is served a jittered moment into it.
+async def _admit(account: AccountRead, req: Ask, at: datetime) -> Admission:
+    """The budget's word, and when it says probe, the attempt row: ONE step under the gate.
 
     With ``live_session_embedding`` off this is the budget at ``at``, nothing more. On, a ROUTINE
     or DECISION ask the budget lets through waits a jittered moment when the account's client is
     already connected (the budget is then asked again: the clock moved), and a ROUTINE ask for an
-    account with no live client is deferred. Neither writes a ledger row.
+    account with no live client is deferred. The wait happens with the gate RELEASED.
     """
     intel = settings.spam_intel
-    decision, snapshot = await _decide_at(account, req, at)
-    if decision.action != "probe":
-        return decision, snapshot, at
-    moment = _human.live_moment(req.account_id, req.purpose, intel)
-    if moment is _human.Moment.DEFER:
-        return _no_live_session(at), snapshot, at
-    if moment is _human.Moment.WAIT:
-        await _human.sleep(_human.live_delay(rng, intel))
-        at = now()
-        if req.purpose == "routine" and not _human.is_live(req.account_id):
-            return _no_live_session(at), snapshot, at  # the session ended while we waited
+    async with _admission.gate():
         decision, snapshot = await _decide_at(account, req, at)
-    return decision, snapshot, at
+        if decision.action != "probe":
+            return Admission(decision, snapshot, at)
+        moment = _human.live_moment(req.account_id, req.purpose, intel)
+        if moment is _human.Moment.DEFER:
+            return Admission(_no_live_session(at), snapshot, at)
+        if moment is _human.Moment.NOW:
+            return Admission(decision, snapshot, at, await reserve(account, req, at))
+    await _human.sleep(_human.live_delay(rng, intel))
+    at = now()
+    if req.purpose == "routine" and not _human.is_live(req.account_id):
+        return Admission(_no_live_session(at), snapshot, at)  # the session ended while we waited
+    async with _admission.gate():
+        decision, snapshot = await _decide_at(account, req, at)
+        attempt_id = await reserve(account, req, at) if decision.action == "probe" else None
+        return Admission(decision, snapshot, at, attempt_id)
+
+
+async def _unasked(
+    req: Ask, cached: SpamStatusVerdict | None, admitted: Admission
+) -> SpamStatusVerdict:
+    """The answer for an ask the budget did not let probe: the window's reading, or the reason."""
+    decision, at = admitted.decision, admitted.at
+    await log_unasked(req.account_id, decision, req, at)
+    if decision.action == "coalesce":
+        return coalesced(req.account_id, cached, admitted.snapshot, at)
+    if decision.reason is None:  # pragma: no cover - a probe always has its row, the rest a reason
+        msg = f"the budget said {decision.action} without a reason"
+        raise RuntimeError(msg)
+    return unasked(
+        req.account_id,
+        served_from="deferred" if decision.action == "defer" else "refused",
+        reason=decision.reason,
+        at=at,
+        retry_at=decision.retry_at,
+    )
 
 
 async def _ask_once(req: Ask) -> SpamStatusVerdict:
@@ -290,48 +255,45 @@ async def _ask_once(req: Ask) -> SpamStatusVerdict:
     account = await fetch_account(account_id)
     if account is None:
         # Guard, don't probe: see ``spam_status.refresh_spam_status``.
-        return unasked(
-            account_id,
-            served_from="refused",
-            reason="account_missing",
-            at=at,
-            detail="account not found",
-        )
+        return await refuse(req, "account_missing", at, detail="account not found")
     cached = await get_spam_status(account_id)
     # Empty unless ``passive_decisions`` is on (``_served``): then the evidence may say the
     # cache cannot be trusted (``recheck``) or answer without a probe (``answer``).
     hint = await evidence_hint(req, cached, at)
+    stored_may_serve = not req.force and req.purpose not in _REAL_ANSWER_ONLY
     if (
-        not req.force
+        stored_may_serve
         and not hint.recheck
         and cached is not None
         and spam_status.is_reading_fresh(cached.checked_at, at)
     ):
         return cached.model_copy(update={"served_from": "cache"})
-    if hint.answer is not None:
+    if hint.answer is not None and stored_may_serve:
         return hint.answer
-    intel = settings.spam_intel
-    decision, snapshot, at = await _budget(account, req, at)
-    if decision.action == "coalesce":
-        await log_unasked(account_id, decision, req, at)
-        return coalesced(account_id, cached, snapshot.state, at)
-    if decision.reason is not None:
-        await log_unasked(account_id, decision, req, at)
-        return unasked(
-            account_id,
-            served_from="deferred" if decision.action == "defer" else "refused",
-            reason=decision.reason,
-            at=at,
-            retry_at=decision.retry_at,
-        )
-    if decision.warning == "soft_cap":
-        await log_event(
-            "WARNING",
-            "spam_intel_budget_exceeded",
-            account_id=account_id,
-            extra={"cap": "soft", "limit": intel.fleet_soft_cap, "caller": req.caller},
-        )
-    return await _probe(account, cached, snapshot.state, req)
+    admitted = await _admit(account, req, at)
+    if admitted.attempt_id is None:
+        return await _unasked(req, cached, admitted)
+    return await _probe(account, cached, req, admitted, admitted.attempt_id)
+
+
+async def _legacy(req: Ask) -> SpamStatusVerdict:
+    """The pre-gateway funnel, behind the guard that holds in both paths (rules 1 and 2, D1).
+
+    ``TELEGRAM__ALLOW_DIRECT_CONNECTION`` only decides whether ``core`` would connect an account
+    with no proxy; with it on, this guard is what keeps the rollback switch from asking one. An
+    account the guard refuses still gets the stored reading back when it is fresh and the caller
+    did not force: that asks nothing.
+    """
+    at = now()
+    account = await fetch_account(req.account_id)
+    if account is None:
+        return await refuse(req, "account_missing", at, detail="account not found")
+    reason = refusal_reason(account)
+    if reason is not None:
+        stored = await get_spam_status(req.account_id)
+        if req.force or stored is None or not spam_status.is_reading_fresh(stored.checked_at, at):
+            return await refuse(req, reason, at)
+    return await spam_status.refresh_spam_status(req.account_id, force=req.force)
 
 
 async def ask(  # noqa: PLR0913 - the public asker; every knob is a keyword.
@@ -350,23 +312,19 @@ async def ask(  # noqa: PLR0913 - the public asker; every knob is a keyword.
     an account another feature holds is not probed in parallel, but the caller's own is.
     ``caller`` defaults to the label set by :func:`caller_scope`.
     """
-    if not settings.spam_intel.enabled:
-        return await spam_status.refresh_spam_status(account_id, force=force)
     label = caller or _CALLER.get() or "unspecified"
     wanted: Purpose = purpose or CALLER_PURPOSE.get(label) or ("decision" if force else "routine")
-    while (leader := _INFLIGHT.get(account_id)) is not None:
-        shared = await asyncio.shield(leader)
-        if shared is not None:
-            joined = "coalesced" if shared.served_from == "probe" else shared.served_from
-            return shared.model_copy(update={"served_from": joined})
-    future: asyncio.Future[SpamStatusVerdict | None] = asyncio.get_running_loop().create_future()
-    _INFLIGHT[account_id] = future
+    req = Ask(account_id, force, wanted, label, holder, confirm_out_of_turn)
+    if not settings.spam_intel.enabled:
+        return await _legacy(req)
+    if (shared := await join(account_id)) is not None:
+        return shared
+    future = open_flight(account_id)
     result: SpamStatusVerdict | None = None
     try:
-        result = await _ask_once(Ask(account_id, force, wanted, label, holder, confirm_out_of_turn))
+        result = await _ask_once(req)
     finally:
-        _INFLIGHT.pop(account_id, None)
-        future.set_result(result)
+        close_flight(account_id, future, result)
     return result
 
 

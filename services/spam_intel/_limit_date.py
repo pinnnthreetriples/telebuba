@@ -127,3 +127,9 @@ def end_date(expiry: datetime | None) -> date | None:
 def limit_end_date(text: str | None) -> date | None:
     """The day a reply says a limit ends, or ``None`` when it names none."""
     return end_date(parse_limit_expiry(text))
+
+
+def limit_has_ended(text: str | None, at: datetime) -> bool:
+    """A dated limit named by ``text`` has run out by ``at`` (an undated one never does)."""
+    expiry = parse_limit_expiry(text)
+    return expiry is not None and at >= expiry

@@ -4,7 +4,11 @@ import { useTranslation } from 'react-i18next';
 
 import { Button, ConfirmModal, Icon, toastError } from '@/shared/ui';
 
-import { invalidateAccountViews, spamCheckAccountMutation } from '@/entities/account';
+import {
+  invalidateAccountViews,
+  invalidateSpamAppeal,
+  spamCheckAccountMutation,
+} from '@/entities/account';
 import type { AccountRead, SpamCheckResult } from '@/shared/api';
 import {
   errorMessage,
@@ -53,6 +57,8 @@ export function SpamCheckControl({
       })
       .then((result) => {
         invalidateAccountViews(queryClient);
+        // A check can close the appeal or move its re-check: the card's own read is stale now.
+        invalidateSpamAppeal(queryClient, account.account_id);
         if (isHeld(result)) {
           onResult(result);
           setCheck('idle');

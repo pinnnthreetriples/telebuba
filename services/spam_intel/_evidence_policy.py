@@ -58,6 +58,14 @@ KIND_POLICY: dict[EvidenceKind, KindPolicy] = {
     "flood_wait": KindPolicy("none", 0.0),
 }
 
+# Successes that prove nothing yet (a clean direction at weight 0). They are recorded to be measured
+# against @SpamBot, and they have their own small quota per account: a busy account's sightings
+# must never crowd a real observation out of the per-account row cap.
+SHADOW_KINDS: frozenset[EvidenceKind] = frozenset(
+    kind for kind, policy in KIND_POLICY.items() if policy.direction == "clean" and policy.base == 0
+)
+SHADOW_MAX_PER_ACCOUNT = 16
+
 SPAMBOT_KINDS: frozenset[EvidenceKind] = frozenset(
     {"spambot_limited", "spambot_clean", "spambot_unreadable", "spambot_reviewing"}
 )

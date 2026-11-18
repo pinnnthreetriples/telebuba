@@ -231,15 +231,17 @@ async def test_a_bot_that_never_goes_quiet_is_cut_at_the_message_cap(
     calls: list[tuple[str, Any]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """No real timer decides this: the quiet span is long, so only the cap can end it."""
     client = _FakeClient(calls, [])
     chatter: list[asyncio.Task[None]] = []
+    patient = PLAN.model_copy(update={"quiet_after_last_reply": 30.0, "reply_wait_max": 30.0})
 
     async def _keeps_talking(_peer: object, text: str) -> None:
         client.send_log.append(text)
 
         async def _talk() -> None:
             for index in range(_spam._MAX_TRANSCRIPT_MESSAGES * 3):
-                await asyncio.sleep(0.005)
+                await asyncio.sleep(0)  # a yield, not a timer: the next message is always due
                 if client.handler is None:
                     return
                 await client.handler(_reply(f"m{index}"))
@@ -248,11 +250,25 @@ async def test_a_bot_that_never_goes_quiet_is_cut_at_the_message_cap(
 
     monkeypatch.setattr(client, "send_message", _keeps_talking)
 
-    transcript = await _converse(client)
+    transcript = await converse_with_spambot(cast("TelegramClient", client), patient)
     await asyncio.gather(*chatter)
 
-    # Messages kept coming faster than the quiet span, so only the cap ended the collection.
     assert transcript.n_messages == _spam._MAX_TRANSCRIPT_MESSAGES
+    assert len(transcript.texts) == _spam._MAX_TRANSCRIPT_MESSAGES
+
+
+@pytest.mark.asyncio
+async def test_a_burst_that_arrives_before_the_send_returns_is_cut_at_the_cap(
+    calls: list[tuple[str, Any]],
+) -> None:
+    """The cap lives in the handler: 25 replies delivered at once are still 20 texts."""
+    burst = [_reply(f"m{index}") for index in range(_spam._MAX_TRANSCRIPT_MESSAGES + 5)]
+    client = _FakeClient(calls, burst)
+
+    transcript = await _converse(client)
+
+    assert transcript.n_messages == _spam._MAX_TRANSCRIPT_MESSAGES
+    assert transcript.texts == [f"m{index}" for index in range(_spam._MAX_TRANSCRIPT_MESSAGES)]
 
 
 def _patch_pool(monkeypatch: pytest.MonkeyPatch, client: object) -> None:

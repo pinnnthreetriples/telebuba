@@ -26,7 +26,7 @@ from schemas.spam_card import (
     SpamCheckResult,
     SpamSource,
 )
-from services.spam_intel._appeal import open_appeal
+from services.spam_intel._appeal import ended_by_clean
 from services.spam_intel._evidence import verdicts_for
 from services.spam_intel._gateway import operator_check
 from services.spam_intel._policy import parse_moment
@@ -34,7 +34,7 @@ from services.spam_intel._policy import parse_moment
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from schemas.spam_appeals import AppealStatus
+    from schemas.spam_appeals import AppealStatus, SpamAppeal
     from schemas.spam_evidence import EvidenceKind, Verdict
     from schemas.spam_intel import ProbeState
     from schemas.spam_status import SpamStatusVerdict
@@ -116,8 +116,11 @@ def out_of_turn(activity: ProbeActivity | None, at: datetime) -> bool:
     return settled <= at < last + timedelta(hours=intel.out_of_turn_hours)
 
 
-def _appeal_status(closed_at: datetime | None) -> AppealStatus:
-    return "open" if closed_at is None else "closed"
+def _appeal_status(appeal: SpamAppeal | None, verdict: Verdict) -> AppealStatus:
+    if appeal is None:
+        return "none"
+    open_now = appeal.closed_at is None and ended_by_clean(appeal, verdict) is None
+    return "open" if open_now else "closed"
 
 
 async def card_signals(account_ids: Iterable[str]) -> dict[str, SpamCardSignals]:
@@ -129,9 +132,8 @@ async def card_signals(account_ids: Iterable[str]) -> dict[str, SpamCardSignals]
     verdicts = await verdicts_for(ids)
     activity = await probe_activity(ids, (at - _PROBE_WINDOW).isoformat())
     states = await list_probe_states(ids)
-    for appeal in (await list_latest_appeals(ids)).values():
-        if appeal.closed_at is None:
-            await open_appeal(appeal.account_id)  # closes one a stored clean already ended
+    # One read, no write: an appeal a stored clean already ended shows as closed, and the
+    # re-check loop's pass is what persists it.
     appeals = await list_latest_appeals(ids)
     result: dict[str, SpamCardSignals] = {}
     for account_id in ids:
@@ -151,7 +153,7 @@ async def card_signals(account_ids: Iterable[str]) -> dict[str, SpamCardSignals]
             out_of_turn=out_of_turn(seen, at),
             tos_restricted=verdict.tos_restricted,
             tos_reason=verdict.tos_reason,
-            appeal_status="none" if appeal is None else _appeal_status(appeal.closed_at),
+            appeal_status=_appeal_status(appeal, verdict),
             appeal_filed_at=None if appeal is None else appeal.filed_at,
             appeal_filed_by=None if appeal is None else appeal.filed_by,
         )

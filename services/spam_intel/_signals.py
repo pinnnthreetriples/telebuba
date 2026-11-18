@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from core.spam_signals import set_signal_sink
 from services.spam_intel import _evidence
-from services.spam_intel._evidence_policy import KIND_POLICY
+from services.spam_intel._evidence_policy import SHADOW_KINDS
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -34,8 +34,7 @@ _shadow_seen: dict[tuple[str, EvidenceKind], datetime] = {}
 
 
 def _is_shadow(kind: EvidenceKind) -> bool:
-    policy = KIND_POLICY[kind]
-    return policy.direction == "clean" and policy.base == 0
+    return kind in SHADOW_KINDS
 
 
 def _is_open(kind: EvidenceKind, verdict: Verdict) -> bool:

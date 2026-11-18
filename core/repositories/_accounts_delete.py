@@ -21,6 +21,7 @@ from core.db import (
     _now_iso,
     _warming_joined_channels,
 )
+from core.spam_signals import discard_signals_for
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -267,4 +268,7 @@ async def delete_account(account_id: str) -> None:
     ``_tdata`` rollback path is the only legitimate direct caller of this
     repo function because those accounts never started warming.
     """
+    # Signals raised for the account and not yet written must not outlive it (a late one would
+    # revive its evidence, and a re-registered account of the same id would inherit it).
+    discard_signals_for(account_id)
     await asyncio.to_thread(_delete_account, account_id)

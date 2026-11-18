@@ -45,7 +45,8 @@ async def check_spam_status(account_id: str) -> SpamStatusProbe:
     """Probe @SpamBot and read self-restriction flags for an account.
 
     Sends ``/start`` to @SpamBot and captures its reply, and reads the account's
-    own ``restricted`` / ``restriction_reason`` flags via ``get_me``. The raw
+    own ``restricted`` / ``restriction_reason`` flags via ``get_me`` (carried as data: they are
+    a platform restriction, and no classifier reads them as a spam limit). The raw
     result is parsed and cached by ``services.spam_status`` — never raises.
 
     Runs on the pooled client for the same reason the session check does: a
@@ -91,7 +92,9 @@ async def converse_spam_status(account_id: str, plan: HumanProbePlan) -> SpamSta
 
 async def _probe_failed(account_id: str, exc: Exception) -> SpamStatusProbe:
     """Record a failed probe and turn it into the verdict-less result callers classify."""
-    logger.exception("spam status probe failed for %s", account_id)
+    # The class name only, no traceback: the exception's text can carry a proxy endpoint or a
+    # session path, and ``logger.exception`` prints it again.
+    logger.warning("spam status probe failed for %s: %s", account_id, type(exc).__name__)
     await log_event(
         "WARNING",
         "telegram_spam_status_probe_failed",
@@ -112,9 +115,10 @@ async def _probe_failed(account_id: str, exc: Exception) -> SpamStatusProbe:
     # streams it — so the WARNING is an HTTP body too, by a different route
     # (verified: the probe's ``message`` came back verbatim in
     # ``GET /api/v1/logs``). Bounding this field removed the DUPLICATE; the
-    # ``extra`` above is now bounded too and the full text goes to the stdlib
-    # logger, which reaches no route. What justifies the class name here is the
-    # response contract on its own — a locale-neutral code the SPA can translate.
+    # ``extra`` above is bounded too and neither it nor the stdlib logger carries
+    # the text (the local debug log is not a place for a proxy endpoint either).
+    # What justifies the class name here is the response contract on its own — a
+    # locale-neutral code the SPA can translate.
     return SpamStatusProbe(account_id=account_id, error=type(exc).__name__)
 
 
@@ -181,6 +185,8 @@ class _Inbox:
     arrived: asyncio.Event = field(default_factory=asyncio.Event)
 
     async def on_reply(self, event: events.NewMessage.Event) -> None:
+        if self.count >= _MAX_TRANSCRIPT_MESSAGES:
+            return  # the cap lives here: a burst delivered before the collector looks is cut too
         self.count += 1
         if text := optional_str(getattr(event, "raw_text", None)):
             self.texts.append(text)
@@ -270,8 +276,8 @@ async def read_spambot_history(account_id: str, limit: int) -> SpamBotHistory:
         client = await get_client(account_id)
         bot = await client.get_input_entity(_SPAMBOT_USERNAME)
         messages = await client.get_messages(bot, limit=limit)
-    except Exception as exc:  # any read failure is a class name, nothing more.
-        logger.exception("spambot history read failed for %s", account_id)
+    except Exception as exc:  # noqa: BLE001 - any read failure is a class name, nothing more.
+        logger.warning("spambot history read failed for %s: %s", account_id, type(exc).__name__)
         await log_event(
             "WARNING",
             "telegram_spam_history_failed",

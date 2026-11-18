@@ -11,11 +11,12 @@ from __future__ import annotations
 
 from core.repositories.spam_status import upsert_spam_status
 from schemas.spam_status import SpamStatusVerdict
-from services.spam_intel._evidence import record_evidence
+from services.spam_intel._evidence import keep_prior_reading, record_evidence
 
 
 async def record_peer_flood_limited(account_id: str, *, checked_at: str) -> SpamStatusVerdict:
     """Store ``limited`` (detail ``peer_flood``) for an account a feature saw PeerFlooded."""
+    await keep_prior_reading(account_id)  # the reading this row replaces stays evidence
     stored = await upsert_spam_status(
         SpamStatusVerdict(
             account_id=account_id,

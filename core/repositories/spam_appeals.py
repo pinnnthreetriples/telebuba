@@ -146,21 +146,35 @@ async def file_appeal(
     return await asyncio.to_thread(_file, account_id, filed_at, filed_by, verdict, until_day)
 
 
-def _close(account_id: str, closed_at: datetime, kind: str) -> bool:
+def _close(account_id: str, closed_at: datetime, kind: str, appeal_id: int | None) -> bool:
+    # One atomic statement: the OPEN row (of the one named, if the caller names one) is closed
+    # only if it was filed no later than the answer that closes it. A clean that was taken
+    # BEFORE a new appeal was filed says nothing about that appeal.
+    conditions = [
+        _T.c.account_id == account_id,
+        _T.c.closed_at.is_(None),
+        _T.c.filed_at <= _iso(closed_at),
+    ]
+    if appeal_id is not None:
+        conditions.append(_T.c.id == appeal_id)
     with _get_engine().begin() as connection:
         return (
             connection.execute(
-                update(_T)
-                .where(_T.c.account_id == account_id, _T.c.closed_at.is_(None))
-                .values(closed_at=_iso(closed_at), closed_by_kind=kind)
+                update(_T).where(*conditions).values(closed_at=_iso(closed_at), closed_by_kind=kind)
             ).rowcount
             > 0
         )
 
 
-async def close_open_appeal(account_id: str, *, closed_at: datetime, kind: str) -> bool:
-    """Close the account's open appeal; ``True`` when there was one."""
-    return await asyncio.to_thread(_close, account_id, closed_at, kind)
+async def close_open_appeal(
+    account_id: str, *, closed_at: datetime, kind: str, appeal_id: int | None = None
+) -> bool:
+    """Close the account's open appeal; ``True`` when it closed one.
+
+    ``appeal_id`` names the appeal the caller means. Either way the appeal must have been filed
+    at or before ``closed_at``: an answer older than the filing never closes it.
+    """
+    return await asyncio.to_thread(_close, account_id, closed_at, kind, appeal_id)
 
 
 def delete_account_appeals(connection: Connection, account_id: str) -> None:
