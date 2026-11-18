@@ -203,8 +203,8 @@ async def rest_known_block(
     The stored status only (``_seams.known_spam_status``, no Telegram), asked before the
     account joins or writes anything, so the block is not discovered by sending. The rest is the
     one a PeerFlood takes (``spam_rest_seconds``, the same reason): at its end @SpamBot is asked
-    (``sit_out``), a postponed answer keeps the account resting and a block still standing takes
-    it out. An unknown status does not rest the account.
+    (``sit_out``): only a block still standing takes the account out, while a postponed, refused
+    or failed answer keeps it resting. An unknown status does not rest the account.
     """
     if await _seams.known_spam_status(account_id) != "limited":
         return None
@@ -213,7 +213,7 @@ async def rest_known_block(
     )
 
 
-async def _spam_verdict(account_id: str, caller: str) -> str:
+async def _spam_verdict(account_id: str, caller: str) -> _seams.SpamVerdict:
     """@SpamBot's answer for this account, named by who is asking."""
     with _seams.spam_caller(caller):
         return await _seams.spam_verdict(account_id)
@@ -335,14 +335,15 @@ async def sit_out(ctx: RunContext, account_id: str) -> bool:
         _seams.assert_live_run()
         if item.rest_reason in SPAM_REASONS:
             verdict = await _spam_verdict(account_id, "chat_broadcast.rest_end")
-            if verdict == "deferred":
-                # The budget says later: that is not a failed check, so the account keeps
-                # resting and is asked again on the next tick instead of being halted.
-                await _seams.sleep(tick)
-                continue
-            if verdict != "clean":
+            if verdict == "limited":
                 await _moves.halt_account(ctx, account_id, "spam_block")
                 return False
+            if verdict != "clean":
+                # No reading (the budget said later, the guard refused, the probe failed): that
+                # is not a block, so the account keeps resting and is asked again on the next
+                # tick instead of being halted (D9).
+                await _seams.sleep(tick)
+                continue
         if item.rest_reason in LIMIT_REASONS and (ends := await limit_ends(ctx, account_id)):
             await repository.rest_account(ctx.campaign_id, account_id, ends[0], ends[1])
             continue

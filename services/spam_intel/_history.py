@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -27,13 +28,15 @@ from core.repositories.spam_probe_ledger import (
     fetch_probe_state,
     finish_attempt,
     load_budget_snapshot,
-    save_probe_state,
+    mark_history_read,
     start_attempt,
 )
 from core.telegram_client import read_spambot_history
-from schemas.spam_intel import ProbeAttemptFinish, ProbeAttemptStart, ProbeState
+from schemas.spam_intel import ProbeAttemptFinish, ProbeAttemptStart
 from services.spam_intel import _gateway
-from services.spam_intel._answers import UNASKABLE, busy
+from services.spam_intel._admission import gate
+from services.spam_intel._answers import ASKABLE, TRANSIENT, busy
+from services.spam_intel._attempts import finish_quietly
 from services.spam_intel._policy import ProbeRequest, decide_history
 from services.spam_status import store_reply_sample
 
@@ -60,51 +63,67 @@ async def _sleep(seconds: float) -> None:
     await asyncio.sleep(seconds)
 
 
-async def _wait_for_budget(account: AccountRead) -> bool:
-    """Wait until the account may be read, or say it may not be (this run)."""
+async def _wait_for_budget(account: AccountRead) -> int | None:
+    """Wait until the account may be read and reserve the read: its attempt id, or ``None``.
+
+    ``None`` means not in this run: the budget asks for a longer wait than the sweep holds for,
+    or the dialog was read meanwhile. Deciding and writing the history row are ONE step under
+    the gateway's admission gate (a read counts toward the spacing a probe meets, so the two
+    must not be admitted from one snapshot); the wait between two tries is outside it.
+    """
     intel = settings.spam_intel
     for _ in range(_MAX_TRIES):
-        at = _gateway.now()
-        snapshot = await load_budget_snapshot(
-            account.account_id, account.proxy_id, (at - timedelta(hours=24)).isoformat()
-        )
-        request = ProbeRequest(
-            purpose="routine",
-            now=at,
-            alive=account.status not in UNASKABLE,
-            has_proxy=account.proxy_id is not None,
-            busy=busy(account.account_id, None),
-            confirmed=False,
-            process_age=_gateway.process_age(),
-            fleet_gap=timedelta(
-                seconds=_gateway.rng.uniform(
-                    intel.fleet_gap_min_seconds, intel.fleet_gap_max_seconds
+        async with gate():
+            at = _gateway.now()
+            snapshot = await load_budget_snapshot(
+                account.account_id, account.proxy_id, (at - timedelta(hours=24)).isoformat()
+            )
+            if snapshot.state is not None and snapshot.state.history_read_at is not None:
+                return None  # one read per account, checked where the row would be written
+            request = ProbeRequest(
+                purpose="routine",
+                now=at,
+                alive=account.status in ASKABLE | TRANSIENT,
+                transient=account.status in TRANSIENT,
+                has_proxy=account.proxy_id is not None,
+                busy=busy(account.account_id, None),
+                confirmed=False,
+                process_age=_gateway.process_age(),
+                fleet_gap=timedelta(
+                    seconds=_gateway.rng.uniform(
+                        intel.fleet_gap_min_seconds, intel.fleet_gap_max_seconds
+                    )
+                ),
+            )
+            decision = decide_history(snapshot, request, intel)
+            if decision.action == "probe":
+                return await start_attempt(
+                    ProbeAttemptStart(
+                        account_id=account.account_id,
+                        proxy_key=account.proxy_id,
+                        kind="history",
+                        purpose="routine",
+                        caller="spam_intel.history_sweep",
+                        started_at=at.isoformat(),
+                    )
                 )
-            ),
-        )
-        decision = decide_history(snapshot, request, intel)
-        if decision.action == "probe":
-            return True
+        if decision.reason == "account_status_transient":
+            return None  # the session check clears it; the next run reads this account
         if decision.retry_at is None or decision.retry_at - at > _MAX_WAIT:
-            return False
+            return None
         await _sleep((decision.retry_at - at).total_seconds())
-    return False
+    return None
 
 
-async def _read_one(account: AccountRead) -> int | None:
+async def _read_one(account: AccountRead, attempt_id: int) -> int | None:
     """Read one account's dialog and keep the replies; the count, or ``None`` on a failure."""
     intel = settings.spam_intel
-    attempt_id = await start_attempt(
-        ProbeAttemptStart(
-            account_id=account.account_id,
-            proxy_key=account.proxy_id,
-            kind="history",
-            purpose="routine",
-            caller="spam_intel.history_sweep",
-            started_at=_gateway.now().isoformat(),
-        )
-    )
-    history = await read_spambot_history(account.account_id, intel.history_messages)
+    clock = time.monotonic()
+    try:
+        history = await read_spambot_history(account.account_id, intel.history_messages)
+    except BaseException as exc:
+        await finish_quietly(attempt_id, type(exc).__name__, _gateway.now(), clock)
+        raise
     finished = _gateway.now()
     await finish_attempt(
         ProbeAttemptFinish(
@@ -118,13 +137,8 @@ async def _read_one(account: AccountRead) -> int | None:
         return None
     for text in history.texts:
         await store_reply_sample(account.account_id, text, "history", finished)
-    previous = await fetch_probe_state(account.account_id)
-    state = previous or ProbeState(account_id=account.account_id)
-    await save_probe_state(
-        state.model_copy(
-            update={"history_read_at": finished.isoformat(), "updated_at": finished.isoformat()}
-        )
-    )
+    # Only the history column: a probe that started earlier writes its own fields, never this.
+    await mark_history_read(account.account_id, finished.isoformat())
     return len(history.texts)
 
 
@@ -136,9 +150,10 @@ async def run_history_sweep() -> int:
         state = await fetch_probe_state(account.account_id)
         if state is not None and state.history_read_at is not None:
             continue
-        if not await _wait_for_budget(account):
+        attempt_id = await _wait_for_budget(account)
+        if attempt_id is None:
             continue
-        count = await _read_one(account)
+        count = await _read_one(account, attempt_id)
         await log_event(
             "INFO" if count is not None else "WARNING",
             "spam_intel_history_read",
@@ -156,7 +171,7 @@ async def _run() -> None:
     try:
         await run_history_sweep()
     except Exception as exc:  # noqa: BLE001 - a failed sweep must not end the app.
-        logger.warning("spam history sweep failed", exc_info=exc)
+        logger.warning("spam history sweep failed: %s", type(exc).__name__)
         await log_event(
             "WARNING", "spam_intel_history_sweep_failed", extra={"error_type": type(exc).__name__}
         )

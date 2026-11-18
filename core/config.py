@@ -45,6 +45,7 @@ from core._config_session_audit import SessionAuditSettings
 from core._config_session_vault import SessionVaultSettings
 from core._config_soft_start import SoftStartSettings
 from core._config_spam_intel import SpamIntelSettings
+from core._config_spam_recheck import SpamRecheckSettings
 from core._config_survival import SurvivalSettings
 from core._config_telephony import TelephonySettings
 from core._config_user_parser import UserParserSettings
@@ -399,6 +400,7 @@ class Settings(BaseSettings):
     soft_start: SoftStartSettings = Field(default_factory=SoftStartSettings)
     survival: SurvivalSettings = Field(default_factory=SurvivalSettings)
     spam_intel: SpamIntelSettings = Field(default_factory=SpamIntelSettings)
+    spam_recheck: SpamRecheckSettings = Field(default_factory=SpamRecheckSettings)
     session_audit: SessionAuditSettings = Field(default_factory=SessionAuditSettings)
     session_vault: SessionVaultSettings = Field(default_factory=SessionVaultSettings)
     instance: InstanceSettings = Field(default_factory=InstanceSettings)

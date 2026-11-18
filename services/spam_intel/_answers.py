@@ -18,12 +18,18 @@ from schemas.spam_status import SpamStatusVerdict
 from services import _account_owner
 
 if TYPE_CHECKING:
-    from schemas.spam_intel import AttemptOutcome, ProbeState, Purpose, Reason, ServedFrom
+    from schemas.spam_intel import AttemptOutcome, BudgetSnapshot, Purpose, Reason, ServedFrom
     from services.spam_intel._policy import Decision
 
-# Statuses of an account whose session cannot answer: asking would only fail (production
-# showed five probes of a revoked session).
-UNASKABLE = frozenset({"unauthorized", "session_error", "account_error", "frozen"})
+# The statuses an account may be ASKED in (design 5.5 rule 1). ``new`` is an account no session
+# check has judged yet, which nothing says is dead.
+ASKABLE = frozenset({"new", "alive"})
+# Faults the session check sets and clears by itself (a flood wait, a proxy or network error): the
+# account is not asked NOW, but it is not refused either. A refusal would be counted by a caller
+# (warming's quarantine) as an unreadable answer; a deferral with ``retry_at`` is not one.
+TRANSIENT = frozenset({"flood_wait", "proxy_error", "network_error", "unknown_error"})
+# Every other status is a session that cannot answer (production showed five probes of a
+# revoked one): refused.
 
 # What each named caller is asking for. A caller not listed is a DECISION when it forces
 # and ROUTINE otherwise.
@@ -96,14 +102,23 @@ def unasked(  # noqa: PLR0913 - keyword-only facts of one answer.
 def coalesced(
     account_id: str,
     cached: SpamStatusVerdict | None,
-    previous: ProbeState | None,
+    snapshot: BudgetSnapshot,
     at: datetime,
 ) -> SpamStatusVerdict:
-    """The last reading (or failure) handed to a caller who asks again inside the window."""
-    failed = previous is not None and previous.last_outcome in {"error", "unknown"}
+    """The last reading (or failure) handed to a caller who asks again inside the window.
+
+    The stored reading is "the last reading" only when the attempt that opened the window
+    produced it. An attempt that failed, was unreadable, or died (crash, cancellation, a
+    restart: its ledger row never closed with a reading) leaves what was stored before it
+    uncertain, so the answer is an ``unknown`` that carries the failure and not that reading.
+    """
+    state = snapshot.state
+    failed = (state is not None and state.last_outcome in {"error", "unknown"}) or (
+        snapshot.last_attempt_outcome in {"started", "error", "unknown"}
+    )
     if cached is not None and not failed:
         return cached.model_copy(update={"served_from": "coalesced"})
-    detail = previous.last_error if previous is not None else None
+    detail = snapshot.last_attempt_error or (state.last_error if state is not None else None)
     return SpamStatusVerdict(
         account_id=account_id,
         status="unknown",

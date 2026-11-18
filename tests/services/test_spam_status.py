@@ -72,14 +72,15 @@ def test_classify_error_is_unknown() -> None:
     assert spam_status.classify_spam_probe(probe) == ("unknown", "TimeoutError: boom")
 
 
-def test_classify_falls_back_to_restriction_flag() -> None:
+def test_classify_ignores_the_restriction_flag() -> None:
+    """Pins the audit's F-004: a platform (ToS) restriction is not a spam limit."""
     probe = SpamStatusProbe(
         account_id="a",
         reply_text="something unrelated",
         restricted=True,
         restriction_reason="terms violation",
     )
-    assert spam_status.classify_spam_probe(probe) == ("limited", "terms violation")
+    assert spam_status.classify_spam_probe(probe) == ("clean", None)
 
 
 def test_classify_unmatched_reply_defaults_to_clean_via_heuristic() -> None:

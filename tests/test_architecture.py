@@ -254,17 +254,83 @@ def test_frontend_test_source_detection_excludes_production_and_other_languages(
 _SPAM_GATEWAY = ("services/spam_intel/", "services/spam_status.py")
 
 
-def _imported_symbols(path: Path) -> set[str]:
-    """Every imported thing as a dotted name: ``from a.b import c`` is ``a.b.c`` and ``a.b``."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+def _package_of(path: Path) -> str:
+    """The dotted package a repo file lives in (what its relative imports start from)."""
+    try:
+        parts = path.resolve().relative_to(_ROOT.resolve()).parts
+    except ValueError:
+        return ""
+    return ".".join(parts[:-1])
+
+
+def _chain(node: ast.expr) -> list[str] | None:
+    """``a.b.c`` as ``["a", "b", "c"]``; ``None`` when the root is not a plain name."""
+    attrs: list[str] = []
+    while isinstance(node, ast.Attribute):
+        attrs.append(node.attr)
+        node = node.value
+    return [node.id, *reversed(attrs)] if isinstance(node, ast.Name) else None
+
+
+def _import_bindings(tree: ast.AST, package: str) -> tuple[set[str], dict[str, str]]:
+    """Every imported dotted name, and the local name each import binds to its dotted target.
+
+    ``import a.b`` binds ``a``; ``import a.b as x`` and ``from a import b as x`` bind ``x``; a
+    relative ``from . import y`` is resolved against ``package`` (``from .. import y`` one up).
+    """
     symbols: set[str] = set()
+    bound: dict[str, str] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            symbols.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            symbols.add(node.module)
-            symbols.update(f"{node.module}.{alias.name}" for alias in node.names)
+            for alias in node.names:
+                symbols.add(alias.name)
+                bound[alias.asname or alias.name.split(".")[0]] = (
+                    alias.name if alias.asname else alias.name.split(".")[0]
+                )
+        elif isinstance(node, ast.ImportFrom):
+            base_parts = package.split(".") if package and node.level else []
+            if node.level:
+                base_parts = base_parts[: max(len(base_parts) - (node.level - 1), 0)]
+            module = ".".join([*base_parts, *([node.module] if node.module else [])])
+            if not module:
+                continue
+            symbols.add(module)
+            for alias in node.names:
+                symbols.add(f"{module}.{alias.name}")
+                bound[alias.asname or alias.name] = f"{module}.{alias.name}"
+    return symbols, bound
+
+
+def _referenced_symbols(source: str, package: str = "") -> set[str]:
+    """Every dotted name a module imports OR reaches through an imported name.
+
+    ``from a.b import c`` is ``a.b.c`` and ``a.b``; ``import a.b`` then ``a.b.c(...)`` is
+    ``a.b.c`` too; so are an alias (``import a.b as x; x.c``), a module bound by ``from a import
+    b as x`` and a relative import (``from . import c`` in package ``a`` is ``a.c``). A string
+    handed to ``importlib.import_module`` / ``__import__`` counts as an import.
+    """
+    tree = ast.parse(source)
+    symbols, bound = _import_bindings(tree, package)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute):
+            chain = _chain(node)
+            if chain is not None and chain[0] in bound:
+                full = [*bound[chain[0]].split("."), *chain[1:]]
+                symbols.update(".".join(full[:size]) for size in range(1, len(full) + 1))
+        elif (
+            isinstance(node, ast.Call)
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+            and (_chain(node.func) or [""])[-1] in {"import_module", "__import__"}
+        ):
+            symbols.add(node.args[0].value)
     return symbols
+
+
+def _imported_symbols(path: Path) -> set[str]:
+    """What the file at ``path`` imports or reaches through an import (``_referenced_symbols``)."""
+    return _referenced_symbols(path.read_text(encoding="utf-8"), _package_of(path))
 
 
 def _spam_gateway_violations(forbidden: dict[str, tuple[str, ...]]) -> list[str]:
@@ -321,3 +387,75 @@ def test_the_spam_gateway_guard_catches_a_bypass(tmp_path: Path) -> None:
     )
     symbols = _imported_symbols(bad)
     assert {"core.telegram_client.check_spam_status", "services.spam_status"} <= symbols
+
+
+@pytest.mark.parametrize(
+    ("source", "package", "expected"),
+    [
+        # A plain module import, reached by attribute.
+        (
+            "import core.telegram_client\ncore.telegram_client.check_spam_status('a')\n",
+            "services",
+            "core.telegram_client.check_spam_status",
+        ),
+        # An alias of the module, and of the package it sits in.
+        (
+            "import core.telegram_client as tc\ntc.check_spam_status('a')\n",
+            "services",
+            "core.telegram_client.check_spam_status",
+        ),
+        (
+            "import core.telegram_client._spam as spam\nspam.anything\n",
+            "services",
+            "core.telegram_client._spam",
+        ),
+        (
+            "from core import telegram_client as tc\ntc.check_spam_status('a')\n",
+            "services",
+            "core.telegram_client.check_spam_status",
+        ),
+        (
+            "import core\ncore.telegram_client.check_spam_status('a')\n",
+            "services",
+            "core.telegram_client.check_spam_status",
+        ),
+        # Relative imports resolved against the file's own package.
+        ("from . import spam_status\n", "services", "services.spam_status"),
+        ("from .. import spam_status\n", "services.sub", "services.spam_status"),
+        (
+            "from .spam_status import refresh_spam_status\n",
+            "services",
+            "services.spam_status.refresh_spam_status",
+        ),
+        (
+            "from ..repositories.spam_status import upsert_spam_status\n",
+            "core.sub",
+            "core.repositories.spam_status.upsert_spam_status",
+        ),
+        # A dynamic import by name.
+        (
+            "import importlib\nimportlib.import_module('services.spam_status')\n",
+            "services",
+            "services.spam_status",
+        ),
+    ],
+)
+def test_the_spam_gateway_guard_sees_every_way_to_reach_a_forbidden_name(
+    source: str, package: str, expected: str
+) -> None:
+    """F-025: module attributes, aliases and relative imports are bypasses too."""
+    assert expected in _referenced_symbols(source, package)
+
+
+def test_the_spam_gateway_guard_reports_a_planted_module_attribute_bypass(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.py"
+    bad.write_text(
+        "import core.telegram_client as tc\n\nasync def f():\n"
+        "    return await tc.check_spam_status('a')\n",
+        encoding="utf-8",
+    )
+    forbidden = {"core.telegram_client.check_spam_status": ("core/",)}
+    assert _imported_symbols(bad) & forbidden.keys() == {"core.telegram_client.check_spam_status"}
+    clean = tmp_path / "clean.py"
+    clean.write_text("import core.telegram_client as tc\ntc.execute\n", encoding="utf-8")
+    assert not _imported_symbols(clean) & forbidden.keys()

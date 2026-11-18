@@ -1,4 +1,7 @@
-"""The two reply classifiers and the redaction of stored samples."""
+"""The two reply classifiers and the redaction of stored samples.
+
+The leak classes of redaction are in ``tests/services/spam_intel/test_samples_redaction.py``.
+"""
 
 from __future__ import annotations
 
@@ -14,9 +17,8 @@ from services._spam_parse import (
     classify_strict,
     extract_until,
     find_date,
-    redact_reply,
-    reply_hash,
 )
+from services._spam_redact import redact_reply, reply_hash
 
 CLEAN_EN = "Good news, no limits are currently applied to your account. You're free as a bird!"
 CLEAN_RU = "Хорошие новости, на ваш аккаунт не применены никакие ограничения."
@@ -68,9 +70,10 @@ def test_a_date_marks_an_unknown_language_limited_in_both_classifiers() -> None:
     assert (status, detail) == ("limited", "12. Juli 2026")
 
 
-def test_a_reply_with_both_a_clean_and_a_limited_marker_is_ambiguous_when_strict() -> None:
+def test_a_reply_with_both_a_clean_and_a_limited_marker_is_ambiguous_in_both() -> None:
+    """Pins the audit's F-013: the legacy classifier used to answer ``clean`` for this text."""
     text = "Good news: the account that was limited yesterday has no limits now."
-    assert classify_legacy(_probe(text))[0] == "clean"
+    assert classify_legacy(_probe(text)) == ("unknown", AMBIGUOUS_DETAIL)
     assert classify_strict(_probe(text)) == ("unknown", AMBIGUOUS_DETAIL)
 
 
@@ -84,10 +87,13 @@ def test_a_probe_error_and_an_empty_reply_are_unknown_in_both() -> None:
         assert classify(_probe(None))[0] == "unknown"
 
 
-def test_the_restricted_flag_limits_only_the_legacy_classifier() -> None:
-    """Telegram documents ``restricted`` as a platform restriction, not a spam limit."""
+def test_the_restricted_flag_limits_neither_classifier() -> None:
+    """Telegram documents ``restricted`` as a platform restriction, not a spam limit.
+
+    Pins the audit's F-004: the legacy classifier used to turn the flag into ``limited``.
+    """
     probe = _probe("something unrelated", restricted=True, restriction_reason="terms")
-    assert classify_legacy(probe) == ("limited", "terms")
+    assert classify_legacy(probe) == ("clean", None)  # the legacy fallback, flag or no flag
     assert classify_strict(probe) == ("unknown", UNRECOGNIZED_DETAIL)
     clean = _probe(CLEAN_EN, restricted=True)
     assert classify_strict(clean)[0] == "clean"
@@ -144,8 +150,9 @@ def test_redaction_is_bounded_and_collapses_blank_runs() -> None:
     assert "\n\n\n" not in redact_reply("x\n\n\n\n\ny", [], 1000)
 
 
-def test_a_one_letter_name_is_not_replaced_everywhere() -> None:
-    assert redact_reply("A bad account", ["A"], 1000) == "A bad account"
+def test_a_one_letter_name_is_masked_as_a_whole_token_only() -> None:
+    """Pins the audit's F-001: a one-character first name used to survive redaction."""
+    assert redact_reply("A bad account, Abe", ["A"], 1000) == "<name> bad account, Abe"
 
 
 def test_the_hash_ignores_case_and_spacing_but_not_wording() -> None:

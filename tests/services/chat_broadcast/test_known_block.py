@@ -59,7 +59,7 @@ def _answers(
         if on_check is not None:
             on_check()
         answer = queue.pop(0) if len(queue) > 1 else queue[0]
-        if answer != "deferred":
+        if answer in {"clean", "limited"}:  # a failed, refused or postponed ask stores nothing
             await _store(account_id, answer)  # ty: ignore[invalid-argument-type]
         return answer
 
@@ -149,6 +149,24 @@ async def test_a_postponed_check_at_the_end_keeps_the_known_block_resting(
     campaign_id = await seed(accounts=("a1",), targets=("@alpha",), messages=("Hi",))
     await _store("a1", "limited")
     _answers(monkeypatch, telegram, "deferred", "deferred", "clean")
+
+    await _run(campaign_id)
+
+    roster = await repository.list_roster(campaign_id)
+    assert (roster[0].state, roster[0].halted_reason) == ("active", None)
+    assert telegram.spam_checks == ["a1", "a1", "a1"]
+    assert len(telegram.sent) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("no_answer", ["unknown", "refused"])
+async def test_a_failed_or_refused_check_at_the_end_keeps_the_known_block_resting(
+    telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch, no_answer: str
+) -> None:
+    """D9: a transport failure or a refusal is no reading, so it never takes the account out."""
+    campaign_id = await seed(accounts=("a1",), targets=("@alpha",), messages=("Hi",))
+    await _store("a1", "limited")
+    _answers(monkeypatch, telegram, no_answer, no_answer, "clean")
 
     await _run(campaign_id)
 

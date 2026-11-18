@@ -77,8 +77,10 @@ from services.spam_intel import (
     install_signal_sink,
     shutdown_appeal_recheck,
     shutdown_history_sweep,
+    shutdown_idle_recheck,
     start_appeal_recheck,
     start_history_sweep,
+    start_idle_recheck,
 )
 from services.survival import shutdown_survival_probes, start_survival_probes
 from services.user_parser import (
@@ -155,22 +157,38 @@ async def _shutdown_step(name: str, close: Callable[[], Awaitable[None]]) -> Non
 
 
 async def _start_spambot_tasks() -> None:
-    """The background tasks that ask @SpamBot: the survival probes, and the history sweep.
+    """The background tasks that ask @SpamBot: survival probes, the history sweep, two re-checks.
 
     The sweep is a one-off, read-only pass over each account's old @SpamBot dialog and stays
     off unless the owner switches it on (``SPAM_INTEL__HISTORY_SWEEP``). The appeal re-check asks
-    the gateway (a decision under the shared budget) about accounts the operator appealed for.
+    the gateway (a decision under the shared budget) about accounts the operator appealed for; the
+    idle re-check asks it (a routine ask under the same budget) about accounts whose verdict is
+    due one, and only with ``SPAM_INTEL__PASSIVE_DECISIONS``. They stop one by one in the
+    lifespan's ``finally`` (``_shutdown_step`` each), so one that fails to stop skips no other.
     """
     await start_survival_probes()
     await start_history_sweep()
     await start_appeal_recheck()
+    await start_idle_recheck()
 
 
 async def _shutdown_spambot_tasks() -> None:
-    """Stop both before the pool goes: each may be mid-request on a pooled client."""
-    await shutdown_survival_probes()
-    await shutdown_history_sweep()
-    await shutdown_appeal_recheck()
+    """Stop them before the pool goes; each may be mid-request on a pooled client.
+
+    Each stops in its own guarded step: one that fails to stop skips neither the others nor
+    what follows.
+    """
+    await _shutdown_step("survival_probes", shutdown_survival_probes)
+    await _shutdown_step("history_sweep", shutdown_history_sweep)
+    await _shutdown_step("appeal_recheck", shutdown_appeal_recheck)
+    await _shutdown_step("idle_recheck", shutdown_idle_recheck)
+
+
+async def _cancel_task(task: asyncio.Task[None]) -> None:
+    """Cancel a background task and wait for it; whatever it died of is reported by the step."""
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
 
 def _setup_process() -> None:
@@ -243,7 +261,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # then lose an in-flight upload to the pool teardown (an ambiguous post).
         await _shutdown_step("scheduled_posts", shutdown_scheduled_posts)
         # Before the pool: a probe in flight asks @SpamBot through a pooled client.
-        await _shutdown_step("survival_probes", _shutdown_spambot_tasks)
+        await _shutdown_spambot_tasks()
         # Before the pool: a close in flight talks through a pooled client.
         await _shutdown_step("session_guard", shutdown_session_guard)
         # Before warming and the pool: a refill search reads on the pooled client.
@@ -268,9 +286,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # After every runtime has drained, so their last events can still notify.
         await _shutdown_step("notifications", shutdown_notifications)
         await _shutdown_step("web_login", shutdown_web_login)
-        maintenance_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await maintenance_task
+        await _shutdown_step("db_maintenance", lambda: _cancel_task(maintenance_task))
         await _shutdown_step("gemini", close_gemini_client)
         await _shutdown_step("openai", close_openai_client)
 

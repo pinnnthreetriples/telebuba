@@ -50,6 +50,7 @@ export {
   fetchLiveProfileSnapshot,
   getBulkMessageJobQueryOptions,
   invalidateAccountViews,
+  invalidateSpamAppeal,
   qrLoginQueryKey,
   qrLoginQueryOptions,
 } from './api/accounts.queries';

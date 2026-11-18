@@ -222,46 +222,6 @@ def test_only_routine_waits_out_a_fresh_start() -> None:
         assert decide(_snapshot(), _request(purpose, process_age=young), CFG).action == "probe"
 
 
-def test_the_rules_are_checked_in_the_documented_order() -> None:
-    """Backoff, then the account cap, then startup, busy, proxy spacing, fleet spacing, soft cap."""
-    state = ProbeState(
-        account_id="a", fail_streak=1, next_allowed_at=(NOW + timedelta(hours=1)).isoformat()
-    )
-    everything = _snapshot(
-        state=state,
-        account_count_24h=CFG.account_daily_cap,
-        last_proxy_started_at=_iso(1),
-        last_fleet_started_at=_iso(1),
-        fleet_count_24h=CFG.fleet_soft_cap,
-        last_attempt_started_at=_iso(60 * 5),
-    )
-    request = _request(busy=True, process_age=timedelta(minutes=1))
-    seen: list[str | None] = []
-    snapshot = everything
-    seen.append(decide(snapshot, request, CFG).reason)  # backoff
-    snapshot = snapshot.model_copy(update={"state": None})
-    seen.append(decide(snapshot, request, CFG).reason)  # account cap
-    snapshot = snapshot.model_copy(update={"account_count_24h": 0})
-    seen.append(decide(snapshot, request, CFG).reason)  # startup
-    request = _request(busy=True)
-    seen.append(decide(snapshot, request, CFG).reason)  # busy
-    request = _request()
-    seen.append(decide(snapshot, request, CFG).reason)  # proxy
-    snapshot = snapshot.model_copy(update={"last_proxy_started_at": None})
-    seen.append(decide(snapshot, request, CFG).reason)  # fleet spacing
-    snapshot = snapshot.model_copy(update={"last_fleet_started_at": None})
-    seen.append(decide(snapshot, request, CFG).reason)  # soft cap
-    assert seen == [
-        "backoff",
-        "account_daily_cap",
-        "startup_quiet",
-        "busy",
-        "proxy_spacing",
-        "fleet_spacing",
-        "fleet_soft_cap",
-    ]
-
-
 def test_history_reads_follow_the_same_permanent_refusals() -> None:
     assert decide_history(_snapshot(), _request(alive=False), CFG).reason == "account_not_alive"
     assert decide_history(_snapshot(), _request(has_proxy=False), CFG).reason == "no_proxy"

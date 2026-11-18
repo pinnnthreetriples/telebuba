@@ -123,9 +123,12 @@ def test_the_executors_classifier_reads_a_transcript_probe(
 def test_a_single_probe_still_goes_through_the_old_classifiers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """n_messages == 0 (every old caller): the restriction flag still counts for the legacy one."""
+    """n_messages == 0 (every old caller): the legacy classifier, which ignores ``restricted``.
+
+    Pins the audit's F-004: the platform flag used to make this probe ``limited``.
+    """
     monkeypatch.setattr(settings.spam_intel, "strict_parser", False)
     probe = SpamStatusProbe(
         account_id="a", reply_text="hello", restricted=True, restriction_reason="spam"
     )
-    assert spam_status.classify_spam_probe(probe) == ("limited", "spam")
+    assert spam_status.classify_spam_probe(probe) == ("clean", None)

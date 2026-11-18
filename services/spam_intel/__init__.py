@@ -13,6 +13,9 @@ The semi-automatic appeal (design 5.12): ``record_appeal_filed``, ``open_appeal`
 (``_appeal``), closed by a persisted @SpamBot ``clean`` (``_appeal_close``, called from the evidence
 layer's store path) and re-checked through the gateway as a DECISION ask (``_appeal_recheck``). A
 human appeals; nothing in these modules sends, clicks or types.
+Idle accounts (design 5.5, D5): ``start_idle_recheck`` re-asks, as a ROUTINE ask under the same
+budget and only with ``passive_decisions``, the account whose stored verdict is due a re-check
+(``_idle_recheck``).
 ``install_signal_sink`` registers the receiver (``_signals``) that turns what ``core``'s gateways
 saw into that evidence.
 """
@@ -47,7 +50,8 @@ from services.spam_intel._gateway import (
     parse_retry,
 )
 from services.spam_intel._history import shutdown_history_sweep, start_history_sweep
-from services.spam_intel._limit_date import end_date, limit_end_date
+from services.spam_intel._idle_recheck import shutdown_idle_recheck, start_idle_recheck
+from services.spam_intel._limit_date import end_date, limit_end_date, limit_has_ended
 from services.spam_intel._shadow import shadow_agreement
 from services.spam_intel._signals import install_signal_sink
 
@@ -69,6 +73,7 @@ __all__ = [
     "fold",
     "install_signal_sink",
     "limit_end_date",
+    "limit_has_ended",
     "open_appeal",
     "open_appeal_states",
     "operator_check",
@@ -79,7 +84,9 @@ __all__ = [
     "shadow_agreement",
     "shutdown_appeal_recheck",
     "shutdown_history_sweep",
+    "shutdown_idle_recheck",
     "start_appeal_recheck",
     "start_history_sweep",
+    "start_idle_recheck",
     "verdicts_for",
 ]

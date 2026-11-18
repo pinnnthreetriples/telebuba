@@ -32,6 +32,10 @@ class WarmingSafetySettings(BaseModel):
     quarantine_hours: float = Field(default=48.0, gt=0.0)
     quarantine_max_repeats: int = Field(default=1, ge=1)
     quarantine_unreadable_max: int = Field(default=3, ge=1)
+    # A re-check the gateway REFUSED (no proxy, a dead session) asked nothing, so it is neither
+    # an unreadable answer nor a re-check of the block: the account waits in quarantine, the
+    # reason on its row, and asks again after this many hours.
+    quarantine_refused_retry_hours: float = Field(default=6.0, gt=0.0)
     # After a clean quarantine release: cap ramps from this share to full; DMs stay shut.
     release_ramp_start_fraction: float = Field(default=0.3, ge=0.0, le=1.0)
     release_ramp_days: float = Field(default=5.0, ge=0.0)

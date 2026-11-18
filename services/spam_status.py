@@ -15,14 +15,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from core.config import settings
 from core.db import fetch_account, get_spam_status, upsert_spam_status
 from core.logging import log_event
 from core.repositories.device_fingerprint import list_device_fingerprints_by_ids
-from core.repositories.spam_reply_samples import upsert_reply_sample
+from core.repositories.spam_reply_samples import prune_reply_samples, upsert_reply_sample
 from core.telegram_client import check_spam_status, converse_spam_status
 from schemas.spam_intel import ReplySample, SampleStructure
 from schemas.spam_status import (
@@ -36,9 +36,8 @@ from services._spam_parse import (
     classify_strict,
     classify_transcript,
     find_date,
-    redact_reply,
-    reply_hash,
 )
+from services._spam_redact import redact_reply, reply_hash
 from services.lifecycle_journal import record_lifecycle_event
 from services.spam_block_lift import lift_on_clean
 
@@ -105,7 +104,9 @@ async def _observe_reply(account_id: str, probe: SpamStatusProbe, now: datetime)
                 account_id=account_id,
                 extra={"legacy": legacy[0], "strict": strict[0], "strict_detail": strict[1]},
             )
-        if intel.sample_capture:
+        if not intel.sample_capture:
+            await _prune_aged_samples(now)  # switching capture off still ages out what was kept
+        else:
             for text in texts:
                 await store_reply_sample(
                     account_id,
@@ -117,7 +118,14 @@ async def _observe_reply(account_id: str, probe: SpamStatusProbe, now: datetime)
                     ),
                 )
     except Exception as exc:  # noqa: BLE001 - observation must never fail a probe.
-        logger.warning("spam reply observation failed: %s", type(exc).__name__, exc_info=exc)
+        # The class name only: an exception's text and traceback can quote the reply or a path.
+        logger.warning("spam reply observation failed: %s", type(exc).__name__)
+
+
+async def _prune_aged_samples(now: datetime) -> None:
+    """Drop the samples last seen more than ``SPAM_INTEL__SAMPLE_MAX_AGE_DAYS`` ago."""
+    cutoff = now - timedelta(days=settings.spam_intel.sample_max_age_days)
+    await prune_reply_samples(cutoff.isoformat())
 
 
 async def store_reply_sample(
@@ -128,6 +136,17 @@ async def store_reply_sample(
     structure: SampleStructure | None = None,
 ) -> None:
     """Keep one reply of @SpamBot, redacted, with what each classifier makes of it.
+
+    Only the redacted text is stored (``services._spam_redact``: names of the account, phone
+    numbers in any format, ``@usernames``, links, long digit runs), at most
+    ``SPAM_INTEL__SAMPLE_MAX_CHARS`` of it, and a row older than ``SAMPLE_MAX_AGE_DAYS`` is
+    dropped on every write. The classification is read from the original text; ``has_date`` too.
+
+    The ``SAMPLE_CAPTURE`` switch decides whether a PROBE keeps its replies (``_observe_reply``
+    asks it; off, nothing is stored and old rows still age out). This function does not ask: the
+    history sweep (``SPAM_INTEL__HISTORY_SWEEP``, the owner's explicit opt-in to read the bot's
+    old replies) exists to capture them, so it stores whatever ``SAMPLE_CAPTURE`` says. Either
+    way what lands in the table is redacted.
 
     ``structure``: the flags of the conversation the text came from (the bot sent more than one
     message; a message carried buttons). A history read has none.
@@ -142,6 +161,7 @@ async def store_reply_sample(
     if not redacted:
         return
     probe = SpamStatusProbe(account_id=account_id, reply_text=text)
+    await _prune_aged_samples(now)
     fingerprint = (await list_device_fingerprints_by_ids([account_id])).get(account_id)
     stamp = now.isoformat()
     await upsert_reply_sample(
@@ -152,7 +172,7 @@ async def store_reply_sample(
             source=source,
             legacy_status=classify_legacy(probe)[0],
             strict_status=classify_strict(probe)[0],
-            has_date=find_date(redacted) is not None,
+            has_date=find_date(text) is not None,
             multi_message=structure.multi_message if structure else False,
             has_markup=structure.has_markup if structure else False,
             first_seen_at=stamp,
@@ -193,6 +213,9 @@ async def probe_and_store(
         # ``telegram_spam_status_probe_failed`` (bounded to the exception class name — the
         # full text is on its stdlib logger, not in ``extra``).
         return ProbeOutcome(verdict=_uncached_unknown(account_id, detail, now), error=probe.error)
+    # The reading this one replaces stays evidence: a reply without a verdict ("being checked")
+    # must not take a still-valid dated limit with it (audit F-015).
+    await _keep_prior_reading(account_id)
     saved = await upsert_spam_status(
         SpamStatusVerdict(
             account_id=account_id,
@@ -211,6 +234,9 @@ async def probe_and_store(
             "status": status,
             "detail": detail,
             "previous": previous.status if previous is not None else None,
+            # Its date, so a notification can tell a limit that was still on from one that had
+            # already ended (a new limit after an ended one is news, not a repeat).
+            "previous_detail": previous.detail if previous is not None else None,
         },
     )
     await record_lifecycle_event(
@@ -219,6 +245,15 @@ async def probe_and_store(
     # A clean answer ends a confirmed spam block, whoever asked (``spam_block_lift``).
     await lift_on_clean(account_id, saved)
     return ProbeOutcome(verdict=saved)
+
+
+async def _keep_prior_reading(account_id: str) -> None:
+    """Record the stored reading as evidence before it is replaced (``spam_intel._evidence``)."""
+    # Imported here: the evidence layer sits in ``services.spam_intel``, whose package root
+    # imports this module (the gateway), so a top-level import would be a cycle.
+    from services.spam_intel._evidence import keep_prior_reading  # noqa: PLC0415
+
+    await keep_prior_reading(account_id)
 
 
 async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:

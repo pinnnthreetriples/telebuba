@@ -259,9 +259,10 @@ async def test_on_limiting_evidence_resets_the_stretch(
     await _clean_run("a1", clock, count=5, newest_hours_ago=100.0)
     await _see("a1", "peer_flood_other", clock.now() - timedelta(hours=10))
     verdict = await spam_intel.ask("a1", purpose="routine", caller="warming.cycle")
-    # The clean record no longer answers for the account: what is known now is the limit
-    # (written through to the stored status while the fold decides), not a stretched clean.
-    assert verdict.status == "limited"
+    # The clean record no longer answers for the account: the stretch is gone, so the ask goes to
+    # the budget and @SpamBot (nothing is written through to the stored status any more, so a
+    # fold's limit is no stand-in for a reading, audit F-006).
+    assert verdict.served_from == "probe"
     assert [e["via"] for e in events.of("spam_intel_served_from_evidence")] == []
 
 

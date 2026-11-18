@@ -9,6 +9,9 @@ quarantine window has elapsed: re-ask @SpamBot, then
   still-limited answers (one by default) warming stops in ``spam_blocked``
   (``services.warming._spam_block``) for the operator to delete or keep the account;
   below that count the account rests another window;
+* ``deferred`` / ``refused`` — nothing was asked (the budget says later; or never for now: no
+  proxy, a dead session), so it is neither a re-check of the block nor an unreadable answer: the
+  account waits in quarantine with the reason on its row and no counter moves;
 * ``unknown`` — the probe read nothing (proxy down, dead session, @SpamBot silent), so
   it is not a re-check of the block at all and spends none. Holding for free would be
   unbounded, though, so unreadable windows count in the row's unreadable streak, and
@@ -28,6 +31,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import record_spam_check_outcome
 from core.logging import log_event
+from schemas.spam_status import is_unasked
 from schemas.warming import WarmingCycleResult, spam_block_known
 from services.spam_intel import caller_scope, parse_retry
 from services.warming import _seams
@@ -136,19 +140,28 @@ async def _unreadable(
     return await _extend(record, now, record.quarantine_count, run_id)
 
 
-async def _wait_for_budget(
+async def _wait_unasked(
     record: WarmingStateRecord,
     now: datetime,
     verdict: SpamStatusVerdict,
     run_id: str | None,
 ) -> WarmingCycleResult:
-    """The budget said later: keep the window and ask again then, spending nothing.
+    """Nothing was asked: keep the window, say why, and ask again later, spending nothing.
 
-    Not an unreadable answer (nothing was asked), so neither the re-check count nor the
-    unreadable streak moves.
+    Neither the re-check count nor the unreadable streak moves (D9: a postponed or refused answer
+    is not an unreadable one). A postponement carries its own ``retry_at``. A refusal (no proxy, a
+    dead session) names the condition for resuming in ``last_error`` and waits
+    ``quarantine_refused_retry_hours``, so the account sits in quarantine with its reason visible
+    instead of drifting into ``error``.
     """
     account_id = record.account_id
-    retry = parse_retry(verdict) or now + timedelta(minutes=settings.spam_intel.busy_retry_minutes)
+    refusal = verdict.served_from == "refused"
+    if refusal:
+        retry = now + timedelta(hours=settings.warming.quarantine_refused_retry_hours)
+    else:
+        retry = parse_retry(verdict) or now + timedelta(
+            minutes=settings.spam_intel.busy_retry_minutes
+        )
     write = await _set_state(
         account_id,
         "quarantine",
@@ -156,6 +169,7 @@ async def _wait_for_budget(
         next_run_at=retry.isoformat(),
         heartbeat_at=now.isoformat(),
         quarantine_count=record.quarantine_count,
+        last_error=f"spam check refused: {verdict.reason}" if refusal else None,
         expected_run_id=run_id,
     )
     if run_id is not None and not write.applied:
@@ -164,7 +178,7 @@ async def _wait_for_budget(
         "INFO",
         "warming_quarantine_recheck_deferred",
         account_id=account_id,
-        extra={"reason": verdict.reason},
+        extra={"reason": verdict.reason, "served_from": verdict.served_from},
     )
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="recheck deferred")
 
@@ -175,9 +189,9 @@ async def _no_reading(
     verdict: SpamStatusVerdict,
     run_id: str | None,
 ) -> WarmingCycleResult:
-    """An ``unknown`` re-check: postponed by the budget, or genuinely unreadable."""
-    if verdict.served_from == "deferred":
-        return await _wait_for_budget(record, now, verdict, run_id)
+    """An ``unknown`` re-check: not asked (postponed or refused), or genuinely unreadable."""
+    if is_unasked(verdict):
+        return await _wait_unasked(record, now, verdict, run_id)
     return await _unreadable(record, now, run_id)
 
 

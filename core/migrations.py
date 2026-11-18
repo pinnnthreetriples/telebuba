@@ -130,6 +130,7 @@ from core.migration_steps_spam_appeals import _add_spam_appeals
 from core.migration_steps_spam_evidence import _add_spam_evidence
 from core.migration_steps_spam_intel import _add_spam_probe_ledger
 from core.migration_steps_spam_lift import _allow_lifecycle_spam_block_lifted
+from core.migration_steps_spam_mirror_repair import _add_spam_mirror_repair
 from core.migration_steps_spam_projection_observed import _add_spam_projection_observed
 from core.migration_steps_spam_sample_flags import _add_spam_sample_flags
 from core.migration_steps_spam_streak import _add_warming_state_spam_unknown_streak
@@ -310,6 +311,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (117, "add_spam_appeals", _add_spam_appeals),
     (118, "add_spam_sample_flags", _add_spam_sample_flags),
     (119, "add_spam_projection_observed", _add_spam_projection_observed),
+    (120, "repair_spam_status_mirror", _add_spam_mirror_repair),
 )
 
 

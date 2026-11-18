@@ -3,8 +3,10 @@
 Everything it reads comes in as arguments — the ledger snapshot, the clock, the jitter the
 caller drew, the settings — so every rule is a table-driven test and nothing here touches
 Telegram, the database or ``random``. The order of the rules is part of the contract
-(``docs/spam-intel.md`` section 5.5): cheap, permanent refusals first, then the coalescing
-window, then the caps, then the spacing.
+(``docs/spam-intel.md`` section 5.5): who may be asked at all, then the coalescing window, then
+the account's own cap, backoff, the proxy and fleet spacing, the fleet caps, and last the busy
+account, the quiet start and the local night. The order decides which reason an ask is turned
+away with, never whether it goes.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
 
 _DAY = timedelta(hours=24)
 _PURPOSES_WITH_BACKOFF = frozenset({"routine", "decision", "measurement"})
+_MAX_DOUBLINGS = 32
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,11 @@ class ProbeRequest:
     process_age: timedelta
     # The gap the caller drew for this ask; the spacing rule compares against it.
     fleet_gap: timedelta
+    # The account's status is a transient fault (flood wait, proxy or network error): not dead
+    # (``alive`` stays true), but not to be asked now.
+    transient: bool = False
+    # When the account's local night ends, if the ask is made inside it (``_night``).
+    night_until: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -67,7 +75,8 @@ def backoff_until(fail_streak: int, now: datetime, cfg: SpamIntelSettings) -> da
     ``backoff_base_hours`` for the first, doubling per further failure, capped at
     ``backoff_max_hours`` (6, 12, 24, 48 by default).
     """
-    streak = max(fail_streak, 1)
+    # Clamped: past a few dozen doublings the cap is long reached, and 2 ** 1100 is not a float.
+    streak = min(max(fail_streak, 1), _MAX_DOUBLINGS)
     hours = min(cfg.backoff_base_hours * 2 ** (streak - 1), cfg.backoff_max_hours)
     return now + timedelta(hours=hours)
 
@@ -95,32 +104,32 @@ def _operator_rule(
     return None
 
 
-def _backlog_rule(
+def _account_cap(
     snapshot: BudgetSnapshot,
     request: ProbeRequest,
     cfg: SpamIntelSettings,
 ) -> Decision | None:
-    """Rules for routine, decision and measurement asks, before the spacing."""
-    now = request.now
+    """The account's own daily cap (rule 4: it replaces the draft's 6 h minimum)."""
+    if snapshot.account_count_24h >= cfg.account_daily_cap:
+        retry = _later(snapshot.account_oldest_24h, _DAY) or request.now + _DAY
+        return _defer("account_daily_cap", retry)
+    return None
+
+
+def _backoff_rule(
+    snapshot: BudgetSnapshot,
+    request: ProbeRequest,
+    cfg: SpamIntelSettings,  # noqa: ARG001 - the shape every rule shares
+) -> Decision | None:
+    """Rule 6: after an unreadable answer or a failure the account waits (6, 12, 24, 48 h)."""
     state = snapshot.state
     next_allowed = parse_moment(state.next_allowed_at) if state is not None else None
     if (
         request.purpose in _PURPOSES_WITH_BACKOFF
         and next_allowed is not None
-        and next_allowed > now
+        and next_allowed > request.now
     ):
         return _defer("backoff", next_allowed)
-    if snapshot.account_count_24h >= cfg.account_daily_cap:
-        return _defer("account_daily_cap", _later(snapshot.account_oldest_24h, _DAY) or now + _DAY)
-    if request.purpose == "routine" and request.process_age < timedelta(
-        minutes=cfg.startup_quiet_minutes
-    ):
-        return _defer(
-            "startup_quiet",
-            now + timedelta(minutes=cfg.startup_quiet_minutes) - request.process_age,
-        )
-    if request.busy:
-        return _defer("busy", now + timedelta(minutes=cfg.busy_retry_minutes))
     return None
 
 
@@ -141,22 +150,15 @@ def _spacing_rule(
     return None
 
 
-def _gate(
+def _hard_cap(
     snapshot: BudgetSnapshot,
     request: ProbeRequest,
     cfg: SpamIntelSettings,
 ) -> Decision | None:
-    """The rules every purpose meets first: who may be asked, the window, the hard cap."""
-    now = request.now
-    if not request.alive:
-        return Decision(action="refuse", reason="account_not_alive")
-    if not request.has_proxy:
-        return Decision(action="refuse", reason="no_proxy")
-    last = _later(snapshot.last_attempt_started_at, timedelta(minutes=cfg.coalesce_minutes))
-    if last is not None and last > now:
-        return Decision(action="coalesce")
+    """Past the hard cap nothing goes, the operator included."""
     if snapshot.fleet_count_24h >= cfg.fleet_hard_cap:
-        return _defer("fleet_hard_cap", _later(snapshot.fleet_oldest_24h, _DAY) or now + _DAY)
+        retry = _later(snapshot.fleet_oldest_24h, _DAY) or request.now + _DAY
+        return _defer("fleet_hard_cap", retry)
     return None
 
 
@@ -164,14 +166,91 @@ def _soft_cap(
     snapshot: BudgetSnapshot,
     request: ProbeRequest,
     cfg: SpamIntelSettings,
-) -> Decision:
-    """Past the soft cap routine and measurement wait; a decision goes on, with a warning."""
+) -> Decision | None:
+    """Past the soft cap routine and measurement wait (a decision goes on, with a warning)."""
     if snapshot.fleet_count_24h < cfg.fleet_soft_cap:
-        return Decision(action="probe")
+        return None
     if request.purpose in {"routine", "measurement"}:
         retry = _later(snapshot.fleet_oldest_24h, _DAY) or request.now + _DAY
         return _defer("fleet_soft_cap", retry)
-    return Decision(action="probe", warning="soft_cap")
+    return None
+
+
+def _occupancy_rule(
+    snapshot: BudgetSnapshot,  # noqa: ARG001 - the shape every rule shares
+    request: ProbeRequest,
+    cfg: SpamIntelSettings,
+) -> Decision | None:
+    """Rules 11 and 12: another feature holds the account, then a routine ask in the quiet start."""
+    if request.busy:
+        return _defer("busy", request.now + timedelta(minutes=cfg.busy_retry_minutes))
+    if request.purpose == "routine" and request.process_age < timedelta(
+        minutes=cfg.startup_quiet_minutes
+    ):
+        return _defer(
+            "startup_quiet",
+            request.now + timedelta(minutes=cfg.startup_quiet_minutes) - request.process_age,
+        )
+    return None
+
+
+def _transient_status(request: ProbeRequest, cfg: SpamIntelSettings) -> Decision | None:
+    """A transient account status defers every purpose, the operator's click included.
+
+    The session check clears it by itself, so this is a wait, not a refusal. The operator is held
+    too, conservatively: a human can look at the account's status on the card, and a check sent
+    through a flood wait or a failing proxy would mostly come back unreadable and cost a streak.
+    """
+    if not request.transient:
+        return None
+    retry = request.now + timedelta(minutes=cfg.account_status_retry_minutes)
+    return _defer("account_status_transient", retry)
+
+
+def _night_rule(
+    snapshot: BudgetSnapshot,  # noqa: ARG001 - the shape every rule shares
+    request: ProbeRequest,
+    cfg: SpamIntelSettings,  # noqa: ARG001 - the shape every rule shares
+) -> Decision | None:
+    """Rule 13 (D13): a ROUTINE ask waits out the account's local night; no other purpose does."""
+    until = request.night_until
+    if request.purpose == "routine" and until is not None and until > request.now:
+        return _defer("local_night", until)
+    return None
+
+
+def _gate(
+    snapshot: BudgetSnapshot,
+    request: ProbeRequest,
+    cfg: SpamIntelSettings,
+) -> Decision | None:
+    """Rules 1-3, for every purpose: who may be asked at all, and the coalescing window."""
+    if not request.alive:
+        return Decision(action="refuse", reason="account_not_alive")
+    if not request.has_proxy:
+        return Decision(action="refuse", reason="no_proxy")
+    last = _later(snapshot.last_attempt_started_at, timedelta(minutes=cfg.coalesce_minutes))
+    if last is not None and last > request.now:
+        return Decision(action="coalesce")
+    return _transient_status(request, cfg)
+
+
+def _go(snapshot: BudgetSnapshot, cfg: SpamIntelSettings) -> Decision:
+    """The ask may probe; past the soft cap (a decision or the operator) the owner hears."""
+    over = snapshot.fleet_count_24h >= cfg.fleet_soft_cap
+    return Decision(action="probe", warning="soft_cap" if over else None)
+
+
+# Rules 4-13 for a routine, decision or measurement ask, in the order of design 5.5.
+_RULES = (
+    _account_cap,
+    _backoff_rule,
+    _spacing_rule,
+    _hard_cap,
+    _soft_cap,
+    _occupancy_rule,
+    _night_rule,
+)
 
 
 def decide(snapshot: BudgetSnapshot, request: ProbeRequest, cfg: SpamIntelSettings) -> Decision:
@@ -180,13 +259,17 @@ def decide(snapshot: BudgetSnapshot, request: ProbeRequest, cfg: SpamIntelSettin
     if gated is not None:
         return gated
     if request.purpose == "operator":
-        # A human click: no backoff, spacing or busy rule, only its own limits.
-        return _operator_rule(snapshot, request, cfg) or _soft_cap(snapshot, request, cfg)
-    for rule in (_backlog_rule, _spacing_rule):
-        deferred = rule(snapshot, request, cfg)
-        if deferred is not None:
-            return deferred
-    return _soft_cap(snapshot, request, cfg)
+        # A human click: no backoff, spacing or busy rule, only the hard cap and its own limits.
+        return (
+            _hard_cap(snapshot, request, cfg)
+            or _operator_rule(snapshot, request, cfg)
+            or _go(snapshot, cfg)
+        )
+    for rule in _RULES:
+        refused = rule(snapshot, request, cfg)
+        if refused is not None:
+            return refused
+    return _go(snapshot, cfg)
 
 
 def decide_history(
@@ -204,6 +287,8 @@ def decide_history(
         return Decision(action="refuse", reason="account_not_alive")
     if not request.has_proxy:
         return Decision(action="refuse", reason="no_proxy")
+    if (transient := _transient_status(request, cfg)) is not None:
+        return transient
     if request.busy:
         return _defer("busy", request.now + timedelta(minutes=cfg.busy_retry_minutes))
     return _spacing_rule(snapshot, request, cfg) or Decision(action="probe")

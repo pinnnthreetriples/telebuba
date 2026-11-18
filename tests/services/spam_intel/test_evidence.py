@@ -210,29 +210,23 @@ def decisions(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("decisions")
-async def test_passive_decisions_write_a_limit_and_a_freeze(
+async def test_passive_decisions_keep_a_limit_and_a_freeze_in_the_projection_only(
     make_account: MakeAccount, clock: Clock, events: Events
 ) -> None:
+    """Audit F-006: the decision lives in the projection, never in the bot's stored answer."""
     await make_account("a1")
-    await upsert_spam_status(
-        SpamStatusVerdict(account_id="a1", status="clean", checked_at=clock.now().isoformat())
-    )
+    said = SpamStatusVerdict(account_id="a1", status="clean", checked_at=clock.now().isoformat())
+    await upsert_spam_status(said)
     clock.advance(hours=1)
     await spam_intel.record_evidence("a1", "peer_flood_send", source="execute")
-    stored = await get_spam_status("a1")
-    assert stored is not None
-    assert (stored.status, stored.detail, stored.checked_at) == (
-        "limited",
-        "peer_flood_send",
-        clock.now().isoformat(),
-    )
+    assert await get_spam_status("a1") == said
+    assert (await spam_intel.verdicts_for(["a1"]))["a1"].status == "limited"
     assert events.of("spam_intel_verdict_changed")[-1]["shadow"] is False
 
     clock.advance(hours=1)
     await spam_intel.record_evidence("a1", "freeze_seen", source="session_check")
-    stored = await get_spam_status("a1")
-    assert stored is not None
-    assert (stored.status, stored.detail) == ("unknown", "frozen")
+    assert await get_spam_status("a1") == said
+    assert (await spam_intel.verdicts_for(["a1"]))["a1"].status == "frozen"
 
 
 @pytest.mark.asyncio
@@ -246,9 +240,8 @@ async def test_a_passive_clean_never_writes_the_legacy_status(
     await spam_intel.record_evidence("a1", "dm_stranger_ok", source="outreach")
 
     assert (await spam_intel.verdicts_for(["a1"]))["a1"].status == "clean"
-    stored = await get_spam_status("a1")
-    assert stored is not None
-    assert stored.status == "limited"  # still what the limit wrote: only @SpamBot says clean
+    # No reading was ever taken, and no passive verdict writes one: only @SpamBot says anything.
+    assert await get_spam_status("a1") is None
 
 
 @pytest.mark.asyncio

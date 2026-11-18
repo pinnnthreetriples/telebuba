@@ -1,7 +1,8 @@
-"""Reading @SpamBot's reply: the legacy classifier, the strict one, and redaction of samples.
+"""Reading @SpamBot's reply: the legacy classifier and the strict one.
 
 Pure: no Telethon, no database, no clock. ``services.spam_status`` runs the probe and picks
-between the two classifiers by ``settings.spam_intel.strict_parser``.
+between the two classifiers by ``settings.spam_intel.strict_parser``. Redaction of the
+samples it keeps is ``services._spam_redact``.
 
 * **Legacy** is what shipped before the gateway. Its last step treats a reply no marker
   recognised, and that carries no date, as ``clean``. Its docstrings claimed German; there
@@ -25,7 +26,6 @@ Marker lexicons for more languages are added only from captured replies (``_spam
 
 from __future__ import annotations
 
-import hashlib
 import re
 from typing import TYPE_CHECKING
 
@@ -38,7 +38,7 @@ from services._spam_lexicon import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
 
 UNRECOGNIZED_DETAIL = "unrecognized_reply"
 AMBIGUOUS_DETAIL = "ambiguous_reply"
@@ -84,7 +84,10 @@ def extract_until(text: str) -> str | None:
 def _classify_reply_text(text: str) -> tuple[SpamStatusKind, str | None] | None:
     """Match the reply against the explicit keyword markers; ``None`` = none matched."""
     lowered = text.lower()
-    if any(marker in lowered for marker in CLEAN_MARKERS):
+    clean = any(marker in lowered for marker in CLEAN_MARKERS)
+    if clean and any(marker in lowered for marker in LIMITED_MARKERS):
+        return "unknown", AMBIGUOUS_DETAIL  # a contradiction is never a clean
+    if clean:
         return "clean", None
     if any(marker in lowered for marker in BEING_CHECKED_MARKERS):
         return "unknown", CHECKING_DETAIL
@@ -112,11 +115,16 @@ def classify_legacy(probe: SpamStatusProbe) -> tuple[SpamStatusKind, str | None]
     """The classifier as it was before the gateway.
 
     1. Probe error → unknown with the exception's CLASS NAME in ``detail``.
-    2. Explicit keyword markers → precise verdict if any match.
-    3. ``getFullUser.restricted`` flag → limited.
-    4. Non-empty reply with no marker → heuristic (date → limited, ``automat`` → being
-       checked, otherwise clean).
-    5. Empty / no reply → unknown with no detail.
+    2. Explicit keyword markers → precise verdict if any match; a text that matches both a clean
+       and a limited marker is ``unknown`` (``ambiguous_reply``), as in the strict classifier.
+    3. Non-empty reply with no marker → heuristic (date → limited, ``automat`` → being
+       checked, otherwise clean). That last fallback is only for a text NOTHING matched, a known
+       limitation until captured samples exist for the fleet's languages.
+    4. Empty / no reply → unknown with no detail.
+
+    ``getFullUser.restricted`` plays no part: Telegram documents it as a platform (terms of
+    service) restriction, not a spam limit. It reaches the evidence layer as ``tos_restricted``
+    (weight 0, beside the verdict), never through here.
     """
     if probe.error:
         return "unknown", probe.error
@@ -124,8 +132,6 @@ def classify_legacy(probe: SpamStatusProbe) -> tuple[SpamStatusKind, str | None]
     matched = _classify_reply_text(text)
     if matched is not None:
         return matched
-    if probe.restricted:
-        return "limited", probe.restriction_reason
     if text.strip():
         return _classify_by_heuristic(text)
     return "unknown", None
@@ -193,40 +199,3 @@ def classify_transcript(
         if detail in unknown_details:
             return "unknown", detail
     return readings[0]
-
-
-# Redaction of stored samples: everything that names an account goes before a reply is kept.
-
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
-_PLUS_PHONE = re.compile(r"\+\d[\d\s().-]{6,}\d")
-_LONG_DIGITS = re.compile(r"\d{5,}")
-_BLANK_LINES = re.compile(r"\n{3,}")
-_SPACES = re.compile(r"[ \t]+")
-_MIN_NAME_LENGTH = 2
-
-
-def redact_reply(text: str, names: Iterable[str | None], max_chars: int) -> str:
-    """The reply with everything that names an account removed, bounded to ``max_chars``.
-
-    ``names``: the account's first name, last name, username and phone, as the account row
-    has them. Each is replaced wherever it appears (case-insensitive, a ``@`` in front of a
-    username included); e-mail addresses, ``+`` phone numbers and any run of five or more
-    digits are masked. Dates survive: they carry no run of five digits and the parser's
-    fixtures need them.
-    """
-    redacted = text.replace("\r\n", "\n")
-    for name in sorted({n.strip() for n in names if n and n.strip()}, key=len, reverse=True):
-        if len(name) >= _MIN_NAME_LENGTH:
-            redacted = re.sub(rf"@?{re.escape(name)}", "<name>", redacted, flags=re.IGNORECASE)
-    redacted = _EMAIL.sub("<email>", redacted)
-    redacted = _PLUS_PHONE.sub("<phone>", redacted)
-    redacted = _LONG_DIGITS.sub("<num>", redacted)
-    redacted = _SPACES.sub(" ", redacted)
-    redacted = _BLANK_LINES.sub("\n\n", redacted).strip()
-    return redacted[:max_chars]
-
-
-def reply_hash(redacted: str) -> str:
-    """A stable key for a redacted reply: case and whitespace do not make a new sample."""
-    normal = " ".join(redacted.lower().split())
-    return hashlib.sha256(normal.encode()).hexdigest()[:32]

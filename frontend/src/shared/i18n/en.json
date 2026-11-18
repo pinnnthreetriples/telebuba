@@ -270,6 +270,8 @@
             "busy": "The account is busy with another feature right now.",
             "startup_quiet": "Scheduled checks are not sent right after startup.",
             "no_live_session": "The account has no open session, and it is not connected just to be checked.",
+            "account_status_transient": "The account is in a temporary state (a Telegram limit or a connection error), so it is not checked now.",
+            "local_night": "It is night where the account lives: scheduled checks wait for the morning.",
             "account_missing": "The account was not found.",
             "account_not_alive": "The account is not in a working state, so there is nothing to ask @SpamBot with.",
             "no_proxy": "A proxy is required: without one the account does not connect to Telegram.",
@@ -1642,7 +1644,7 @@
       "twofa_proxy_missing": "Assign a proxy to the account first: the password cannot be checked without one.",
       "session_json_no_password": "The seller JSON has no 2FA password.",
       "web_login_no_proxy": "This account has no proxy assigned, and the browser must reach Telegram through the account's own exit. Assign a proxy and try again.",
-      "spam_appeal_not_limited": "This account has no spam block to appeal: its last @SpamBot answer is clean or the account is frozen.",
+      "spam_appeal_not_limited": "This account has no spam block to appeal: its last @SpamBot answer is clean, or the account is frozen or its session is not alive.",
       "web_login_proxy_dead": "The account's proxy is not answering, so Telegram Web cannot load through it. Check or replace it in the proxy pool and try again.",
       "web_login_browser_failed": "The web-login browser window could not be started. Check that Chrome or Edge is installed and that no window for this account is still open.",
       "web_login_relay_failed": "The local proxy relay for the web session could not be started. Try again in a moment.",
@@ -2376,6 +2378,10 @@
     "own_session_marked": "The operator marked a session as ours (or took the mark back)"
   },
   "logEventReason": {
+    "account_not_alive": "the account is not in a working state, @SpamBot was not asked",
+    "no_proxy": "the account has no proxy, @SpamBot was not asked",
+    "account_status_transient": "the account is in a temporary state, @SpamBot will be asked again later",
+    "local_night": "night at the account's place, the scheduled check waits for the morning",
     "freed": "the account became free",
     "retry": "automatic retry after a pause",
     "restart": "back in after a start",

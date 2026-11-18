@@ -224,9 +224,11 @@ async def test_the_fleet_budget_counts_probes_against_the_caps(
     await spam_intel.operator_check("a2", confirm_out_of_turn=True)
 
     busy = await spam_intel.budget_status()
-    assert (busy.probes_24h, busy.out_of_turn_24h) == (4, 2)
+    # Four probes; only the SECOND operator check on ``a2`` was out of turn (an account probed an
+    # hour before): the first was an ordinary click and no longer counts (audit F-020).
+    assert (busy.probes_24h, busy.out_of_turn_24h) == (4, 1)
     assert (busy.soft_cap, busy.hard_cap, busy.out_of_turn_warn_at) == (3, 6, 2)
-    assert (busy.daily_cap_reached, busy.out_of_turn_warned) == (True, True)
+    assert (busy.daily_cap_reached, busy.out_of_turn_warned) == (True, False)
 
     clock.advance(hours=25)  # the window rolls: everything aged out
     quiet = await spam_intel.budget_status()

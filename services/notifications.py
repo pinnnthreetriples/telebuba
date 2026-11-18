@@ -40,10 +40,10 @@ _SECONDS_PER_HOUR = 3600
 
 _ThrottleKey = tuple[str | None, NotificationKind]
 
-# A warming account whose loop is running already hears about its own PeerFlood: the cycle result
-# sends the ``quarantine`` notification, so the verdict turning limited from that same PeerFlood
-# would only repeat it.
-_WARMING_LOOP_STATES = frozenset({"active", "sleeping", "flood_wait", "quarantine"})
+# A passive PeerFlood limit repeats the ``quarantine`` notification only when that alert exists:
+# the account is parked in quarantine, or one was handled for it inside the throttle window. A
+# running loop alone says nothing (a PeerFlood from another feature never parks it).
+_QUARANTINE_STATE = "quarantine"
 
 
 class _Runtime:
@@ -81,12 +81,25 @@ async def _label(account_id: str | None) -> str:
     return account_label(account)
 
 
+def _quarantine_told(account_id: str) -> bool:
+    """A ``quarantine`` notification for the account was handled inside the throttle window."""
+    last = _runtime.last_sent.get((account_id, "quarantine"))
+    window = settings.notifications.throttle_hours * _SECONDS_PER_HOUR
+    return last is not None and _runtime.clock() - last < window
+
+
 async def _warming_covers(entry: LogEntry) -> bool:
-    """A passive PeerFlood limit on an account in a running warming loop: ``quarantine`` says it."""
+    """A passive PeerFlood limit the account's own ``quarantine`` alert already told.
+
+    Only that specific duplicate is dropped: the account sits in quarantine, or its quarantine
+    alert went out inside the throttle window. Any other limit is told.
+    """
     if entry.account_id is None or not is_passive_peer_flood(entry):
         return False
+    if _quarantine_told(entry.account_id):
+        return True
     record = await fetch_warming_state(entry.account_id)
-    return record is not None and record.state in _WARMING_LOOP_STATES
+    return record is not None and record.state == _QUARANTINE_STATE
 
 
 async def handle_log_entry(entry: LogEntry) -> None:

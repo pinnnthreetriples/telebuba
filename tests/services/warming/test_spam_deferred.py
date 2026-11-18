@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core.config import settings
 from core.db import (
     create_account,
     fetch_warming_state,
@@ -193,17 +194,52 @@ async def test_a_deferred_recheck_keeps_the_window_and_spends_nothing(
 
 
 @pytest.mark.asyncio
-async def test_a_refused_recheck_is_unreadable_and_counts_toward_the_error_park(
+async def test_a_refused_recheck_waits_in_quarantine_and_never_reaches_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """F-009: three ``no_proxy`` refusals asked nothing, so they cannot add up to ``error``."""
     asker = _install(monkeypatch, _verdict("refused", reason="no_proxy"))
     monkeypatch.setattr(_seams, "refresh_spam_status", asker)
+    await _quarantined(quarantine_count=1)
+    details = []
+    for _ in range(settings.warming.quarantine_unreadable_max + 1):
+        record = await fetch_warming_state("acc-1")
+        assert record is not None
+        before = datetime.now(UTC)
+        result = await _recover_from_quarantine("acc-1", record, before)
+        details.append((result.status, result.detail))
+        stored = await fetch_warming_state("acc-1")
+        assert stored is not None
+        assert stored.state == "quarantine"
+        assert stored.last_event == "quarantine_recheck_deferred"
+        assert stored.last_error == "spam check refused: no_proxy"
+        assert (stored.quarantine_count, stored.spam_unknown_streak) == (1, 0)
+        assert stored.next_run_at is not None
+        wait = datetime.fromisoformat(stored.next_run_at) - before
+        assert wait == timedelta(hours=settings.warming.quarantine_refused_retry_hours)
+    assert set(details) == {("skipped", "recheck deferred")}
+    assert len(asker.forces) == len(details)
+
+
+@pytest.mark.asyncio
+async def test_a_reading_after_a_refusal_releases_and_clears_the_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    refusal = _install(monkeypatch, _verdict("refused", reason="no_proxy"))
+    monkeypatch.setattr(_seams, "refresh_spam_status", refusal)
     record = await _quarantined()
+    await _recover_from_quarantine("acc-1", record, datetime.now(UTC))
+    clean = SpamStatusVerdict(
+        account_id="acc-1", status="clean", checked_at=datetime.now(UTC).isoformat()
+    )
+    refusal.answer = clean
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
     result = await _recover_from_quarantine("acc-1", record, datetime.now(UTC))
-    assert result.detail == "quarantine extended"
+    assert result.detail == "recovered"
     stored = await fetch_warming_state("acc-1")
     assert stored is not None
-    assert stored.spam_unknown_streak == 1
+    assert (stored.state, stored.last_error) == ("sleeping", None)
 
 
 @pytest.mark.asyncio

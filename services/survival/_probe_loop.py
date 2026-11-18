@@ -3,9 +3,11 @@
 One background task, started in the lifespan, makes one pass an hour. A pass first
 journals any death no session check recorded (an action found the account frozen), so
 the counter sees it, then asks about at most one account (``services.survival._due``).
-The ask is the same cached ``refresh_spam_status`` the warming cycle and the hand-off
-use — no second Telegram path: a fresh cached answer is reused, a new one lands in the
-journal as ``spambot_verdict``.
+The ask goes through the same gateway the warming cycle and the hand-off use — no second
+Telegram path — as a MEASUREMENT: the answer is the product, so the gateway never serves it
+from the cache or from passive evidence, and a real one lands in the journal as
+``spambot_verdict``. Should an answer come back that is no probe anyway (a stored reading, the
+fold), it is not remembered as an attempt, like a postponed one.
 Attempts and the per-proxy spacing are remembered in memory, which is safe because one
 uvicorn worker runs; after a restart the journal's own answers still space the asks.
 
@@ -54,6 +56,10 @@ if TYPE_CHECKING:
     from schemas.lifecycle import LifecycleEvent
     from schemas.spam_status import SpamStatusVerdict
     from schemas.warming import WarmingStateRecord
+
+# Answers that asked @SpamBot nothing: the budget said later, or a stored reading or the fold
+# answered. None of them measures a window.
+_NO_MEASUREMENT = frozenset({"deferred", "cache", "evidence"})
 
 # Stdlib sink for the traceback; the persisted event carries only the error type.
 logger = logging.getLogger(__name__)
@@ -163,7 +169,9 @@ async def _ask(account_id: str, proxy_key: str, at: datetime, caller: str) -> Sp
     """Ask through the gateway, remembering the attempt unless the budget said "later".
 
     An answer the budget postponed asked nothing, so it must not start the 24 h retry wait
-    or the per-proxy spacing: the next pass tries again once the budget allows.
+    or the per-proxy spacing: the next pass tries again once the budget allows. The same holds
+    for a stored reading or a passive answer: it left no ``spambot_verdict``, so the window it
+    was meant to measure is still undone.
     """
     attempt_before = _state.attempts.get(account_id)
     proxy_before = _state.asked_by_proxy.get(proxy_key)
@@ -171,7 +179,7 @@ async def _ask(account_id: str, proxy_key: str, at: datetime, caller: str) -> Sp
     _state.asked_by_proxy[proxy_key] = at
     with caller_scope(caller):
         verdict = await refresh_spam_status(account_id)
-    if verdict.served_from == "deferred":
+    if verdict.served_from in _NO_MEASUREMENT:
         _restore(_state.attempts, account_id, attempt_before)
         _restore(_state.asked_by_proxy, proxy_key, proxy_before)
     return verdict

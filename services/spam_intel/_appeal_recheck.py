@@ -28,7 +28,7 @@ from core.config import settings
 from core.repositories.spam_appeals import list_open_appeals
 from schemas.spam_status import is_unasked
 from services.spam_intel import _gateway
-from services.spam_intel._appeal import open_appeal, recheck_at
+from services.spam_intel._appeal import close_ended_appeals, open_appeal, recheck_at
 from services.spam_intel._evidence import verdicts_for
 from services.spam_intel._policy import parse_moment
 
@@ -65,9 +65,9 @@ async def due_appeals(at: datetime) -> list[str]:
         verdict = verdicts[appeal.account_id]
         if verdict.status == "frozen":
             continue
+        # ``None``: a real reading since the filing's due time already ended this appeal's turn.
         when = recheck_at(appeal, verdict, cfg)
-        answered = verdict.last_spambot_at is not None and verdict.last_spambot_at >= when
-        if at >= when and not answered and await open_appeal(appeal.account_id) is not None:
+        if when is not None and at >= when and await open_appeal(appeal.account_id) is not None:
             due.append(appeal.account_id)
     return due
 
@@ -82,6 +82,8 @@ async def run_appeal_rechecks() -> int:
     """Ask the gateway about every due appeal once; the number of accounts asked."""
     at = _gateway.now()
     asked = 0
+    # Persist the close of appeals a stored @SpamBot clean already ended (reads never write).
+    await close_ended_appeals()
     for account_id in await due_appeals(at):
         held = _state.held.get(account_id)
         if held is not None and at < held:

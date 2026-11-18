@@ -2,8 +2,9 @@
 
 One row per distinct normalised text (``text_hash``), with a counter, so a probe that
 answers the same words every time costs one row. The table is bounded: past
-``max_rows`` the least recently seen rows go. The text is redacted by the caller
-(``services._spam_parse.redact_reply``) before it reaches this module.
+``max_rows`` the least recently seen rows go, and :func:`prune_reply_samples` drops the old
+ones by age. The text is redacted by the caller (``services._spam_redact.redact_reply``) before
+it reaches this module.
 """
 
 from __future__ import annotations
@@ -49,6 +50,17 @@ def _upsert_sample(sample: ReplySample, max_rows: int) -> None:
                 .limit(total - max_rows)
             )
             connection.execute(delete(table).where(table.c.text_hash.in_(stale)))
+
+
+def _prune_older_than(cutoff: str) -> None:
+    table = _spam_reply_samples
+    with _get_engine().begin() as connection:
+        connection.execute(delete(table).where(table.c.last_seen_at < cutoff))
+
+
+async def prune_reply_samples(older_than: str) -> None:
+    """Drop every sample last seen before ``older_than`` (an ISO timestamp)."""
+    await asyncio.to_thread(_prune_older_than, older_than)
 
 
 async def upsert_reply_sample(sample: ReplySample, max_rows: int) -> None:

@@ -11,10 +11,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import case, delete, func, select, update
+from sqlalchemy import case, delete, exists, func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.orm import aliased
 
 from core._schema_spam_intel import _spam_probe_attempts, _spam_probe_state
+from core.config import settings
 from core.db import _get_engine
 from schemas.spam_card import ProbeActivity
 from schemas.spam_intel import BudgetSnapshot, ProbeAttemptFinish, ProbeAttemptStart, ProbeState
@@ -24,6 +26,8 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
 _PROBE = "probe"
+_MINUTES_PER_DAY = 24 * 60
+_HOURS_PER_DAY = 24
 _OPERATOR = "operator"
 
 
@@ -56,8 +60,45 @@ def _save_probe_state(state: ProbeState) -> None:
 
 
 async def save_probe_state(state: ProbeState) -> None:
-    """Insert the account's probe state, or replace it."""
+    """Insert the account's probe state, or replace it (every column, the history mark too)."""
     await asyncio.to_thread(_save_probe_state, state)
+
+
+# The row has two writers that must not overwrite each other: the gateway after a probe (the
+# probe fields) and the history sweep (``history_read_at``). Each writes only its own columns.
+_HISTORY_COLUMNS = frozenset({"history_read_at"})
+
+
+def _save_probe_outcome(state: ProbeState) -> None:
+    values = state.model_dump(exclude={"account_id", *_HISTORY_COLUMNS})
+    statement = sqlite_insert(_spam_probe_state).values(account_id=state.account_id, **values)
+    with _get_engine().begin() as connection:
+        connection.execute(
+            statement.on_conflict_do_update(
+                index_elements=[_spam_probe_state.c.account_id], set_=values
+            )
+        )
+
+
+async def save_probe_outcome(state: ProbeState) -> None:
+    """Write the probe fields of the account's state; ``history_read_at`` is left as it is."""
+    await asyncio.to_thread(_save_probe_outcome, state)
+
+
+def _mark_history_read(account_id: str, at: str) -> None:
+    values = {"history_read_at": at, "updated_at": at}
+    statement = sqlite_insert(_spam_probe_state).values(account_id=account_id, **values)
+    with _get_engine().begin() as connection:
+        connection.execute(
+            statement.on_conflict_do_update(
+                index_elements=[_spam_probe_state.c.account_id], set_=values
+            )
+        )
+
+
+async def mark_history_read(account_id: str, at: str) -> None:
+    """Record that the account's @SpamBot dialog was read; the probe fields are left as they are."""
+    await asyncio.to_thread(_mark_history_read, account_id, at)
 
 
 def _start_attempt(attempt: ProbeAttemptStart) -> int:
@@ -108,10 +149,12 @@ def _load_budget_snapshot(
         state_row = connection.execute(
             select(_spam_probe_state).where(_spam_probe_state.c.account_id == account_id)
         ).first()
-        last_account = _scalar(
-            connection,
-            select(func.max(table.c.started_at)).where(probes, table.c.account_id == account_id),
-        )
+        newest = connection.execute(
+            select(table.c.started_at, table.c.outcome, table.c.error_type)
+            .where(probes, table.c.account_id == account_id)
+            .order_by(table.c.started_at.desc(), table.c.id.desc())
+            .limit(1)
+        ).first()
         # Spacing counts a history read as well: it is a conversation with the bot too.
         last_fleet = _scalar(connection, select(func.max(table.c.started_at)))
         last_proxy = (
@@ -137,7 +180,9 @@ def _load_budget_snapshot(
         ).scalar()
     return BudgetSnapshot(
         state=None if state_row is None else _state_from_row(state_row),
-        last_attempt_started_at=last_account,
+        last_attempt_started_at=None if newest is None else str(newest[0]),
+        last_attempt_outcome=None if newest is None else newest[1],
+        last_attempt_error=None if newest is None else newest[2],
         last_fleet_started_at=last_fleet,
         last_proxy_started_at=last_proxy,
         fleet_count_24h=int(fleet[0]),
@@ -200,16 +245,33 @@ async def probe_activity(account_ids: list[str], since: str) -> dict[str, ProbeA
 def _fleet_use(since: str) -> tuple[int, int]:
     table = _spam_probe_attempts
     window = (table.c.kind == _PROBE, table.c.started_at >= since)
+    intel = settings.spam_intel
+    # An operator check is OUT OF TURN when the account was probed before it, past the
+    # coalescing window but inside ``out_of_turn_hours`` (the card's own rule, per account): the
+    # one a click needs a confirmation for. A first check, or one long after the last probe, is
+    # an ordinary click and does not count toward the fleet warning.
+    prior = aliased(table)
+    gap_days = func.julianday(table.c.started_at) - func.julianday(prior.c.started_at)
+    after_a_probe = (
+        exists()
+        .where(
+            prior.c.account_id == table.c.account_id,
+            prior.c.kind == _PROBE,
+            gap_days >= intel.coalesce_minutes / _MINUTES_PER_DAY,
+            gap_days < intel.out_of_turn_hours / _HOURS_PER_DAY,
+        )
+        .correlate(table)
+    )
     with _get_engine().connect() as connection:
         total = connection.execute(select(func.count()).where(*window)).scalar()
-        operator = connection.execute(
-            select(func.count()).where(*window, table.c.purpose == _OPERATOR)
+        out_of_turn = connection.execute(
+            select(func.count()).where(*window, table.c.purpose == _OPERATOR, after_a_probe)
         ).scalar()
-    return int(total or 0), int(operator or 0)
+    return int(total or 0), int(out_of_turn or 0)
 
 
 async def fleet_probe_use(since: str) -> tuple[int, int]:
-    """``(every real probe, the operator's own)`` started since ``since`` across the fleet."""
+    """``(every real probe, the operator's out-of-turn checks)`` started since ``since``."""
     return await asyncio.to_thread(_fleet_use, since)
 
 

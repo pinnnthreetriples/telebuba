@@ -104,6 +104,21 @@ async def test_a_postponed_ask_does_not_start_the_retry_wait_or_the_proxy_spacin
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("served", ["cache", "evidence"])
+async def test_an_answer_that_is_no_probe_does_not_stamp_the_window_as_measured(
+    monkeypatch: pytest.MonkeyPatch, gateway: _Gateway, served: ServedFrom
+) -> None:
+    """A stored reading left no ``spambot_verdict``: the day-7 measurement is still to do."""
+    await _seed(monkeypatch, ("a", "p1"))
+    gateway.script = [served, "probe"]
+    assert await run_probe_pass(now=at(22)) == "a"
+    assert _probe_loop._state.attempts == {}
+    assert _probe_loop._state.asked_by_proxy == {}
+    assert await run_probe_pass(now=at(22.01)) == "a"
+    assert len(gateway.calls) == 2
+
+
+@pytest.mark.asyncio
 async def test_a_real_ask_still_starts_the_retry_wait_and_the_proxy_spacing(
     monkeypatch: pytest.MonkeyPatch, gateway: _Gateway
 ) -> None:
