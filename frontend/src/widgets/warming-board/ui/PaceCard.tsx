@@ -1,6 +1,5 @@
-import { type ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -13,8 +12,6 @@ import { mutationErrorText } from '@/shared/lib';
 import {
   Button,
   CollapsibleCard,
-  DataTable,
-  type DataTableColumnMeta,
   FeedbackMark,
   Icon,
   Input,
@@ -48,7 +45,9 @@ type Row = PaceRow & {
 // `.env` edit. «Осторожно», «Обычно» and «Быстро» apply at once; «Свой» opens the limits
 // for editing and applies on «Сохранить». The table under the buttons is the server's
 // own cadence math, so the visits it shows are the visits the engine plans.
-export function PaceCard() {
+// `bare`: без складной обёртки — содержимое для окна, которое открывает иконка в
+// шапке «В прогреве».
+export function PaceCard({ bare = false }: { bare?: boolean } = {}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const reply = useQuery(warmingTuningQueryOptions()).data;
@@ -110,62 +109,11 @@ export function PaceCard() {
         onEdit: edit,
       }))
     : [];
-  const columns = useMemo<ColumnDef<Row>[]>(
-    () => [
-      {
-        id: 'phase',
-        header: () => t('warming.pace.col.phase'),
-        cell: ({ row }) => t(`warming.console.phase.${row.original.phase}`),
-        meta: { cardSlot: 'title' } satisfies DataTableColumnMeta,
-      },
-      {
-        id: 'cap',
-        header: () => t('warming.pace.col.limit'),
-        cell: ({ row }) => {
-          const { phase, draft: typed, locked, onEdit } = row.original;
-          if (typed === undefined) return row.original.cap;
-          return (
-            <Input
-              size="sm"
-              type="number"
-              min={CAP_MIN}
-              max={CAP_MAX}
-              value={typed}
-              disabled={locked}
-              aria-label={t('warming.pace.limitLabel', {
-                phase: t(`warming.console.phase.${phase}`),
-              })}
-              onChange={(event) => {
-                onEdit(phase, Number(event.target.value));
-              }}
-            />
-          );
-        },
-        meta: { className: 'w-col' } satisfies DataTableColumnMeta,
-      },
-      ...PERSONAS.map((persona): ColumnDef<Row> => ({
-        id: persona,
-        header: () => t(`warming.persona.${persona}.name`),
-        cell: ({ row }) => row.original.visits[persona],
-        meta: { cellClassName: 'text-content-secondary' } satisfies DataTableColumnMeta,
-      })),
-    ],
-    [t],
-  );
-
   const draftOk = draft !== null && capsValid(draft);
   const selected = editing ? 'custom' : (tuning?.preset ?? 'normal');
 
-  return (
-    <CollapsibleCard
-      wrapperClassName="rounded-lg border border-line bg-surface-card"
-      headerClassName="px-4 py-4"
-      bodyClassName="px-4 pb-4"
-      label={t('warming.pace.title')}
-      icon={<Icon name="chart" size={16} />}
-      title={t('warming.pace.title')}
-      subtitle={t('warming.pace.subtitle')}
-    >
+  const body = (
+    <>
       <SegmentedControl
         variant="outline"
         ariaLabel={t('warming.pace.title')}
@@ -183,8 +131,59 @@ export function PaceCard() {
       {tuning ? (
         <>
           <div className="mt-4 type-small-medium">{t('warming.pace.visitsCaption')}</div>
-          <div className="mt-2 overflow-hidden rounded-md border border-line">
-            <DataTable data={rows} columns={columns} getRowId={(row) => row.phase} />
+          {/* Компактная сетка, а не DataTable: пять коротких столбцов помещаются и в
+              узком окне, а карточка на фазу растягивала таблицу на экран. */}
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full type-small tabular-nums">
+              <thead className="text-content-subtle">
+                <tr>
+                  <th className="py-1 pr-2 text-left font-normal">{t('warming.pace.col.phase')}</th>
+                  <th className="px-2 py-1 text-right font-normal">
+                    {t('warming.pace.col.limit')}
+                  </th>
+                  {PERSONAS.map((persona) => (
+                    <th key={persona} className="px-2 py-1 text-right font-normal">
+                      {t(`warming.persona.${persona}.name`)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.phase} className="border-t border-line">
+                    <td className="py-1 pr-2 text-left">
+                      {t(`warming.console.phase.${row.phase}`)}
+                    </td>
+                    <td className="px-2 py-1 text-right type-small-medium">
+                      {row.draft === undefined ? (
+                        row.cap
+                      ) : (
+                        <Input
+                          size="sm"
+                          type="number"
+                          min={CAP_MIN}
+                          max={CAP_MAX}
+                          value={row.draft}
+                          disabled={row.locked}
+                          className="ml-auto w-number text-right"
+                          aria-label={t('warming.pace.limitLabel', {
+                            phase: t(`warming.console.phase.${row.phase}`),
+                          })}
+                          onChange={(event) => {
+                            row.onEdit(row.phase, Number(event.target.value));
+                          }}
+                        />
+                      )}
+                    </td>
+                    {PERSONAS.map((persona) => (
+                      <td key={persona} className="px-2 py-1 text-right text-content-secondary">
+                        {row.visits[persona]}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           <p className="mt-2 type-small">
             {t('warming.pace.factors', { pause: tuning.pause_factor, dm: tuning.dm_factor })}
@@ -244,6 +243,20 @@ export function PaceCard() {
         </div>
       ) : null}
       <FeedbackMark result={save.isSuccess ? 'ok' : undefined} />
+    </>
+  );
+  if (bare) return body;
+  return (
+    <CollapsibleCard
+      wrapperClassName="rounded-lg border border-line bg-surface-card"
+      headerClassName="px-4 py-4"
+      bodyClassName="px-4 pb-4"
+      label={t('warming.pace.title')}
+      icon={<Icon name="chart" size={16} />}
+      title={t('warming.pace.title')}
+      subtitle={t('warming.pace.subtitle')}
+    >
+      {body}
     </CollapsibleCard>
   );
 }

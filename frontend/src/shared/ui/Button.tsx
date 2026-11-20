@@ -72,7 +72,8 @@ const SIZE: Record<'lg' | 'md' | 'sm', { size: ControlSize; weight: string }> = 
 // decision, so those five say it as `className="bg-surface-card"` instead of losing it — but
 // all five live in `widgets/account-edit`, and a fill is not given a name until two
 // independent slices ask for it.
-// `neutral` — залитый чернильный: «остановить» у конвейера и у пула прогрева, «в
+// `neutral` — залитый чернильный: «остановить» у конвейера (пул прогрева с тех пор
+// стал `secondary` с подтверждением — редкое действие не должно быть самым ярким), «в
 // нейроаккаунты» у выпущенного аккаунта. Он тут по тому же порогу, что `dashedMuted`:
 // три независимых слайса набирали его дословно одной строкой `bg-content-primary
 // hover:bg-content-primary` поверх `variant="primary"`, то есть перекрывали заливку и

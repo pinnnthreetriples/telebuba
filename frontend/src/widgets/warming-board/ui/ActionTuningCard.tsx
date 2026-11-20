@@ -181,7 +181,9 @@ function ActionRow({
 // Настройки прогрева ОБЩИЕ (`WarmingSettingsUpdate` не знает про account_id), поэтому
 // карточка одна на страницу и стоит под сеткой аккаунтов, а не в модалке у каждого:
 // шестерёнка на карточке аккаунта обещала настройку «этого аккаунта» и писала всем.
-export function ActionTuningCard() {
+// `bare`: без складной обёртки — содержимое для окна, которое открывает иконка в
+// шапке «В прогреве».
+export function ActionTuningCard({ bare = false }: { bare?: boolean } = {}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const settings = useQuery(warmingSettingsQueryOptions()).data;
@@ -243,16 +245,8 @@ export function ActionTuningCard() {
     );
   };
 
-  return (
-    <CollapsibleCard
-      wrapperClassName="rounded-lg border border-line bg-surface-card"
-      headerClassName="px-4 py-4"
-      bodyClassName="px-4 pb-4"
-      label={t('warming.tune.title')}
-      icon={<Icon name="gear" size={16} />}
-      title={t('warming.tune.title')}
-      subtitle={t('warming.tune.subtitle')}
-    >
+  const body = (
+    <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button
           size="sm"
@@ -344,6 +338,20 @@ export function ActionTuningCard() {
           <FeedbackMark result={save.isSuccess ? 'ok' : undefined} />
         </div>
       </div>
+    </>
+  );
+  if (bare) return body;
+  return (
+    <CollapsibleCard
+      wrapperClassName="rounded-lg border border-line bg-surface-card"
+      headerClassName="px-4 py-4"
+      bodyClassName="px-4 pb-4"
+      label={t('warming.tune.title')}
+      icon={<Icon name="gear" size={16} />}
+      title={t('warming.tune.title')}
+      subtitle={t('warming.tune.subtitle')}
+    >
+      {body}
     </CollapsibleCard>
   );
 }

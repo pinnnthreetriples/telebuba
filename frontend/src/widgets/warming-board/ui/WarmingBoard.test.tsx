@@ -348,7 +348,7 @@ test('the per-card log request uses the served card_log_limit', async () => {
       logLimit={7}
     />,
   );
-  await userEvent.click(screen.getByText('Лог активности'));
+  await userEvent.click(screen.getByText('Подробнее'));
   await waitFor(() => {
     const used = vi
       .mocked(fetch)
@@ -369,7 +369,7 @@ test('the per-card log request scopes itself to warming and spam-status events',
       busyIds={NONE_BUSY}
     />,
   );
-  await userEvent.click(screen.getByText('Лог активности'));
+  await userEvent.click(screen.getByText('Подробнее'));
   await waitFor(() => {
     const scoped = vi.mocked(fetch).mock.calls.some(([input]) => {
       const url = new URL((input as Request).url);
@@ -410,7 +410,7 @@ test('expanding a card fetches that account real activity log', async () => {
   renderWithClient(
     <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
-  await userEvent.click(screen.getAllByText('Лог активности')[0]!);
+  await userEvent.click(screen.getAllByText('Подробнее')[0]!);
   await waitFor(() => {
     // Event codes are localized on the client (not shown as raw snake_case).
     expect(screen.getByText('Подписка на канал')).toBeInTheDocument();
@@ -463,7 +463,7 @@ test('names which channel and which reaction each log action touched', async () 
       channelLabels={{ '@durov': 'Дуров' }}
     />,
   );
-  await userEvent.click(screen.getByText('Лог активности'));
+  await userEvent.click(screen.getByText('Подробнее'));
   await waitFor(() => {
     // The join line names the channel by its configured label…
     expect(screen.getByText('Дуров')).toBeInTheDocument();
@@ -523,7 +523,7 @@ test('shows reaction-skip reasons and stories-seen detail in the log', async () 
       busyIds={NONE_BUSY}
     />,
   );
-  await userEvent.click(screen.getByText('Лог активности'));
+  await userEvent.click(screen.getByText('Подробнее'));
   await waitFor(() => {
     expect(screen.getByText('Реакция не поставлена')).toBeInTheDocument();
   });
@@ -574,7 +574,7 @@ test('says what Telegram refused on a failed warming action', async () => {
       busyIds={NONE_BUSY}
     />,
   );
-  await userEvent.click(screen.getByText('Лог активности'));
+  await userEvent.click(screen.getByText('Подробнее'));
   // A Telethon class name (logEventTelegram.error.*) and a gateway stable code
   // (accounts.profile.code.*) both reach the operator as the real refusal, where
   // the card used to show the action label and nothing else.
@@ -625,7 +625,7 @@ test('explains a cycle that ended badly, and stays quiet about a healthy one', a
       busyIds={NONE_BUSY}
     />,
   );
-  await userEvent.click(screen.getByText('Лог активности'));
+  await userEvent.click(screen.getByText('Подробнее'));
   // The engine writes a cycle's outcome as extra.status; only the bad ones have a
   // label, so a normal cycle keeps its one-line "завершён" instead of gaining a tail.
   await waitFor(() => {
@@ -661,7 +661,7 @@ test('clear button hides the existing log lines', async () => {
   renderWithClient(
     <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
-  await userEvent.click(screen.getAllByText('Лог активности')[0]!);
+  await userEvent.click(screen.getAllByText('Подробнее')[0]!);
   await waitFor(() => {
     expect(screen.getByText('Подписка на канал')).toBeInTheDocument();
   });

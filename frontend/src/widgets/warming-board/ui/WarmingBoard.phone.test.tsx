@@ -70,7 +70,7 @@ test('the visit ending leaves the open screen be, and the next visit opens nothi
   expect(screen.queryByText('screen telebuba-acc-live view')).toBeNull();
 });
 
-test('a phone card lists only the steps its visit runs', () => {
+test('a phone card lists only the steps its visit runs', async () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
@@ -88,10 +88,12 @@ test('a phone card lists only the steps its visit runs', () => {
     </QueryClientProvider>,
   );
 
+  // Механики — подробность: под «Подробнее», а не на виду всегда.
+  await userEvent.click(screen.getByText('Подробнее'));
   expect(screen.getByText('Механики: чтение · реакции · сторис')).toBeTruthy();
 });
 
-test('a card without mechanics falls back to the schema defaults', () => {
+test('a card without mechanics falls back to the schema defaults', async () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
@@ -104,5 +106,7 @@ test('a card without mechanics falls back to the schema defaults', () => {
     </QueryClientProvider>,
   );
 
+  // Механики — подробность: под «Подробнее», а не на виду всегда.
+  await userEvent.click(screen.getByText('Подробнее'));
   expect(screen.getByText('Механики: чтение · вступления · реакции · сторис')).toBeTruthy();
 });
