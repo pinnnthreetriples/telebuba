@@ -40,8 +40,11 @@ _PRESENT: DeviceRefusalCode = "device_already_present"
 _NO_MOBILE_API: DeviceRefusalCode = "mobile_api_not_configured"
 _COOLDOWN: DeviceRefusalCode = "device_code_cooldown"
 # Refusals decided before any code was asked for: they leave the pacing untouched.
+# ``device_api_id_rejected`` reached Telegram, but SendCode was refused outright, so
+# no code went to the account.
 _NOT_REQUESTED: frozenset[DeviceRefusalCode] = frozenset(
     {
+        "device_api_id_rejected",
         "mobile_api_not_configured",
         "device_already_present",
         "device_phone_unknown",

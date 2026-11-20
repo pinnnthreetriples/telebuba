@@ -90,6 +90,7 @@ _UNREACHABLE: DeviceRefusalCode = "device_unreachable"
 _PRIMARY_UNAVAILABLE: DeviceRefusalCode = "device_primary_unavailable"
 _TWOFA_MISSING: DeviceRefusalCode = "device_twofa_missing"
 _USER_MISMATCH: DeviceRefusalCode = "device_user_mismatch"
+_API_ID_REJECTED: DeviceRefusalCode = "device_api_id_rejected"
 # Telegram answers that end the attempt, each with the code the operator is shown.
 _ERROR_CODES: tuple[
     tuple[type[Exception] | tuple[type[Exception], ...], DeviceRefusalCode], ...
@@ -100,6 +101,9 @@ _ERROR_CODES: tuple[
     ),
     (errors.PasswordHashInvalidError, "device_twofa_invalid"),
     (errors.ConnectionLangPackInvalidError, "device_lang_pack_invalid"),
+    # SendCode refused for the app credentials themselves — a leaked official api_id
+    # answers API_ID_PUBLISHED_FLOOD. Only other credentials help; the class name stays.
+    ((errors.ApiIdPublishedFloodError, errors.ApiIdInvalidError), _API_ID_REJECTED),
     (SecondDeviceConflictError, "device_already_present"),
 )
 
@@ -162,7 +166,9 @@ def _classify(request: SecondDeviceSignIn, exc: Exception) -> SecondDeviceResult
         return _refusal(request, "device_flood_wait", flood_wait_seconds=exc.seconds)
     for error_types, code in _ERROR_CODES:
         if isinstance(exc, error_types):
-            return _refusal(request, code)
+            # Which of a grouped refusal it was is kept: published vs invalid api_id.
+            error_type = type(exc).__name__ if code == _API_ID_REJECTED else None
+            return _refusal(request, code, error_type=error_type)
     if isinstance(exc, UNREACHABLE_ERRORS):
         # Deadline expiry, a dead proxy or a dropped socket: retryable, not a refusal.
         return _refusal(request, _UNREACHABLE, error_type=type(exc).__name__)

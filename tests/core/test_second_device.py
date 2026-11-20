@@ -116,6 +116,8 @@ class _NewDevice:
         self.disconnect_error = behaviour.get("disconnect_error")
         # A dead proxy: SendCode is written and no answer ever comes back.
         self.hang_send_code = behaviour.get("hang_send_code", False)
+        # Telegram refuses SendCode itself (e.g. an app api_id it no longer accepts).
+        self.send_code_error = behaviour.get("send_code_error")
         # A code that reaches 777000 while the new client is still connecting.
         self.stale_on_connect = behaviour.get("stale_on_connect", False)
         # The server accepted the code, then the answer never came back.
@@ -140,6 +142,8 @@ class _NewDevice:
         self.calls.append(f"send_code:{phone}")
         if self.hang_send_code:
             await asyncio.Event().wait()
+        if self.send_code_error is not None:
+            raise self.send_code_error
         if self.code_text is not None:
             self.primary.pending = self.code_text
         return SimpleNamespace(phone_code_hash="hash-1", type=SimpleNamespace(length=5))
@@ -359,6 +363,26 @@ async def test_a_sign_in_on_another_user_is_logged_out_and_discarded(
 
     assert result.code == "device_user_mismatch"
     assert made[0].calls[-2:] == ["log_out", "disconnect"], "a sign-in that happened is revoked"
+    await _nothing_kept(made[0])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error",
+    [errors.ApiIdPublishedFloodError(request=None), errors.ApiIdInvalidError(request=None)],
+)
+async def test_an_app_api_id_telegram_refuses_is_named_and_rolled_back(
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    # Seen live: TELEGRAM__MOBILE_API_ID=4 answers SendCode with API_ID_PUBLISHED_FLOOD.
+    await _desktop_account()
+    made = _wire(monkeypatch, _Primary([(1, "hi")]), send_code_error=error)
+
+    result = await authorize_second_device(_request())
+
+    assert (result.code, result.error_type) == ("device_api_id_rejected", type(error).__name__)
+    assert not any(c.startswith("sign_in") for c in made[0].calls), "no code was ever typed"
     await _nothing_kept(made[0])
 
 
