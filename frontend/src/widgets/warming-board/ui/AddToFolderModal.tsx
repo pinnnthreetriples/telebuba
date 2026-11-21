@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next';
 
 import { FOCUS_RING, HEADING_ICON_TILE } from '@/shared/design-system';
 import { cn } from '@/shared/lib';
-import { Button, Icon, Modal, Notice } from '@/shared/ui';
+import { Button, Icon, Modal } from '@/shared/ui';
 
 import { PERSONAS, personaFor, type WarmingFolder } from '../model/folders';
 
 import { FolderSummary } from './FolderGrid';
+import { PoolGeoNotice } from './GeoNotice';
 
 // «В папку»: выбранные готовые аккаунты уходят в папку и стартуют с ЕЁ настройками —
 // длительность, тип по смеси папки, устройство и окно первого захода. Своих настроек
@@ -16,7 +17,7 @@ export function AddToFolderModal({
   accountIds,
   initialFolderId,
   skipped,
-  geoMismatch,
+  geoPairs = [],
   folders,
   startIndex,
   onCreateFolder,
@@ -28,8 +29,9 @@ export function AddToFolderModal({
   initialFolderId?: string;
   // Готовые к прогреву, но не готовые к старту (гейт готовности): не пойдут.
   skipped: number;
-  // Сколько из `accountIds` ждут согласия на несовпадение гео.
-  geoMismatch: number;
+  // Пары стран `PHONE>PROXY` тех из `accountIds`, кто ждёт согласия на несовпадение
+  // гео, — снятые при открытии окна. «Добавить и запустить» соглашается ровно на них.
+  geoPairs?: readonly string[];
   folders: WarmingFolder[];
   // Сколько аккаунтов уже в папке: смесь типов продолжается, а не начинается заново.
   startIndex: (folderId: string) => number;
@@ -44,6 +46,7 @@ export function AddToFolderModal({
   const folder = folders.find((f) => f.id === folderId);
   const title = t('warming.folders.add.title');
   const count = accountIds.length;
+  const geoMismatch = geoPairs.length;
 
   // Сколько каких типов получит эта пачка — то, что оператор и хотел задать смесью.
   const split = (() => {
@@ -119,9 +122,7 @@ export function AddToFolderModal({
           ) : null}
 
           {geoMismatch > 0 ? (
-            <div className="mb-4">
-              <Notice tone="warning">{t('warming.folders.add.geo', { count: geoMismatch })}</Notice>
-            </div>
+            <PoolGeoNotice count={geoMismatch} total={count} pairs={geoPairs} />
           ) : null}
 
           <div className="flex flex-wrap justify-end gap-2">

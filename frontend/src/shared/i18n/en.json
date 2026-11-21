@@ -4108,7 +4108,8 @@
       "accepted": "Geo ≠ (accepted)",
       "banner_one": "Phone and proxy geo differ on {{count}} account",
       "banner_other": "Phone and proxy geo differ on {{count}} accounts",
-      "bannerDetail": "Starting is not blocked: the start dialog asks for consent per country pair."
+      "bannerDetail": "Starting is not blocked: the start dialog asks for consent per country pair.",
+      "pairs": "The consent is recorded for these pairs only: {{pairs}}"
     },
     "handoff": {
       "title": "To neurocomment",
@@ -4366,19 +4367,9 @@
         "normal": "Normal",
         "fast": "Fast"
       },
-      "paceHint": {
-        "inherit": "The folder follows the shared «Warming pace».",
-        "careful": "Lower caps, longer pauses, half the DMs, for this folder only.",
-        "normal": "As configured on the server, even if the shared pace differs.",
-        "fast": "Higher caps, shorter pauses, for this folder only. Age caps still apply."
-      },
       "finish": {
         "keep": "To «Warmed»",
         "handoff": "To neurocomment"
-      },
-      "finishHint": {
-        "keep": "A warmed account waits in «Warmed»; you decide, as today.",
-        "handoff": "A warmed account moves to neurocomment by itself when @SpamBot says clean; otherwise it stays in «Warmed»."
       },
       "chip": {
         "days": "Length",
@@ -4386,7 +4377,8 @@
         "device": "Device",
         "delay": "First visit",
         "pace": "Pace",
-        "finish": "When done"
+        "finish": "When done",
+        "proto": "prototype"
       },
       "modal": {
         "createTitle": "Warm a batch",
@@ -4406,11 +4398,15 @@
         "spreadOff_one": "Every account makes its first visit in about {{count}} hour",
         "spreadOff_other": "Every account makes its first visit in about {{count}} hours",
         "finish": "When an account is warmed",
-        "impact_one": "Changes reach {{count}} account: type and pace from the next visit; length becomes the new target; device and first visit apply to new accounts only.",
-        "impact_other": "Changes reach {{count}} accounts: type and pace from the next visit; length becomes the new target; device and first visit apply to new accounts only.",
+        "impact_one": "{{count}} account in the folder is running: it keeps the settings it started with. Accounts added after saving get the new ones.",
+        "impact_other": "{{count}} accounts in the folder are running: they keep the settings they started with. Accounts added after saving get the new ones.",
         "delete": "Delete folder",
         "create": "Create folder",
-        "save": "Save"
+        "save": "Save",
+        "scope": "Accounts you start in this folder get its length, types, device and first visit at the moment they start. Accounts already running keep their own settings. The folder is stored in this browser only.",
+        "protoSection": "Below is a prototype: saved with the folder, but warming does not read it yet.",
+        "paceProto": "Warming follows the shared «Warming pace» — a folder pace of its own comes in the next stage.",
+        "finishProto": "A warmed account waits in «Warmed» and you hand it to neurocommenting — there is no automatic hand-off yet."
       },
       "add": {
         "button": "To folder",
@@ -4420,8 +4416,6 @@
         "subtitle_other": "{{count}} ready accounts start with the folder settings",
         "newFolder": "New folder",
         "split": "Types in this batch: {{split}}",
-        "geo_one": "{{count}} account has a phone/proxy country mismatch",
-        "geo_other": "{{count}} accounts have a phone/proxy country mismatch",
         "start_one": "Add and start {{count}}",
         "start_other": "Add and start {{count}}"
       },
@@ -4453,7 +4447,9 @@
         "none": "This folder accounts have not visited channels yet",
         "nowhere_one": "{{count}} account has not visited channels yet",
         "nowhere_other": "{{count}} accounts have not visited channels yet"
-      }
+      },
+      "allWarmed_one": "Every account in this folder is warmed — {{count}} is in «Warmed».",
+      "allWarmed_other": "Every account in this folder is warmed — {{count}} are in «Warmed»."
     },
     "states": {
       "retry": "Retry",
@@ -4462,7 +4458,9 @@
       "nothingBody": "Add accounts — new ones show up here under Ready to warm, and you can sort them into folders.",
       "nothingAction": "Go to accounts",
       "dropOnFolder": "Drop on a folder to add the account to it",
-      "dropHere": "Drop here to add the account to this folder"
+      "dropHere": "Drop here to add the account to this folder",
+      "dropped_one": "{{count}} not started: already starting, running or no longer ready",
+      "dropped_other": "{{count}} not started: already starting, running or no longer ready"
     }
   },
   "auth": {

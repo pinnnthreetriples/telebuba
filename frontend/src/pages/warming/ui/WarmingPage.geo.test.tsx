@@ -59,6 +59,7 @@ test('a mismatched account starts only after the tick, and the consent travels',
   expect((await startBodies())[0]).toMatchObject({
     account_id: 'mx-1',
     accept_geo_mismatch: true,
+    accepted_geo_pair: 'MX>US',
   });
 });
 
@@ -101,7 +102,7 @@ test('the pool can start only the accounts whose geo matches', async () => {
   });
 });
 
-test('«Запустить все» starts the whole pool with the one consent', async () => {
+test('«Запустить все» starts the whole pool, consenting only where it warned', async () => {
   serveBoard({
     ...BOARD,
     idle: [mismatched('mx-1'), account('ok-1', 'idle')],
@@ -118,5 +119,10 @@ test('«Запустить все» starts the whole pool with the one consent',
   });
   const bodies = await startBodies();
   expect(bodies.map((body) => body.account_id).sort()).toEqual(['mx-1', 'ok-1']);
-  expect(bodies.every((body) => body.accept_geo_mismatch === true)).toBe(true);
+  expect(bodies.find((body) => body.account_id === 'mx-1')).toMatchObject({
+    accept_geo_mismatch: true,
+    accepted_geo_pair: 'MX>US',
+  });
+  // ok-1 showed no mismatch: no consent goes out for it.
+  expect(bodies.find((body) => body.account_id === 'ok-1')?.accept_geo_mismatch).toBe(false);
 });

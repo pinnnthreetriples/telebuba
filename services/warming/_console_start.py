@@ -2,7 +2,9 @@
 
 Geo never refuses a start: a phone/proxy country mismatch is a warning the operator
 can accept. The acceptance is stored after the start went through, as the pair it
-covers (``_console.geo_pair``), so a later proxy in another country asks again.
+covers (``_console.geo_pair``), so a later proxy in another country asks again. The
+request names the pair the dialog showed (``accepted_geo_pair``), and nothing is stored
+when that is no longer the account's pair.
 
 «Вернуть в прогрев» is the same start from the same dialog (days, persona, delay,
 device, geo consent) on a graduated account: it warms again FROM ZERO as the account's
@@ -27,12 +29,25 @@ if TYPE_CHECKING:
 
 
 async def _record_geo_consent(data: StartWarmingRequest) -> bool:
-    """Store the accepted country pair; ``False`` when there was nothing to accept."""
-    if not data.accept_geo_mismatch:
+    """Store the accepted country pair; ``False`` when there was nothing to accept.
+
+    Only the pair the operator was shown and confirmed is stored. A request that names
+    no pair, or one the account no longer has (its proxy changed while the dialog was
+    open), starts the account without a consent, and the board keeps asking.
+    """
+    if not data.accept_geo_mismatch or data.accepted_geo_pair is None:
         return False
     account = await fetch_account(data.account_id)
     pair = geo_pair(account_geo(account)) if account is not None else None
     if pair is None:
+        return False
+    if pair != data.accepted_geo_pair:
+        await log_event(
+            "WARNING",
+            "warming_geo_consent_stale",
+            account_id=data.account_id,
+            extra={"shown": data.accepted_geo_pair, "current": pair},
+        )
         return False
     await store_geo_ack(data.account_id, pair)
     await log_event(

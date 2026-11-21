@@ -11,6 +11,9 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, StringConstraints
 
+# A consent key as ``services.warming._console.geo_pair`` builds it.
+GeoPair = Annotated[str, StringConstraints(pattern=r"^[A-Z]{2}>[A-Z]{2}$")]
+
 # The start dialog's "first cycle in" choice: one hour up to a full day.
 StartDelayHours = Annotated[int, Field(ge=1, le=24)]
 
@@ -28,6 +31,10 @@ class StartWindow(BaseModel):
     # The operator saw the phone/proxy country mismatch and starts anyway; the start is
     # never refused for geo, this only records the consent for that country pair.
     accept_geo_mismatch: bool = False
+    # The pair the dialog showed, ``PHONE>PROXY`` (``MX>US``). The consent is stored only
+    # when it is still the account's pair: a proxy changed while the dialog was open, or
+    # a batch start that never showed this account a mismatch, records nothing.
+    accepted_geo_pair: GeoPair | None = None
 
 
 class StartPreviewRequest(BaseModel):

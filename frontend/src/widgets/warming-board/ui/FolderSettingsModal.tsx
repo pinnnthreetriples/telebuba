@@ -64,9 +64,10 @@ function Section({
 }
 
 // «Прогрев пачки»: настройки папки. Верх — то же, что окно «Прогрев аккаунта»
-// (длительность, тип, устройство, первый заход), ниже — темп (сейчас он общий на весь
-// прогрев) и что делать с аккаунтом, когда папка его догрела. Тонкая настройка
-// действий по папке — следующий этап.
+// (длительность, тип, устройство, первый заход): их получает каждый аккаунт, запущенный
+// в папку, — в момент запуска; уже запущенные не меняются. Ниже — темп и «когда
+// догрет»: прототип, сервер их не читает (своё у папки — следующий этап), и окно так и
+// говорит. Сама папка живёт только в этом браузере.
 export function FolderSettingsModal({
   initial,
   members,
@@ -111,10 +112,13 @@ export function FolderSettingsModal({
             </div>
             <div className="flex-1 type-h2">{title}</div>
           </div>
-          <div className="mb-6 type-body text-content-muted">
+          <div className="mb-4 type-body text-content-muted">
             {creating
               ? t('warming.folders.modal.createSubtitle')
               : t('warming.folders.modal.editSubtitle', { count: members })}
+          </div>
+          <div className="mb-6">
+            <Notice tone="info">{t('warming.folders.modal.scope')}</Notice>
           </div>
 
           <Section title={t('warming.folders.modal.name')}>
@@ -253,10 +257,13 @@ export function FolderSettingsModal({
             </div>
           </Section>
 
+          <div className="mb-3 border-t border-line pt-4 type-small text-content-muted">
+            {t('warming.folders.modal.protoSection')}
+          </div>
           <Section
             title={t('warming.pace.title')}
             badge={prototype}
-            hint={t(`warming.folders.paceHint.${draft.pace}`)}
+            hint={t('warming.folders.modal.paceProto')}
           >
             <SegmentedControl
               variant="outline"
@@ -271,7 +278,8 @@ export function FolderSettingsModal({
 
           <Section
             title={t('warming.folders.modal.finish')}
-            hint={t(`warming.folders.finishHint.${draft.finish}`)}
+            badge={prototype}
+            hint={t('warming.folders.modal.finishProto')}
           >
             <SegmentedControl
               variant="outline"

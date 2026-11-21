@@ -45,13 +45,15 @@ type StartTarget =
       poolAccountIds?: undefined;
       poolSkipped?: undefined;
       poolGeoMismatch?: undefined;
+      poolGeoPairs?: undefined;
     }
   | {
       poolAccountIds: string[];
       // Idle accounts left out because they are not ready.
       poolSkipped?: number;
-      // How many of `poolAccountIds` still need a geo consent.
+      // How many of `poolAccountIds` still need a geo consent, and their pairs.
       poolGeoMismatch?: number;
+      poolGeoPairs?: readonly string[];
       accountId?: undefined;
       phone?: undefined;
       geo?: undefined;
@@ -319,7 +321,11 @@ export function WarmDaysModal({
             />
           ) : null}
           {pool && poolMismatch > 0 ? (
-            <PoolGeoNotice count={poolMismatch} total={target.poolAccountIds.length} />
+            <PoolGeoNotice
+              count={poolMismatch}
+              total={target.poolAccountIds.length}
+              pairs={target.poolGeoPairs}
+            />
           ) : null}
 
           {pool && poolMismatch > 0 ? (

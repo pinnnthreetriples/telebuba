@@ -72,7 +72,7 @@ test('with nothing to warm at all the page explains where accounts come from', a
   serve({ ...BOARD, idle: [], warming: [], warmed: [] });
   renderWithClient(<WarmingPage />);
   expect(await screen.findByText('Пока нечего прогревать')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'К аккаунтам' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'К аккаунтам' })).toHaveAttribute('href', '/');
 });
 
 test('picking ready accounts brings up the action bar, and closing it clears the pick', async () => {
