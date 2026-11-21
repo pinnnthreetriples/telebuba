@@ -2281,6 +2281,7 @@
     "masstagging_account_halted": "Mass tagging: the account left — its session does not work",
     "masstagging_spamblock": "Mass tagging: spam block — the account left",
     "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts",
+    "warming_geo_consent_stale": "Geo consent not recorded: the proxy country changed after the dialog showed it",
     "warming_geo_mismatch_accepted": "Operator accepted the phone/proxy geo mismatch",
     "warming_resumed": "Account returned to warming, day count continued",
     "account_device_added": "Device added",
