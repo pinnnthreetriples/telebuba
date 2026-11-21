@@ -74,7 +74,7 @@ async def test_an_accepted_mismatch_is_stored_as_its_country_pair() -> None:
     await _account()
 
     await warming.start_warming_with_consent(
-        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True)
+        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True, accepted_geo_pair="MX>US")
     )
 
     record = await fetch_warming_state("acc-1")
@@ -96,11 +96,43 @@ async def test_a_mismatch_never_refuses_the_start_and_unchecked_stores_nothing()
 
 
 @pytest.mark.asyncio
+async def test_a_consent_naming_no_pair_stores_nothing() -> None:
+    # A batch start that never showed this account a mismatch sends no pair.
+    await _account()
+
+    await warming.start_warming_with_consent(
+        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True)
+    )
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "active"
+    assert record.geo_ack is None
+
+
+@pytest.mark.asyncio
+async def test_a_consent_for_the_pair_before_a_proxy_change_stores_nothing() -> None:
+    # The dialog showed MX>DE; the proxy moved to the US before the operator confirmed.
+    await _account()
+
+    card = await warming.start_warming_with_consent(
+        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True, accepted_geo_pair="MX>DE")
+    )
+
+    record = await fetch_warming_state("acc-1")
+    assert card.state == "active"
+    assert record is not None
+    assert record.geo_ack is None
+    (board_card,) = (await warming.load_board()).warming
+    assert (board_card.geo_status, board_card.geo_accepted) == ("mismatch", False)
+
+
+@pytest.mark.asyncio
 async def test_consent_without_a_mismatch_stores_nothing() -> None:
     await _account(proxy_country="MX")
 
     await warming.start_warming_with_consent(
-        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True)
+        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True, accepted_geo_pair="MX>US")
     )
 
     record = await fetch_warming_state("acc-1")
@@ -113,7 +145,7 @@ async def test_consent_for_an_account_without_a_proxy_stores_nothing() -> None:
     await _account(proxy_country=None)
 
     await warming.start_warming_with_consent(
-        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True)
+        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True, accepted_geo_pair="MX>US")
     )
 
     record = await fetch_warming_state("acc-1")
@@ -125,7 +157,9 @@ async def test_consent_for_an_account_without_a_proxy_stores_nothing() -> None:
 async def test_an_unknown_account_is_refused_before_any_consent() -> None:
     with pytest.raises(warming.UnknownAccountError):
         await warming.start_warming_with_consent(
-            StartWarmingRequest(account_id="ghost", accept_geo_mismatch=True)
+            StartWarmingRequest(
+                account_id="ghost", accept_geo_mismatch=True, accepted_geo_pair="MX>US"
+            )
         )
 
 
@@ -133,7 +167,7 @@ async def test_an_unknown_account_is_refused_before_any_consent() -> None:
 async def test_the_board_shows_the_consent_only_for_the_pair_it_was_given_for() -> None:
     await _account()
     await warming.start_warming_with_consent(
-        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True)
+        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True, accepted_geo_pair="MX>US")
     )
 
     (card,) = (await warming.load_board()).warming
@@ -228,7 +262,9 @@ async def test_rewarm_records_a_geo_consent_too() -> None:
     await _account()
     await _graduate(warmed_days=5)
 
-    await warming.rewarm_account(StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True))
+    await warming.rewarm_account(
+        StartWarmingRequest(account_id="acc-1", accept_geo_mismatch=True, accepted_geo_pair="MX>US")
+    )
 
     record = await fetch_warming_state("acc-1")
     assert record is not None

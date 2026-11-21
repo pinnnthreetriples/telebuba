@@ -20,6 +20,8 @@ const { WarmingPage } = await import('./WarmingPage');
 test('renders the board, channels and settings from live data', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);
+  // Каналы прогрева теперь открываются иконкой в шапке «В прогреве».
+  await userEvent.click(await screen.findByRole('button', { name: 'Каналы прогрева' }));
   await waitFor(() => {
     expect(screen.getByText('idle-1')).toBeInTheDocument();
   });
@@ -33,7 +35,7 @@ test('disables warming for a not-ready account and shows the reason', async () =
   await waitFor(() => {
     expect(screen.getByText('idle-2')).toBeInTheDocument();
   });
-  const blocked = screen.getByText('Недоступен');
+  const blocked = screen.getByRole('button', { name: 'Недоступен' });
   expect(blocked).toBeDisabled();
   expect(blocked.getAttribute('title')).toBe('нет прокси');
   // A disabled button never shows its tooltip, so the reason is also on the card
@@ -60,8 +62,10 @@ test('with the readiness check off a not-ready account can start; its reasons st
   expect(starts).toHaveLength(2);
   for (const button of starts) expect(button).toBeEnabled();
   // The not-ready row still names why, in the warning tone, and the button points at it.
-  const reason = screen.getByText('нет прокси');
-  expect(reason).toHaveClass('text-warning-deep');
+  // Причины свёрнуты в один жёлтый чип «⚠ N»: список — в имени и подсказке.
+  const reason = screen.getByRole('button', { name: 'нет прокси' });
+  expect(reason).toHaveTextContent('1');
+  expect(reason.querySelector('.text-warning-deep')).not.toBeNull();
   expect(starts[1]).toHaveAccessibleDescription('нет прокси');
 });
 
@@ -95,8 +99,8 @@ test('warming row actions meet the touch target size', async () => {
   renderWithClient(<WarmingPage />);
   await waitFor(() => expect(screen.getByText('idle-1')).toBeInTheDocument());
 
-  expect(screen.getByText('Прогреть').closest('button')).toHaveClass(
-    'h-touch',
+  expect(screen.getByRole('button', { name: 'Прогреть' })).toHaveClass(
+    'size-icon',
     'focus-visible:outline-action-primary',
   );
   expect(screen.getByLabelText('Обратно в прогрев')).toHaveClass('size-touch');
@@ -433,7 +437,7 @@ test('a live SSE event refetches an expanded card activity log', async () => {
   await waitFor(() => {
     expect(screen.getByText('warm-1')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getAllByText('Лог активности')[0]!);
+  await userEvent.click(screen.getAllByText('Подробнее')[0]!);
   const logCalls = () =>
     vi
       .mocked(fetch)
@@ -460,7 +464,7 @@ test('starts an idle account', async () => {
   await waitFor(() => {
     expect(screen.getByText('idle-1')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByText('Прогреть'));
+  await userEvent.click(screen.getByRole('button', { name: 'Прогреть' }));
   await userEvent.click(screen.getByText('Запустить прогрев'));
   let startCall: [unknown, ...unknown[]] | undefined;
   await waitFor(() => {
@@ -542,6 +546,8 @@ test('with the readiness check off the pool start takes every idle account', asy
 test('removing a channel asks for confirmation, then calls the remove endpoint', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);
+  // Каналы прогрева теперь открываются иконкой в шапке «В прогреве».
+  await userEvent.click(await screen.findByRole('button', { name: 'Каналы прогрева' }));
   await waitFor(() => {
     expect(screen.getByText('@news')).toBeInTheDocument();
   });
@@ -585,4 +591,29 @@ test('the pool start warms each account through its primary device', async () =>
       expect.objectContaining({ account_id: 'phone', device_mode: 'mobile' }),
     ]),
   );
+});
+
+test('stopping the whole pool asks first, and cancelling stops nothing', async () => {
+  routeApi();
+  renderWithClient(<WarmingPage />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Остановить пул' }));
+  expect(await screen.findByText('Остановить весь прогрев?')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+  await waitFor(() => {
+    expect(screen.queryByText('Остановить весь прогрев?')).toBeNull();
+  });
+  const stopCalls = vi
+    .mocked(fetch)
+    .mock.calls.filter(
+      ([input]) => new URL((input as Request).url).pathname === '/api/v1/warming/stop',
+    );
+  expect(stopCalls).toHaveLength(0);
+});
+
+test('zero errors in the header are not painted as an alarm', async () => {
+  routeApi();
+  renderWithClient(<WarmingPage />);
+  const label = await screen.findByText('ошибки');
+  const tile = label.parentElement ?? label;
+  expect(tile.querySelector('.text-danger-deep, .text-danger')).toBeNull();
 });

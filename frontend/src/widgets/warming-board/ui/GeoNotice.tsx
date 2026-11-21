@@ -52,13 +52,35 @@ export function GeoConsentNotice({
   );
 }
 
-// The pool's one consent: how many of the accounts it would start have a mismatch.
-export function PoolGeoNotice({ count, total }: { count: number; total: number }) {
-  const { t } = useTranslation();
+// A batch's one consent: how many of the accounts it would start have a mismatch, and
+// which country pairs. The consent covers exactly these pairs, so they are named.
+export function PoolGeoNotice({
+  count,
+  total,
+  pairs = [],
+}: {
+  count: number;
+  total: number;
+  // `PHONE>PROXY` per account the dialog warns about.
+  pairs?: readonly string[];
+}) {
+  const { t, i18n } = useTranslation();
+  const tally = new Map<string, number>();
+  for (const pair of pairs) tally.set(pair, (tally.get(pair) ?? 0) + 1);
+  const named = [...tally].map(([pair, n]) => {
+    const [phone, proxy] = pair.split('>');
+    const text = `${regionName(phone, i18n.language)} → ${regionName(proxy, i18n.language)}`;
+    return n > 1 ? `${text} ×${String(n)}` : text;
+  });
   return (
     <div className="mb-6">
       <Notice tone="warning">
         <p className="m-0 type-body-medium">{t('warming.geo.pool', { count, total })}</p>
+        {named.length ? (
+          <p className="m-0 mt-1 type-small">
+            {t('warming.geo.pairs', { pairs: named.join(', ') })}
+          </p>
+        ) : null}
         <p className="m-0 mt-1 type-small">{t('warming.geo.poolDetail')}</p>
       </Notice>
     </div>

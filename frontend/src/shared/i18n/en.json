@@ -2282,6 +2282,7 @@
     "masstagging_account_halted": "Mass tagging: the account left — its session does not work",
     "masstagging_spamblock": "Mass tagging: spam block — the account left",
     "masstagging_contacts_unavailable": "Mass tagging: could not read the account's contacts",
+    "warming_geo_consent_stale": "Geo consent not recorded: the proxy country changed after the dialog showed it",
     "warming_geo_mismatch_accepted": "Operator accepted the phone/proxy geo mismatch",
     "warming_resumed": "Account returned to warming, day count continued",
     "account_device_added": "Device added",
@@ -3692,13 +3693,24 @@
       "subtitle_one": "{{count}} account — each starts at its own moment inside the window",
       "subtitle_other": "{{count}} accounts — each starts at its own moment inside the window",
       "skipped_one": "{{count}} account is not ready to warm and will not start",
-      "skipped_other": "{{count}} accounts are not ready to warm and will not start"
+      "skipped_other": "{{count}} accounts are not ready to warm and will not start",
+      "stopConfirm": {
+        "title": "Stop all warming?",
+        "body_one": "{{count}} account stops warming and returns to Ready. The next start begins anew.",
+        "body_other": "{{count}} accounts stop warming and return to Ready. The next start begins anew.",
+        "confirm": "Stop"
+      }
     },
     "ready": {
       "title": "Ready to warm",
       "empty": "All available accounts are warming",
       "start": "Warm",
-      "unavailable": "Unavailable"
+      "unavailable": "Unavailable",
+      "pickAll": "Select all",
+      "picked": "Selected: {{count}}",
+      "clearPick": "Clear",
+      "startPicked": "Warm · {{count}}",
+      "pickOne": "Select {{name}}"
     },
     "howto": {
       "title": "How warming works",
@@ -3750,7 +3762,7 @@
       "dayProgress_other": "{{days}} / {{target}} days",
       "idleDays_one": "({{count}} idle day not counted)",
       "idleDays_other": "({{count}} idle days not counted)",
-      "logToggle": "Activity log",
+      "logToggle": "Details",
       "storiesSeen": "stories viewed: {{count}}",
       "storiesNone": "no active stories",
       "logLoading": "Loading log…",
@@ -4099,7 +4111,8 @@
       "accepted": "Geo ≠ (accepted)",
       "banner_one": "Phone and proxy geo differ on {{count}} account",
       "banner_other": "Phone and proxy geo differ on {{count}} accounts",
-      "bannerDetail": "Starting is not blocked: the start dialog asks for consent per country pair."
+      "bannerDetail": "Starting is not blocked: the start dialog asks for consent per country pair.",
+      "pairs": "The consent is recorded for these pairs only: {{pairs}}"
     },
     "handoff": {
       "title": "To neurocomment",
@@ -4314,6 +4327,143 @@
       "loading": "Loading waves…",
       "empty": "The account has not been warmed yet",
       "error": "Could not load the waves"
+    },
+    "folders": {
+      "unfiled": "No folder",
+      "create": "Folder",
+      "settings": "Folder settings",
+      "prototype": "prototype: not applied yet",
+      "empty": "Nobody warms in this folder yet. Use «To folder» on «Ready to warm».",
+      "caption_one": "{{count}} account · {{warming}} warming",
+      "caption_other": "{{count}} accounts · {{warming}} warming",
+      "daysValue_one": "{{count}} day",
+      "daysValue_other": "{{count}} days",
+      "delayValue_one": "in {{count}} h",
+      "delayValue_other": "in {{count}} h",
+      "delaySpread_one": "spread over {{count}} h",
+      "delaySpread_other": "spread over {{count}} h",
+      "mixValue": "mix {{calm}} / {{normal}} / {{active}}",
+      "mixOnly": {
+        "calm": "all calm",
+        "normal": "all normal",
+        "active": "all active"
+      },
+      "mixPreset": {
+        "calm": "Calm",
+        "normal": "Normal",
+        "active": "Active",
+        "mixed": "Mixed"
+      },
+      "device": {
+        "desktop": "Desktop",
+        "mobile": "Phone",
+        "primary": "Account primary"
+      },
+      "deviceHint": {
+        "desktop": "An account without a desktop sign-in warms on its primary device.",
+        "mobile": "An account without a phone warms on its primary device.",
+        "primary": "Each account warms where it signed in first, like «Start pool»."
+      },
+      "pace": {
+        "inherit": "Shared",
+        "careful": "Careful",
+        "normal": "Normal",
+        "fast": "Fast"
+      },
+      "finish": {
+        "keep": "To «Warmed»",
+        "handoff": "To neurocomment"
+      },
+      "chip": {
+        "days": "Length",
+        "persona": "Types",
+        "device": "Device",
+        "delay": "First visit",
+        "pace": "Pace",
+        "finish": "When done",
+        "proto": "prototype"
+      },
+      "modal": {
+        "createTitle": "Warm a batch",
+        "editTitle": "Folder settings",
+        "createSubtitle": "Accounts added to the folder start with these settings",
+        "editSubtitle_one": "{{count}} account in the folder",
+        "editSubtitle_other": "{{count}} accounts in the folder",
+        "name": "Folder name",
+        "namePlaceholder": "E.g. Batch Nov 21 · KZ",
+        "personas": "User types",
+        "personasHint": "Each account in the batch gets a type from this mix. A young account still stays calm.",
+        "mixSum": "The total must be 100%, now {{sum}}%",
+        "mobileLimits": "On a phone warming does not join channels, send DMs or run extras.",
+        "spread": "Spread the batch start",
+        "spreadOn_one": "Each account wakes at its own moment within {{count}} hour",
+        "spreadOn_other": "Each account wakes at its own moment within {{count}} hours",
+        "spreadOff_one": "Every account makes its first visit in about {{count}} hour",
+        "spreadOff_other": "Every account makes its first visit in about {{count}} hours",
+        "finish": "When an account is warmed",
+        "impact_one": "{{count}} account in the folder is running: it keeps the settings it started with. Accounts added after saving get the new ones.",
+        "impact_other": "{{count}} accounts in the folder are running: they keep the settings they started with. Accounts added after saving get the new ones.",
+        "delete": "Delete folder",
+        "create": "Create folder",
+        "save": "Save",
+        "scope": "Accounts you start in this folder get its length, types, device and first visit at the moment they start. Accounts already running keep their own settings. The folder is stored in this browser only.",
+        "protoSection": "Below is a prototype: saved with the folder, but warming does not read it yet.",
+        "paceProto": "Warming follows the shared «Warming pace» — a folder pace of its own comes in the next stage.",
+        "finishProto": "A warmed account waits in «Warmed» and you hand it to neurocommenting — there is no automatic hand-off yet."
+      },
+      "add": {
+        "button": "To folder",
+        "title": "Add to folder",
+        "pick": "Folder",
+        "subtitle_one": "{{count}} ready account starts with the folder settings",
+        "subtitle_other": "{{count}} ready accounts start with the folder settings",
+        "newFolder": "New folder",
+        "split": "Types in this batch: {{split}}",
+        "start_one": "Add and start {{count}}",
+        "start_other": "Add and start {{count}}"
+      },
+      "back": "All folders",
+      "card": {
+        "day_one": "day {{from}} of {{count}}",
+        "day_other": "day {{from}} of {{count}}",
+        "dayRange_one": "days {{from}}–{{to}} of {{count}}",
+        "dayRange_other": "days {{from}}–{{to}} of {{count}}",
+        "running_one": "{{count}} running",
+        "running_other": "{{count}} running",
+        "attention_one": "{{count}} needs attention",
+        "attention_other": "{{count}} need attention",
+        "empty": "Empty for now: add accounts with «To folder»",
+        "unfiledMeta": "Started one by one, each with its own settings",
+        "allDone": "all warmed",
+        "done_one": "{{count}} warmed",
+        "done_other": "{{count}} warmed"
+      },
+      "dialoguesAll": "Every chatting pair across all folders. The account folder sits next to the name.",
+      "tabs": {
+        "label": "Folder section",
+        "accounts": "Accounts",
+        "dialogues": "Chats",
+        "channels": "Channels"
+      },
+      "channels": {
+        "note": "This shows where the folder accounts were last. Their full channel list and a folder channel pool come next.",
+        "none": "This folder accounts have not visited channels yet",
+        "nowhere_one": "{{count}} account has not visited channels yet",
+        "nowhere_other": "{{count}} accounts have not visited channels yet"
+      },
+      "allWarmed_one": "Every account in this folder is warmed — {{count}} is in «Warmed».",
+      "allWarmed_other": "Every account in this folder is warmed — {{count}} are in «Warmed»."
+    },
+    "states": {
+      "retry": "Retry",
+      "stale": "No connection to the server — showing data from {{time}}. It refreshes once the connection is back.",
+      "nothingTitle": "Nothing to warm yet",
+      "nothingBody": "Add accounts — new ones show up here under Ready to warm, and you can sort them into folders.",
+      "nothingAction": "Go to accounts",
+      "dropOnFolder": "Drop on a folder to add the account to it",
+      "dropHere": "Drop here to add the account to this folder",
+      "dropped_one": "{{count}} not started: already starting, running or no longer ready",
+      "dropped_other": "{{count}} not started: already starting, running or no longer ready"
     }
   },
   "auth": {

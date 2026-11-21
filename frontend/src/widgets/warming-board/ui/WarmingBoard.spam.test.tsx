@@ -39,3 +39,27 @@ test('only the card the backend flags warns that @SpamBot is silent', () => {
   expect(warnings).toHaveLength(1);
   expect(warnings[0]).toHaveAttribute('role', 'status');
 });
+
+test('the card frame stays plain unless something needs a look', () => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <WarmingBoard
+        warming={[
+          account('acc-silent', true),
+          account('acc-quiet', false),
+          { ...account('acc-broken', false), state: 'error' },
+        ]}
+        onStop={vi.fn()}
+        onPromote={vi.fn()}
+        busyIds={new Set<string>()}
+      />
+    </QueryClientProvider>,
+  );
+
+  // The card is the closest frame around the name; white for all, the border tells.
+  const frame = (id: string) => screen.getByTitle(id).closest('.rounded-md.border');
+  expect(frame('acc-quiet')).toHaveClass('border-line', 'bg-surface-card');
+  expect(frame('acc-silent')).toHaveClass('border-warning-line');
+  expect(frame('acc-broken')).toHaveClass('border-danger-line');
+});

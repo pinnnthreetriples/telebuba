@@ -2,9 +2,11 @@ import type { TFunction } from 'i18next';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { ReactNode } from 'react';
+
 import type { WarmingAccountState } from '@/shared/api';
-import { formatLocalTime } from '@/shared/lib';
-import { Icon, Notice, ProgressBar } from '@/shared/ui';
+import { cn, formatLocalTime } from '@/shared/lib';
+import { Icon, type IconName, ProgressBar } from '@/shared/ui';
 
 import { countdown, MINUTE_MS } from '../lib/countdown';
 import { readinessReasonKey, trustTone } from '../lib/trust';
@@ -27,6 +29,9 @@ function useMinuteClock(): number {
   return now;
 }
 
+// Чип карточки: тонкая пилюля с рамкой, текст строки — её подпись.
+const CHIP = 'inline-flex items-center gap-1 rounded-full border border-line px-2';
+
 // Row 2: phase with its bar to the next one, persona, trust as a colour, spam status.
 export function PhaseRow({ account }: { account: WarmingAccountState }) {
   const { t } = useTranslation();
@@ -37,31 +42,42 @@ export function PhaseRow({ account }: { account: WarmingAccountState }) {
       ? account.spam_status
       : 'unknown';
   const next = account.days_to_next_phase;
+  const phaseLabel = t('warming.console.phaseLabel', {
+    phase: t(`warming.console.phase.${phase}`),
+  });
   return (
-    <div className="mb-3">
-      <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 type-small">
-        <span className="type-small-medium text-content-primary">
-          {t('warming.console.phaseLabel', { phase: t(`warming.console.phase.${phase}`) })}
-        </span>
-        {next != null ? <span>{t('warming.console.toNext', { days: next })}</span> : null}
-        <span>{t(`warming.persona.${account.activity_persona ?? 'normal'}.name`)}</span>
-        <span
-          className={`inline-flex items-center gap-1 ${trust != null ? trustTone(trust) : 'text-content-subtle'}`}
-        >
-          <Icon name="shield-check" size={12} className="shrink-0" />
-          {t('warming.console.trust', { score: trust ?? '—' })}
-        </span>
-        <span className={spam === 'limited' ? 'text-danger' : undefined}>
-          {t(`warming.console.spam.${spam}`)}
-        </span>
-      </div>
-      {account.progress_to_next != null ? (
-        <ProgressBar
-          value={account.progress_to_next}
-          max={1}
-          label={t('warming.console.phaseLabel', { phase: t(`warming.console.phase.${phase}`) })}
-        />
+    <div className="mb-3 flex flex-wrap items-center gap-1 type-small text-content-muted">
+      {/* Фаза — главный чип: своя мини-полоса до следующей фазы внутри него, а не
+          вторая полоса во всю ширину рядом с полосой дней. */}
+      <span className={cn(CHIP, 'border-info-line bg-info-tint text-info-strong')}>
+        <span className="type-small-medium">{phaseLabel}</span>
+        {account.progress_to_next != null ? (
+          <ProgressBar
+            className="w-number"
+            value={account.progress_to_next}
+            max={1}
+            label={phaseLabel}
+          />
+        ) : null}
+      </span>
+      {next != null ? (
+        <span className="px-1">{t('warming.console.toNext', { days: next })}</span>
       ) : null}
+      <span className={CHIP}>
+        {t(`warming.persona.${account.activity_persona ?? 'normal'}.name`)}
+      </span>
+      <span className={cn(CHIP, trust != null ? trustTone(trust) : 'text-content-subtle')}>
+        <Icon name="shield-check" size={12} className="shrink-0" />
+        {t('warming.console.trust', { score: trust ?? '—' })}
+      </span>
+      <span
+        className={cn(
+          CHIP,
+          spam === 'limited' && 'border-danger-line bg-danger-tint text-danger-deep',
+        )}
+      >
+        {t(`warming.console.spam.${spam}`)}
+      </span>
     </div>
   );
 }
@@ -155,12 +171,30 @@ export function AttentionRow({ account }: { account: WarmingAccountState }) {
   const { t } = useTranslation();
   const text = attentionText(t, account);
   if (!text) return null;
+  return <CardAlert>{text}</CardAlert>;
+}
+
+// Предупреждение внутри карточки: одна компактная строка на тонированной подложке, без
+// рамки — рамкой тон уже говорит сама карточка.
+export function CardAlert({
+  tone = 'warning',
+  icon = 'alert-triangle',
+  children,
+}: {
+  tone?: 'warning' | 'info';
+  icon?: IconName;
+  children: ReactNode;
+}) {
   return (
-    <div className="mt-3">
-      <Notice tone="warning" role="status" className="flex items-center gap-2 py-2 type-small">
-        <Icon name="alert-triangle" size={14} className="shrink-0" />
-        {text}
-      </Notice>
+    <div
+      role="status"
+      className={cn(
+        'mt-3 flex items-center gap-2 rounded-sm px-2 py-1 type-small',
+        tone === 'warning' ? 'bg-warning-tint text-warning-deep' : 'bg-info-tint text-info-strong',
+      )}
+    >
+      <Icon name={icon} size={14} className="shrink-0" />
+      {children}
     </div>
   );
 }

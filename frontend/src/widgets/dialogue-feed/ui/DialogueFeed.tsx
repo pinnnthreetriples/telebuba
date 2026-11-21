@@ -223,9 +223,20 @@ function PairRow({
 // A LIST OF PAIRS rather than one flat transcript, because the card now lives in
 // the page's 340px column: one exchange is named once instead of over every
 // reply, and the operator opens the one they want to read.
-export function DialogueFeed() {
+// `accountIds`: только пары, где хотя бы один участник из этого набора (папка
+// прогрева). `nameTag`: приписка к имени собеседника, например его папка. `bare`: без
+// своей карточки — лента внутри окна или вкладки.
+export function DialogueFeed({
+  accountIds,
+  nameTag,
+  bare = false,
+}: {
+  accountIds?: ReadonlySet<string>;
+  nameTag?: (accountId: string) => string | undefined;
+  bare?: boolean;
+} = {}) {
   const { t } = useTranslation();
-  const { data } = useQuery({
+  const { data, isPending } = useQuery({
     ...warmingDialoguesQueryOptions({ query: { limit: FEED_LIMIT } }),
     refetchInterval: FEED_POLL_MS,
     // Liveness is a function of the clock, so it has to decay without new data.
@@ -242,7 +253,25 @@ export function DialogueFeed() {
   // Keyed on `data`, not on the derived array: with `notifyOnChangeProps: 'all'`
   // every poll re-renders, and a fresh `messages` array each time would make the
   // transcript's scroll-to-end effect fire every four seconds.
-  const pairs = useMemo(() => groupIntoPairs(data?.messages ?? []), [data]);
+  const pairs = useMemo(() => {
+    const all = groupIntoPairs(data?.messages ?? []);
+    const scoped = accountIds
+      ? all.filter((pair) => pair.key.split('|').some((id) => accountIds.has(id)))
+      : all;
+    if (!nameTag) return scoped;
+    const tagged = (name: string, id: string | undefined) => {
+      const tag = id ? nameTag(id) : undefined;
+      return tag ? `${name} · ${tag}` : name;
+    };
+    return scoped.map((pair) => {
+      const [, right] = pair.key.split('|');
+      return {
+        ...pair,
+        leftName: tagged(pair.leftName, pair.leftAccount),
+        rightName: tagged(pair.rightName, right),
+      };
+    });
+  }, [data, accountIds, nameTag]);
   // One pair open at a time: several open transcripts stretch the column past
   // the board beside it.
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -273,6 +302,37 @@ export function DialogueFeed() {
   // from the clock on every render, not from the memoised page.
   const live = isFresh(pairs[0]?.newestAt ?? '');
 
+  // Пока первый ответ не пришёл, это не «переписки нет»: скелетон строк, а не
+  // пустое состояние, которое мигало на секунду при каждом открытии вкладки.
+  const list = isPending ? (
+    <div className="flex flex-col gap-2" aria-busy="true">
+      {[0, 1, 2].map((row) => (
+        <div
+          key={row}
+          className="h-touch animate-pulse rounded-md bg-canvas motion-reduce:animate-none"
+        />
+      ))}
+    </div>
+  ) : pairs.length === 0 ? (
+    <EmptyState>{t('warming.dialogues.empty')}</EmptyState>
+  ) : (
+    // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this card's own list height, one component's internal layout
+    <div className="tb-scroll flex max-h-[420px] flex-col gap-2 overflow-y-auto pr-1">
+      {pairs.map((pair) => (
+        <PairRow
+          key={pair.key}
+          pair={pair}
+          entering={entering.has(pair.key)}
+          open={openKey === pair.key}
+          onToggle={() => {
+            setOpenKey(openKey === pair.key ? null : pair.key);
+          }}
+        />
+      ))}
+    </div>
+  );
+  if (bare) return list;
+
   return (
     <Card className="p-4">
       {/* Pulsing green only while the feed is genuinely fresh; otherwise the
@@ -289,28 +349,7 @@ export function DialogueFeed() {
           ) : null
         }
       />
-      {pairs.length === 0 ? (
-        <EmptyState>{t('warming.dialogues.empty')}</EmptyState>
-      ) : (
-        // The list is the ONE scroll: an open transcript grows inside it rather
-        // than scrolling on its own, because two nested scrollbars in a 340px
-        // column are unusable. Taller than `max-h-feed` deliberately — the pairs
-        // moved here to spend the column's height.
-        // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this card's own list height, one component's internal layout
-        <div className="tb-scroll flex max-h-[420px] flex-col gap-2 overflow-y-auto pr-1">
-          {pairs.map((pair) => (
-            <PairRow
-              key={pair.key}
-              pair={pair}
-              entering={entering.has(pair.key)}
-              open={openKey === pair.key}
-              onToggle={() => {
-                setOpenKey(openKey === pair.key ? null : pair.key);
-              }}
-            />
-          ))}
-        </div>
-      )}
+      {list}
     </Card>
   );
 }

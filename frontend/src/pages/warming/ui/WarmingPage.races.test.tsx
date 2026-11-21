@@ -154,6 +154,7 @@ test('disables the bulk pool button while a bulk operation is in flight', async 
   const bulk = await screen.findByText('Остановить пул');
   expect(bulk).not.toBeDisabled();
   await userEvent.click(bulk);
+  await userEvent.click(await screen.findByRole('button', { name: 'Остановить' }));
   await waitFor(() => {
     expect(bulk).toBeDisabled();
   });
@@ -172,6 +173,7 @@ test('keeps the bulk button disabled until the whole batch settles, even if the 
   renderWithClient(<WarmingPage />);
   const bulk = await screen.findByText('Остановить пул');
   await userEvent.click(bulk);
+  await userEvent.click(await screen.findByRole('button', { name: 'Остановить' }));
   // Both per-account stop calls are now in flight.
   await waitFor(() => {
     expect(Object.keys(resolvers)).toHaveLength(2);
@@ -204,6 +206,7 @@ test('a bulk stop disables every card, and the first response clears only its ow
   const resolvers = parkPerAccount(board, '/api/v1/warming/stop');
   renderWithClient(<WarmingPage />);
   await userEvent.click(await screen.findByText('Остановить пул'));
+  await userEvent.click(await screen.findByRole('button', { name: 'Остановить' }));
   await waitFor(() => {
     expect(Object.keys(resolvers)).toHaveLength(2);
   });
@@ -240,14 +243,14 @@ test('warming a second account keeps the first card busy and still refreshes for
   });
 
   for (const index of [0, 1]) {
-    await userEvent.click(screen.getAllByText('Прогреть')[index]!);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Прогреть' })[index]!);
     await userEvent.click(screen.getByText('Запустить прогрев'));
   }
   await waitFor(() => {
     expect(Object.keys(resolvers)).toHaveLength(2);
   });
-  expect(screen.getAllByText('Прогреть')[0]).toBeDisabled();
-  expect(screen.getAllByText('Прогреть')[1]).toBeDisabled();
+  expect(screen.getAllByRole('button', { name: 'Прогреть' })[0]).toBeDisabled();
+  expect(screen.getAllByRole('button', { name: 'Прогреть' })[1]).toBeDisabled();
 
   // idle-2 settles first; idle-1 landing later must still refresh the board.
   await expectBothRefresh(
@@ -271,6 +274,8 @@ test('removing a second channel does not swallow the first one s refresh', async
   };
   const releases = parkInOrder(board, '/api/v1/warming/channels/remove');
   renderWithClient(<WarmingPage />);
+  // Каналы прогрева теперь открываются иконкой в шапке «В прогреве».
+  await userEvent.click(await screen.findByRole('button', { name: 'Каналы прогрева' }));
   await waitFor(() => {
     expect(screen.getByText('@more')).toBeInTheDocument();
   });
@@ -297,6 +302,8 @@ test('adding a second channel does not swallow the first one s refresh', async (
   // first channel's mark, its input reset and its invalidate were all dropped.
   const releases = parkInOrder(BOARD, '/api/v1/warming/channels');
   renderWithClient(<WarmingPage />);
+  // Каналы прогрева теперь открываются иконкой в шапке «В прогреве».
+  await userEvent.click(await screen.findByRole('button', { name: 'Каналы прогрева' }));
   await waitFor(() => {
     expect(screen.getByText('@news')).toBeInTheDocument();
   });
@@ -323,6 +330,8 @@ test('adding a second channel does not swallow the first one s refresh', async (
 test('adds a channel', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);
+  // Каналы прогрева теперь открываются иконкой в шапке «В прогреве».
+  await userEvent.click(await screen.findByRole('button', { name: 'Каналы прогрева' }));
   await waitFor(() => {
     expect(screen.getByText('@news')).toBeInTheDocument();
   });

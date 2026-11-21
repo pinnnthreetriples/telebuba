@@ -8039,6 +8039,10 @@ export type StartWarmingRequest = {
    */
   accept_geo_mismatch?: boolean;
   /**
+   * Accepted Geo Pair
+   */
+  accepted_geo_pair?: string | null;
+  /**
    * Account Id
    */
   account_id: string;

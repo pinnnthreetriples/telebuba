@@ -58,7 +58,7 @@ async function renderLog(items: Partial<LogEntry>[]): Promise<void> {
       />
     </QueryClientProvider>,
   );
-  await userEvent.click(screen.getByText('Лог активности'));
+  await userEvent.click(screen.getByText('Подробнее'));
 }
 
 test('a media row says how much was downloaded, in whole kilobytes', async () => {

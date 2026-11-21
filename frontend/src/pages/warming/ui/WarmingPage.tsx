@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName, deleteAccountMutation } from '@/entities/account';
@@ -19,7 +20,13 @@ import {
   WaveChip,
 } from '@/entities/warming';
 import type { StartWarmingRequest, WarmedAccount, WarmingAccountState } from '@/shared/api';
-import { errorMessage, mutationErrorText, useTransientFeedback } from '@/shared/lib';
+import {
+  cn,
+  errorMessage,
+  formatLocalTime,
+  mutationErrorText,
+  useTransientFeedback,
+} from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -32,22 +39,37 @@ import {
   FeedbackMark,
   HowItWorksCard,
   Icon,
+  IconButton,
   InlineChipEditor,
+  Notice,
+  SegmentedControl,
   StatGrid,
   toastError,
 } from '@/shared/ui';
+import { buttonBase, HEADING_ICON_TILE } from '@/shared/design-system';
 import { DeleteAccountModal, type DeleteReason } from '@/widgets/accounts-table';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import {
-  ActionTuningCard,
+  AddToFolderModal,
+  type BoardTool,
+  FolderChannels,
+  ACCOUNT_DRAG_TYPE,
   ChannelLanguageShortages,
+  FolderBack,
+  FolderGrid,
+  FolderSettingsModal,
+  FolderSummary,
+  newFolder,
+  personaFor,
+  UNFILED,
+  useWarmingFolders,
+  type WarmingFolder,
   ChannelPoolFill,
   DmPauseBanner,
   GeoMismatchBanner,
   HandoffModal,
   type HandoffMode,
   needsGeoConsent,
-  PaceCard,
   readinessReasonKey,
   SpamRetryModal,
   type StartDialogChoice,
@@ -73,16 +95,23 @@ type StartChoice = Pick<
   | 'start_delay_hours'
   | 'spread_start'
   | 'accept_geo_mismatch'
+  | 'accepted_geo_pair'
   | 'device_mode'
 >;
 
-// The dialog's answer as the start request's fields.
-function startChoice(choice: StartDialogChoice): StartChoice {
+type GeoShown = { phoneCountry: string; proxyCountry: string } | undefined;
+
+// The dialog's answer as the start request's fields. The consent names the pair the
+// dialog showed, so the server stores it only while that is still the account's pair.
+function startChoice(choice: StartDialogChoice, shown?: GeoShown): StartChoice {
+  const pair =
+    choice.acceptGeo && shown ? `${shown.phoneCountry}>${shown.proxyCountry}` : undefined;
   return {
     target_days: choice.days,
     activity_persona: choice.persona,
     start_delay_hours: choice.delayHours,
-    accept_geo_mismatch: choice.acceptGeo,
+    accept_geo_mismatch: pair !== undefined,
+    accepted_geo_pair: pair,
     device_mode: choice.device,
   };
 }
@@ -100,6 +129,43 @@ function geoOf(account: {
   return { phoneCountry: account.phone_country, proxyCountry: account.proxy_country };
 }
 
+// A batch dialog (pool, «В папку») takes its geo warning as it opens: account_id → the
+// pair `PHONE>PROXY` it warned about. Only these pairs are consented to on confirm — a
+// proxy changed while the dialog was open, or an account that showed no mismatch, sends
+// no consent.
+type BatchGeo = Readonly<Record<string, string>>;
+
+function batchGeoOf(accounts: readonly WarmingAccountState[]): BatchGeo {
+  const shown: Record<string, string> = {};
+  for (const account of accounts) {
+    const geo = geoOf(account);
+    if (geo) shown[account.account_id] = `${geo.phoneCountry}>${geo.proxyCountry}`;
+  }
+  return shown;
+}
+
+function batchConsent(
+  shown: BatchGeo,
+  accountId: string,
+  onlyGeoMatching: boolean,
+): Pick<StartChoice, 'accept_geo_mismatch' | 'accepted_geo_pair'> {
+  const pair = onlyGeoMatching ? undefined : shown[accountId];
+  return { accept_geo_mismatch: pair !== undefined, accepted_geo_pair: pair };
+}
+
+// What a batch dialog was opened with: whom it starts, how many not-ready accounts it
+// left out, and the geo pairs it showed.
+interface BatchStart {
+  ids: string[];
+  skipped: number;
+  geo: BatchGeo;
+}
+
+// «В папку»: the batch and (after a drop or a new folder) the folder picked for it.
+interface AddTo extends BatchStart {
+  folderId?: string;
+}
+
 const SURVIVAL_PANEL_ID = 'warming-survival-panel';
 
 const HOWTO_STEPS = [
@@ -111,6 +177,35 @@ const HOWTO_STEPS = [
   ['ramp', null],
   ['pauses', null],
 ] as const;
+
+// Первая загрузка: каркас страницы той же раскладки, а не строка «Загрузка…» —
+// страница не прыгает, когда данные приходят.
+const SKELETON = 'animate-pulse rounded-md bg-canvas motion-reduce:animate-none';
+
+function WarmingSkeleton() {
+  const { t } = useTranslation();
+  return (
+    <div aria-busy="true" className="tb-fadeup">
+      <span className="sr-only">{t('warming.loading')}</span>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <h1 className="m-0 type-h1">{t('warming.titleFull')}</h1>
+        <div className={cn(SKELETON, 'h-touch w-sidebar max-w-full')} />
+      </div>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <Card className="flex flex-col gap-2 p-4">
+          {[0, 1, 2, 3, 4].map((row) => (
+            <div key={row} className={cn(SKELETON, 'h-touch')} />
+          ))}
+        </Card>
+        <Card className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
+          {[0, 1, 2].map((tile) => (
+            <div key={tile} className={cn(SKELETON, 'py-16')} />
+          ))}
+        </Card>
+      </div>
+    </div>
+  );
+}
 
 export function WarmingPage() {
   const { t } = useTranslation();
@@ -129,7 +224,11 @@ export function WarmingPage() {
   const [addingChannel, setAddingChannel] = useState(false);
   const [warmDaysFor, setWarmDaysFor] = useState<WarmingAccountState | null>(null);
   // "Запустить пул" opens the start dialog for every idle account instead of firing.
-  const [poolStartOpen, setPoolStartOpen] = useState(false);
+  // Окно запуска пула: кого запускаем (все готовые или выбранные) и сколько не готовых
+  // осталось за бортом.
+  const [poolStart, setPoolStart] = useState<BatchStart | null>(null);
+  // Выбранные галочками готовые аккаунты: «В папку», «Прогреть» и перетаскивание пачкой.
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   // «Вернуть в прогрев» opens the same start dialog; the account warms again from zero
   // as its next wave.
   const [rewarmFor, setRewarmFor] = useState<WarmedAccount | null>(null);
@@ -139,11 +238,31 @@ export function WarmingPage() {
   const [handoffFor, setHandoffFor] = useState<string | null>(null);
   // The survival tile in the header opens its panel under the banners (stage 3).
   const [survivalOpen, setSurvivalOpen] = useState(false);
+  const [stopPoolOpen, setStopPoolOpen] = useState(false);
   const [channelToRemove, setChannelToRemove] = useState<string | null>(null);
   const accountFeedback = useTransientFeedback();
+  // «Прогрев пачками» (прототип): папки, открытая папка (null — экран всех папок),
+  // окна папки и «В папку».
+  const folderStore = useWarmingFolders();
+  const [folderView, setFolderView] = useState<string | null>(null);
+  // Вкладка внутри папки: карточки аккаунтов, переписка папки или её каналы.
+  const [folderTab, setFolderTab] = useState<'accounts' | 'dialogues' | 'channels'>('accounts');
+  // Окно настроек папки. `returnTo` — открыто из «В папку» («Новая папка»): после
+  // сохранения оператор возвращается к тому же добавлению, уже с новой папкой.
+  const [folderEdit, setFolderEdit] = useState<{ folder: WarmingFolder; returnTo?: AddTo } | null>(
+    null,
+  );
+  // «В папку»: кого добавляем и (после броска на папку) в какую папку.
+  const [addTo, setAddTo] = useState<AddTo | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const channelFeedback = useTransientFeedback();
+  // One lock per account across every surface — a single ▶, the pool, «В папку», a drop,
+  // the warmed card's actions. A ref, not state: busyIds is the picture of it, but two
+  // calls in one tick both read the state from before either, and a second start of the
+  // same account went out while the first was still in flight.
+  const lockedIds = useRef(new Set<string>());
 
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, dataUpdatedAt, refetch } = useQuery({
     ...warmingBoardQueryOptions(),
     refetchInterval: FALLBACK_POLL_MS,
   });
@@ -179,8 +298,18 @@ export function WarmingPage() {
   // in ONE slot per hook, so graduating a second account dropped the first
   // account's feedback mark and invalidate. A promise per call also captures its
   // own accountId, not the hook's latest variables.
-  const runGraduation = (mutation: typeof promote, accountId: string) => {
+  const lock = (accountId: string): boolean => {
+    if (lockedIds.current.has(accountId)) return false;
+    lockedIds.current.add(accountId);
     markBusy(accountId, true);
+    return true;
+  };
+  const unlock = (accountId: string) => {
+    lockedIds.current.delete(accountId);
+    markBusy(accountId, false);
+  };
+  const runGraduation = (mutation: typeof promote, accountId: string) => {
+    if (!lock(accountId)) return Promise.resolve();
     return mutation
       .mutateAsync({ body: { account_id: accountId } })
       .then(
@@ -192,7 +321,7 @@ export function WarmingPage() {
         },
       )
       .finally(() => {
-        markBusy(accountId, false);
+        unlock(accountId);
         invalidate();
       });
   };
@@ -201,7 +330,7 @@ export function WarmingPage() {
   // open) the retry dialog — its promise rejects so the dialog stays — while every
   // other outcome resolves, closing it.
   const runHandoff = (accountId: string, mode: HandoffMode) => {
-    markBusy(accountId, true);
+    if (!lock(accountId)) return Promise.resolve();
     return handoff
       .mutateAsync({ body: { account_id: accountId, start_mode: mode } })
       .then(
@@ -219,7 +348,7 @@ export function WarmingPage() {
         },
       )
       .finally(() => {
-        markBusy(accountId, false);
+        unlock(accountId);
         invalidate();
       });
   };
@@ -265,28 +394,35 @@ export function WarmingPage() {
   // `start`/`stop` hooks across every card and the pool, and mutate+onSettled let a
   // later call take an earlier one's ONE callback slot over — its busy mark was never
   // cleared and its feedback mark never appeared.
-  const runOnAccount = (accountId: string, call: () => Promise<unknown>) => {
-    markBusy(accountId, true);
+  // Resolves to whether the call went through. An account another call holds is not
+  // called again.
+  const runOnAccount = (accountId: string, call: () => Promise<unknown>): Promise<boolean> => {
+    if (!lock(accountId)) return Promise.resolve(false);
     return call()
       .then(
         () => {
           accountFeedback.mark(accountId, true);
+          return true;
         },
         () => {
           accountFeedback.mark(accountId, false);
+          return false;
         },
       )
       .finally(() => {
-        markBusy(accountId, false);
+        unlock(accountId);
         invalidate();
       });
   };
   const stopAccount = (accountId: string) =>
     runOnAccount(accountId, () => stop.mutateAsync({ body: { account_id: accountId } }));
-  const startAccount = (accountId: string, choice: StartChoice) =>
-    runOnAccount(accountId, () =>
-      start.mutateAsync({ body: { account_id: accountId, ...choice } }),
-    );
+  // `onStarted` runs only on the server's yes, before the board refresh: a folder
+  // records its member there, so a refused start leaves the account where it was.
+  const startAccount = (accountId: string, choice: StartChoice, onStarted?: () => void) =>
+    runOnAccount(accountId, async () => {
+      await start.mutateAsync({ body: { account_id: accountId, ...choice } });
+      onStarted?.();
+    });
   const rewarmAccount = (accountId: string, choice: StartChoice) =>
     runOnAccount(accountId, () =>
       rewarm.mutateAsync({ body: { account_id: accountId, ...choice } }),
@@ -306,14 +442,29 @@ export function WarmingPage() {
     });
   };
 
-  if (isPending) return <p className="text-content-muted">{t('warming.loading')}</p>;
-  if (isError) {
+  if (isPending) return <WarmingSkeleton />;
+  // Ошибка без данных — страницы нет: сказать и дать повторить. Ошибка ОПРОСА при уже
+  // загруженных данных страницу не убирает (раньше один сбойный опрос стирал всё):
+  // данные остаются, сверху — что связь пропала и от какого они времени.
+  if (data === undefined) {
     return (
-      <p role="alert" className="text-danger">
-        {t('warming.error')}
-      </p>
+      <div role="alert" className="tb-fadeup">
+        <h1 className="mb-6 type-h1">{t('warming.titleFull')}</h1>
+        <Notice tone="danger" className="flex flex-wrap items-center gap-3">
+          <span className="flex-1">{t('warming.error')}</span>
+          <Button
+            size="sm"
+            onClick={() => {
+              void refetch();
+            }}
+          >
+            {t('warming.states.retry')}
+          </Button>
+        </Notice>
+      </div>
     );
   }
+  const stale = isError;
 
   const idle = data.idle ?? [];
   const warming = data.warming ?? [];
@@ -331,15 +482,213 @@ export function WarmingPage() {
     (a) => a.state === 'error' || a.state === 'spam_blocked',
   ).length;
   const poolOn = warming.length > 0;
+  // Нечего показывать вовсе: ни готовых, ни греющихся, ни прогретых.
+  const nothingYet = idle.length === 0 && warming.length === 0 && warmed.length === 0;
   // With the readiness check switched off the engine starts a not-ready account, so
   // the button does too; the reasons stay on the row as a warning, not a block.
   const enforceReadiness = data.settings.enforce_readiness ?? true;
   // The pool starts what each card's own Start would: a not-ready account is left
   // out while the readiness check is on, and the dialog says how many.
-  const poolIdle = idle.filter((a) => (a.readiness?.ready ?? false) || !enforceReadiness);
-  const poolGeoMismatch = poolIdle.filter(needsGeoConsent).length;
+  const startable = (a: WarmingAccountState) => (a.readiness?.ready ?? false) || !enforceReadiness;
+  // Не готовые к старту — пул и «В папку» их не возьмут и скажут сколько.
+  const notReady = idle.filter((a) => !startable(a)).length;
+  // Кого можно запустить: готов к старту и не занят другим запуском.
+  const poolIdle = idle.filter((a) => startable(a) && !busyIds.has(a.account_id));
+  // Перепроверка при подтверждении окна: окно могло пролежать открытым, пока аккаунт
+  // ушёл в прогрев, потерял готовность или его запустили из другого места.
+  const launchable = (ids: readonly string[]) =>
+    idle.filter(
+      (a) => ids.includes(a.account_id) && startable(a) && !lockedIds.current.has(a.account_id),
+    );
+  const reportDropped = (asked: number, going: number) => {
+    if (going < asked) toastError(t('warming.states.dropped', { count: asked - going }));
+  };
+  // Выбор держится только за тех, кого ещё можно запустить: ушедший в прогрев выпадает.
+  const picked = poolIdle.filter((a) => selectedIds.has(a.account_id));
+  const pickedIds = picked.map((a) => a.account_id);
+  const allPicked = poolIdle.length > 0 && picked.length === poolIdle.length;
+  const togglePick = (accountId: string) => {
+    setSelectedIds((ids) => {
+      const next = new Set(ids);
+      if (next.has(accountId)) next.delete(accountId);
+      else next.add(accountId);
+      return next;
+    });
+  };
+  const clearPicked = () => {
+    setSelectedIds(new Set());
+  };
   // Every card on the page whose phone/proxy pair still waits for a consent.
   const geoMismatches = [...idle, ...warming].filter(needsGeoConsent).length;
+  // Папки: экран всех папок, а внутри папки — её карточки.
+  const { folders, assignment } = folderStore;
+  const inView = (accountId: string, view: string) =>
+    view === UNFILED ? !assignment[accountId] : assignment[accountId] === view;
+  const membersOf = (view: string) => warming.filter((a) => inView(a.account_id, view));
+  // Догретые аккаунты папки: перешли в «Прогреты» (и, может, уже отданы дальше), но
+  // остаются её завершённой частью. У «Без папки» таких нет — там только идущие.
+  const allWarmed = data.warmed ?? [];
+  const warmedOf = (folderId: string) =>
+    allWarmed.filter((a) => assignment[a.account_id] === folderId);
+  // Пока папок нет, «В прогреве» выглядит как раньше: карточки сразу. С первой папкой
+  // первым экраном становятся папки, а карточки — внутри них.
+  const byFolders = folders.length > 0;
+  const overviewOpen = byFolders && folderView === null;
+  const shownWarming = !byFolders ? warming : folderView === null ? [] : membersOf(folderView);
+  const openFolder = folders.find((f) => f.id === folderView);
+  // Состав папки — то, что видно на доске: греются сейчас плюс догретые.
+  const folderMembers = (folderId: string) =>
+    membersOf(folderId).length + warmedOf(folderId).length;
+  const openFolderCaption = openFolder
+    ? t('warming.folders.caption', {
+        count: folderMembers(openFolder.id),
+        warming: membersOf(openFolder.id).length,
+      })
+    : '';
+  const openFolderDone = openFolder ? warmedOf(openFolder.id).length : 0;
+  // Who a batch with «Только совпадающие» leaves out: an account the dialog warned
+  // about, and one whose proxy moved into a mismatch after it opened.
+  const geoTargets = (
+    accounts: WarmingAccountState[],
+    shown: BatchGeo,
+    onlyGeoMatching: boolean,
+  ) =>
+    onlyGeoMatching
+      ? accounts.filter((a) => !(a.account_id in shown) && !needsGeoConsent(a))
+      : accounts;
+  // Старт пачки в папку: у каждого аккаунта настройки папки, тип — по её смеси. В папку
+  // аккаунт записывается только после ответа сервера «запущен»: отказ (409 и любой
+  // другой) оставляет его прежнюю папку, и смесь следующей пачки считается от
+  // настоящего состава.
+  const startIntoFolder = (folderId: string, onlyGeoMatching: boolean, batch: BatchStart) => {
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder) return;
+    const ready = launchable(batch.ids);
+    const targets = geoTargets(ready, batch.geo, onlyGeoMatching);
+    reportDropped(batch.ids.length, ready.length);
+    const from = folderMembers(folderId);
+    runBatch(
+      targets.map((a, index) => {
+        // Нет нужного устройства — идёт со своего основного, а не не идёт вовсе.
+        const own = a.devices ?? [];
+        const device =
+          folder.device === 'primary' || !own.includes(folder.device) ? own[0] : folder.device;
+        return startAccount(
+          a.account_id,
+          {
+            target_days: folder.days,
+            activity_persona: personaFor(folder.mix, from + index),
+            start_delay_hours: folder.delayHours,
+            spread_start: folder.spread,
+            ...batchConsent(batch.geo, a.account_id, onlyGeoMatching),
+            device_mode: device,
+          },
+          () => {
+            folderStore.assign([a.account_id], folderId);
+          },
+        );
+      }),
+    );
+  };
+  // Открыть «В папку» для этих аккаунтов: гео-предупреждение берётся сейчас.
+  const openAddTo = (accountIds: string[], folderId?: string) => {
+    const accounts = idle.filter((a) => accountIds.includes(a.account_id));
+    setAddTo({
+      ids: accounts.map((a) => a.account_id),
+      skipped: folderId ? 0 : notReady,
+      geo: batchGeoOf(accounts),
+      folderId,
+    });
+  };
+  // Брошенный на папку готовый аккаунт: то же окно «В папку», папка уже выбрана.
+  const dropIntoFolder = (folderId: string, dropped: string) => {
+    setDraggingId(null);
+    const ids = new Set(dropped.split(','));
+    const accountIds = poolIdle.filter((a) => ids.has(a.account_id)).map((a) => a.account_id);
+    if (accountIds.length) openAddTo(accountIds, folderId);
+  };
+  const createFolder = (returnTo?: AddTo) => {
+    setFolderEdit({ folder: newFolder(data.default_target_days ?? 14), returnTo });
+  };
+  // Каналы прогрева — общий пул, теперь окном из шапки «В прогреве».
+  const channelsPanel = (
+    <>
+      <ChannelLanguageShortages shortages={data.language_shortages ?? []} />
+      <div className="flex flex-wrap gap-2">
+        {channels.map((channel) => (
+          <WarmingChannelPill
+            key={channel.channel}
+            channel={channel}
+            feedback={channelFeedback.feedback[channel.channel]}
+            onRemove={setChannelToRemove}
+          />
+        ))}
+        {addingChannel ? (
+          <InlineChipEditor
+            value={channelInput}
+            onChange={setChannelInput}
+            onConfirm={addChannel}
+            onCancel={cancelAddChannel}
+            placeholder={t('warming.channels.placeholderSingle')}
+            inputLabel={t('warming.channels.placeholderSingle')}
+            confirmLabel={t('warming.channels.add')}
+            cancelLabel={t('warming.channels.cancel')}
+          />
+        ) : (
+          <ChipAddButton
+            onClick={() => {
+              setAddingChannel(true);
+            }}
+          >
+            {t('warming.channels.addPill')}
+          </ChipAddButton>
+        )}
+      </div>
+      <ChannelPoolFill
+        defaultLanguage={data.language_shortages?.[0]?.language}
+        refillRequest={data.pool_refill_request}
+        onPoolChanged={invalidate}
+      />
+    </>
+  );
+  // Папка аккаунта для приписки к собеседнику в переписке (только чужая папка).
+  const partnerTag = (accountId: string) => {
+    const folder = folderStore.folderOf(accountId);
+    if (!folder || folder.id === folderView) return undefined;
+    return folder.name;
+  };
+  const boardTools: BoardTool[] = [
+    {
+      key: 'dialogues',
+      icon: 'users',
+      title: t('warming.dialogues.title'),
+      subtitle: t('warming.folders.dialoguesAll'),
+      content: <DialogueFeed bare nameTag={partnerTag} />,
+    },
+    {
+      key: 'channels',
+      icon: 'link',
+      title: t('warming.channels.title'),
+      subtitle: t('warming.channels.hint'),
+      content: channelsPanel,
+    },
+  ];
+  // Аккаунты открытой папки: и греющиеся, и уже отданные в неё (для переписки).
+  const folderAccountIds = new Set(
+    folderView === null
+      ? []
+      : folderView === UNFILED
+        ? membersOf(UNFILED).map((a) => a.account_id)
+        : Object.entries(assignment)
+            .filter(([, id]) => id === folderView)
+            .map(([accountId]) => accountId),
+  );
+  const folderTabContent =
+    folderView === null || folderTab === 'accounts' ? undefined : folderTab === 'dialogues' ? (
+      <DialogueFeed bare accountIds={folderAccountIds} nameTag={partnerTag} />
+    ) : (
+      <FolderChannels accounts={membersOf(folderView)} channelLabels={channelLabels} />
+    );
   const howtoSteps = HOWTO_STEPS.map(([step, mechanic]) => {
     const label = t(`warming.howto.steps.${step}`);
     const on = mechanic === null || (data.mechanics?.[mechanic] ?? true);
@@ -356,7 +705,12 @@ export function WarmingPage() {
             stats={[
               { value: warming.length, label: t('warming.counter.warming'), tone: 'primary' },
               { value: idle.length, label: t('warming.counter.ready') },
-              { value: errors, label: t('warming.counter.errors'), tone: 'danger' },
+              {
+                value: errors,
+                label: t('warming.counter.errors'),
+                // Ноль ошибок — не тревога: красный только когда они есть.
+                tone: errors > 0 ? 'danger' : 'default',
+              },
             ]}
           />
           <SurvivalTile
@@ -368,14 +722,21 @@ export function WarmingPage() {
             }}
           />
           <Button
-            variant={poolOn ? 'neutral' : 'primary'}
+            // Остановка всего пула — редкое действие: второстепенная кнопка и
+            // подтверждение, а не самая заметная заливка на странице.
+            variant={poolOn ? 'secondary' : 'primary'}
             size="sm"
             disabled={
               bulkBusy || start.isPending || stop.isPending || (!poolOn && !poolIdle.length)
             }
             onClick={() => {
-              if (poolOn) runBatch(warming.map((a) => stopAccount(a.account_id)));
-              else setPoolStartOpen(true);
+              if (poolOn) setStopPoolOpen(true);
+              else
+                setPoolStart({
+                  ids: poolIdle.map((a) => a.account_id),
+                  skipped: notReady,
+                  geo: batchGeoOf(poolIdle),
+                });
             }}
             className="gap-2"
           >
@@ -387,6 +748,16 @@ export function WarmingPage() {
 
       {/* Page banners: the fleet DM pause and unaccepted geo mismatches, then the
           survival panel the header tile opens. */}
+      {stale ? (
+        <div className="mb-4">
+          <Notice tone="warning" role="status" className="flex items-center gap-2">
+            <Icon name="alert-triangle" size={14} className="shrink-0" />
+            {t('warming.states.stale', {
+              time: formatLocalTime(new Date(dataUpdatedAt).toISOString()),
+            })}
+          </Notice>
+        </div>
+      ) : null}
       <DmPauseBanner pausedUntil={data.settings.dm_paused_until} />
       <GeoMismatchBanner count={geoMismatches} />
       {survivalOpen ? (
@@ -404,167 +775,246 @@ export function WarmingPage() {
           because the board's own log prints the same kind of line. */}
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
-          <Card className="p-4">
-            <CardHeader
-              className="mb-3"
-              title={t('warming.ready.title')}
-              badge={<Badge>{idle.length}</Badge>}
-            />
-            <div className="flex flex-col gap-2">
-              {idle.length === 0 ? (
-                <EmptyState>{t('warming.ready.empty')}</EmptyState>
-              ) : (
-                idle.map((account) => {
-                  const trust = account.trust_score;
-                  const tTone = trust != null ? trustTone(trust) : 'text-content-subtle';
-                  const cc = account.phone_country?.toLowerCase() ?? null;
-                  const pc = account.proxy_country?.toLowerCase() ?? null;
-                  const ptype = account.proxy_type;
-                  const ready = account.readiness?.ready ?? false;
-                  const startable = ready || !enforceReadiness;
-                  const blockers = (account.readiness?.reasons ?? [])
-                    .map((reason) => {
-                      const key = readinessReasonKey(reason);
-                      return key ? t(key) : reason;
-                    })
-                    .join(', ');
-                  const blockersId = `warm-blockers-${account.account_id}`;
-                  // Telegram name on top; the phone (with its country flag)
-                  // drops to a subtitle. When the account has no name,
-                  // accountDisplayName falls back to the phone, so skip the
-                  // duplicate subtitle and keep the flag on the primary line.
-                  const name = accountDisplayName(account);
-                  const showPhone = account.phone != null && account.phone !== name;
-                  const flag = cc ? (
-                    <span
-                      className={`fi fi-${cc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
-                    />
-                  ) : null;
-                  return (
-                    <div
-                      key={account.account_id}
-                      className="rounded-md border border-line bg-surface-card px-3 py-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <AccountAvatar
-                          account={account}
-                          className="size-icon shrink-0 rounded-full"
-                          fallbackClassName="text-body font-medium bg-info-tint text-info-strong"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1">
-                            <span className="truncate type-h3">{name}</span>
-                            {showPhone ? null : flag}
-                          </div>
-                          {showPhone ? (
-                            <div className="flex items-center gap-1">
-                              <span className="truncate type-small">{account.phone}</span>
-                              {flag}
-                            </div>
-                          ) : null}
-                          <div className="mt-1 flex flex-wrap items-center gap-2">
-                            <Icon name="shield-check" size={14} className={`shrink-0 ${tTone}`} />
-                            <span className={`text-small font-medium ${tTone}`}>
-                              {trust ?? '—'}
-                            </span>
-                            {ptype ? (
-                              <>
-                                <span className="type-small">·</span>
-                                {pc ? (
-                                  <span
-                                    className={`fi fi-${pc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
-                                  />
-                                ) : null}
-                                <span className="type-small">{proxyTypeLabel(ptype)}</span>
-                              </>
-                            ) : null}
-                            {account.geo_accepted ? (
-                              <Badge>{t('warming.geo.accepted')}</Badge>
-                            ) : null}
-                            <SpamBlockBadge blockedAt={account.spam_blocked_at} />
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="lg"
-                          disabled={!startable || busyIds.has(account.account_id)}
-                          title={ready ? undefined : blockers}
-                          aria-describedby={!ready && blockers ? blockersId : undefined}
-                          onClick={() => {
-                            setWarmDaysFor(account);
-                          }}
-                          className={
-                            startable
-                              ? undefined
-                              : 'cursor-not-allowed bg-canvas text-content-subtle hover:bg-canvas'
-                          }
-                        >
-                          {startable ? t('warming.ready.start') : t('warming.ready.unavailable')}
-                        </Button>
-                      </div>
-                      {/* Spelled out, not only in the button's `title`: a disabled button
-                          never shows its tooltip to keyboard or touch. Full width under the
-                          row, so a long list does not squeeze the name beside it. */}
-                      {!ready && blockers ? (
-                        <div id={blockersId} className="mt-2 type-small text-warning-deep">
-                          {blockers}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </Card>
-
-          {/* Второй сверху, а не под складными карточками: живая лента не должна
-              отодвигать «Прогреть» вниз, но и стоять ниже закрытого чрома ей нечего. */}
-          <DialogueFeed />
-
-          <CollapsibleCard
-            wrapperClassName="rounded-md border border-line bg-surface-card"
-            title={t('warming.channels.title')}
-            label={t('warming.channels.title')}
-          >
-            <div className="mb-3 type-small">{t('warming.channels.hint')}</div>
-            <ChannelLanguageShortages shortages={data.language_shortages ?? []} />
-            <div className="flex flex-wrap gap-2">
-              {channels.map((channel) => (
-                <WarmingChannelPill
-                  key={channel.channel}
-                  channel={channel}
-                  feedback={channelFeedback.feedback[channel.channel]}
-                  onRemove={setChannelToRemove}
-                />
-              ))}
-              {addingChannel ? (
-                <InlineChipEditor
-                  value={channelInput}
-                  onChange={setChannelInput}
-                  onConfirm={addChannel}
-                  onCancel={cancelAddChannel}
-                  placeholder={t('warming.channels.placeholderSingle')}
-                  inputLabel={t('warming.channels.placeholderSingle')}
-                  confirmLabel={t('warming.channels.add')}
-                  cancelLabel={t('warming.channels.cancel')}
-                />
-              ) : (
-                <ChipAddButton
+          {/* Пустая доска: вместо списка «Готовы» — откуда берутся аккаунты. Правая
+              колонка остаётся: каналы, темп и настройки действий задаются и до первого
+              аккаунта. */}
+          {nothingYet ? (
+            <Card className="flex flex-col items-center gap-3 px-6 py-8 text-center">
+              <span className={HEADING_ICON_TILE}>
+                <Icon name="users" size={16} />
+              </span>
+              <div className="type-h3">{t('warming.states.nothingTitle')}</div>
+              <p className="m-0 type-body text-content-muted">{t('warming.states.nothingBody')}</p>
+              {/* Страница аккаунтов — корень приложения (`routes/router.tsx`, indexRoute). */}
+              <a
+                href="/"
+                className={cn(
+                  buttonBase({ size: 'sm' }),
+                  'bg-action-primary font-medium text-on-fill hover:bg-action-pressed',
+                )}
+              >
+                {t('warming.states.nothingAction')}
+              </a>
+            </Card>
+          ) : (
+            <Card className="p-4">
+              <CardHeader
+                className="mb-3"
+                title={t('warming.ready.title')}
+                badge={<Badge>{idle.length}</Badge>}
+              >
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  disabled={poolIdle.length === 0 || bulkBusy}
                   onClick={() => {
-                    setAddingChannel(true);
+                    // Выбранные — если есть, иначе все готовые.
+                    openAddTo(picked.length ? pickedIds : poolIdle.map((a) => a.account_id));
                   }}
                 >
-                  {t('warming.channels.addPill')}
-                </ChipAddButton>
-              )}
-            </div>
-            <ChannelPoolFill
-              defaultLanguage={data.language_shortages?.[0]?.language}
-              refillRequest={data.pool_refill_request}
-              onPoolChanged={invalidate}
-            />
-          </CollapsibleCard>
+                  <Icon name="folder" size={14} />
+                  {t('warming.folders.add.button')}
+                </Button>
+              </CardHeader>
+              {poolIdle.length > 1 ? (
+                <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
+                  <label className="flex items-center gap-2 type-small text-content-muted">
+                    <input
+                      type="checkbox"
+                      className="size-spinner shrink-0 accent-action-primary"
+                      checked={allPicked}
+                      ref={(element) => {
+                        if (element) element.indeterminate = picked.length > 0 && !allPicked;
+                      }}
+                      onChange={() => {
+                        setSelectedIds(
+                          allPicked ? new Set() : new Set(poolIdle.map((a) => a.account_id)),
+                        );
+                      }}
+                    />
+                    {picked.length
+                      ? t('warming.ready.picked', { count: picked.length })
+                      : t('warming.ready.pickAll')}
+                  </label>
+                </div>
+              ) : null}
+              <div className="flex flex-col gap-2">
+                {idle.length === 0 ? (
+                  <EmptyState>{t('warming.ready.empty')}</EmptyState>
+                ) : (
+                  idle.map((account) => {
+                    const trust = account.trust_score;
+                    const tTone = trust != null ? trustTone(trust) : 'text-content-subtle';
+                    const cc = account.phone_country?.toLowerCase() ?? null;
+                    const pc = account.proxy_country?.toLowerCase() ?? null;
+                    const ptype = account.proxy_type;
+                    const ready = account.readiness?.ready ?? false;
+                    const busy = busyIds.has(account.account_id);
+                    const canStart = startable(account) && !busy;
+                    const reasons = (account.readiness?.reasons ?? []).map((reason) => {
+                      const key = readinessReasonKey(reason);
+                      return key ? t(key) : reason;
+                    });
+                    const blockers = reasons.join(', ');
+                    const blockersId = `warm-blockers-${account.account_id}`;
+                    // Telegram name on top; the phone (with its country flag)
+                    // drops to a subtitle. When the account has no name,
+                    // accountDisplayName falls back to the phone, so skip the
+                    // duplicate subtitle and keep the flag on the primary line.
+                    const name = accountDisplayName(account);
+                    const showPhone = account.phone != null && account.phone !== name;
+                    const flag = cc ? (
+                      <span
+                        className={`fi fi-${cc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
+                      />
+                    ) : null;
+                    return (
+                      <div
+                        key={account.account_id}
+                        // Готовый аккаунт тащится в папку: на карточку папки или в
+                        // открытую папку. Бросок открывает «Добавить в папку».
+                        // Выбранный тащит за собой всех выбранных.
+                        draggable={canStart && byFolders}
+                        onDragStart={(event) => {
+                          const ids = selectedIds.has(account.account_id)
+                            ? pickedIds
+                            : [account.account_id];
+                          event.dataTransfer.setData(ACCOUNT_DRAG_TYPE, ids.join(','));
+                          event.dataTransfer.effectAllowed = 'move';
+                          setDraggingId(account.account_id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingId(null);
+                        }}
+                        className={cn(
+                          'group rounded-md border px-3 py-2',
+                          selectedIds.has(account.account_id)
+                            ? 'border-action-primary bg-info-tint'
+                            : 'border-line bg-surface-card',
+                          canStart && byFolders && 'cursor-grab active:cursor-grabbing',
+                          (draggingId === account.account_id ||
+                            (draggingId !== null &&
+                              selectedIds.has(draggingId) &&
+                              selectedIds.has(account.account_id))) &&
+                            'opacity-50',
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          {canStart && poolIdle.length > 1 ? (
+                            <input
+                              type="checkbox"
+                              className="size-spinner shrink-0 accent-action-primary"
+                              aria-label={t('warming.ready.pickOne', { name })}
+                              checked={selectedIds.has(account.account_id)}
+                              onChange={() => {
+                                togglePick(account.account_id);
+                              }}
+                            />
+                          ) : null}
+                          <AccountAvatar
+                            account={account}
+                            className="size-icon shrink-0 rounded-full"
+                            fallbackClassName="text-small font-medium bg-info-tint text-info-strong"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1">
+                              <span className="truncate type-body-medium">{name}</span>
+                              {showPhone ? null : flag}
+                            </div>
+                            <div className="flex min-w-0 items-center gap-1 type-small text-content-muted">
+                              {showPhone ? <span className="truncate">{account.phone}</span> : null}
+                              {showPhone ? flag : null}
+                              <Icon
+                                name="shield-check"
+                                size={12}
+                                className={`ml-1 shrink-0 ${tTone}`}
+                              />
+                              <span className={`font-medium ${tTone}`}>{trust ?? '—'}</span>
+                              {ptype ? (
+                                <span className="ml-1 inline-flex shrink-0 items-center gap-1">
+                                  {pc ? (
+                                    <span
+                                      className={`fi fi-${pc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
+                                    />
+                                  ) : null}
+                                  {proxyTypeLabel(ptype)}
+                                </span>
+                              ) : null}
+                              {account.geo_accepted ? (
+                                <span className="tb-tip ml-1 inline-flex shrink-0">
+                                  <button
+                                    type="button"
+                                    aria-label={t('warming.geo.accepted')}
+                                    className="inline-flex text-content-subtle"
+                                  >
+                                    <Icon name="globe" size={12} />
+                                  </button>
+                                  <span role="tooltip" className="tb-tip-pop">
+                                    {t('warming.geo.accepted')}
+                                  </span>
+                                </span>
+                              ) : null}
+                              <SpamBlockBadge blockedAt={account.spam_blocked_at} />
+                            </div>
+                          </div>
+                          {/* Что мешает старту — иконками предупреждающего цвета; что именно,
+                            говорит подсказка. Текст целиком остаётся описанием кнопки. */}
+                          {reasons.length > 0 ? (
+                            <span className="tb-tip inline-flex shrink-0">
+                              <button
+                                type="button"
+                                aria-label={blockers}
+                                className="inline-flex rounded-full"
+                              >
+                                <Badge tone="warning">
+                                  <Icon name="alert-triangle" size={12} />
+                                  {reasons.length}
+                                </Badge>
+                              </button>
+                              <span role="tooltip" className="tb-tip-pop">
+                                {blockers}
+                              </span>
+                            </span>
+                          ) : null}
+                          <IconButton
+                            shape="circle"
+                            tone={startable(account) ? 'action' : 'neutral'}
+                            disabled={!canStart}
+                            aria-label={
+                              startable(account)
+                                ? t('warming.ready.start')
+                                : t('warming.ready.unavailable')
+                            }
+                            // Причина недоступности — в подсказке, как было у кнопки.
+                            title={ready || !blockers ? t('warming.ready.start') : blockers}
+                            aria-describedby={!ready && blockers ? blockersId : undefined}
+                            // Пять ярких ▶ подряд шумят: на широком экране кнопка проявляется
+                            // при наведении, фокусе и у выбранной строки. На узком (тач без
+                            // наведения) видна всегда.
+                            className={cn(
+                              'transition-opacity duration-state',
+                              !selectedIds.has(account.account_id) &&
+                                'lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100',
+                            )}
+                            onClick={() => {
+                              setWarmDaysFor(account);
+                            }}
+                          >
+                            <Icon name="play" size={14} />
+                          </IconButton>
+                        </div>
+                        {!ready && blockers ? (
+                          <span id={blockersId} className="sr-only">
+                            {blockers}
+                          </span>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card>
+          )}
 
           <CollapsibleCard
             // Auto-expand once there are warmed accounts so a just-graduated
@@ -715,7 +1165,97 @@ export function WarmingPage() {
 
         <div className="flex min-w-0 flex-col gap-4">
           <WarmingBoard
-            warming={warming}
+            warming={shownWarming}
+            tools={boardTools}
+            toolbar={
+              <>
+                {draggingId !== null ? (
+                  <p className="m-0 mb-3 flex items-center gap-2 type-small text-info-strong">
+                    <Icon name="folder" size={14} className="shrink-0" />
+                    {t(openFolder ? 'warming.states.dropHere' : 'warming.states.dropOnFolder')}
+                  </p>
+                ) : null}
+                {!byFolders ? (
+                  <div className="mb-3 flex justify-end">
+                    <Button
+                      variant="dashed"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => {
+                        createFolder();
+                      }}
+                    >
+                      <Icon name="folder-plus" size={14} />
+                      {t('warming.folders.create')}
+                    </Button>
+                  </div>
+                ) : folderView === null ? null : (
+                  <>
+                    <FolderBack
+                      onBack={() => {
+                        setFolderView(null);
+                      }}
+                    />
+                    {openFolder ? (
+                      <FolderSummary
+                        folder={openFolder}
+                        caption={openFolderCaption}
+                        onEdit={() => {
+                          setFolderEdit({ folder: openFolder });
+                        }}
+                      />
+                    ) : (
+                      <div className="mb-3 type-body-medium">{t('warming.folders.unfiled')}</div>
+                    )}
+                    <SegmentedControl
+                      className="mb-3"
+                      value={folderTab}
+                      ariaLabel={t('warming.folders.tabs.label')}
+                      options={(['accounts', 'dialogues', 'channels'] as const).map((tab) => ({
+                        value: tab,
+                        label: t(`warming.folders.tabs.${tab}`),
+                      }))}
+                      onChange={setFolderTab}
+                    />
+                  </>
+                )}
+              </>
+            }
+            overview={
+              folderTabContent ??
+              (overviewOpen ? (
+                <FolderGrid
+                  folders={folders}
+                  membersOf={membersOf}
+                  unfiled={membersOf(UNFILED)}
+                  onOpen={(view) => {
+                    setFolderView(view);
+                    setFolderTab('accounts');
+                  }}
+                  dragging={draggingId !== null}
+                  onDropAccount={dropIntoFolder}
+                  warmedOf={warmedOf}
+                  onCreate={() => {
+                    createFolder();
+                  }}
+                />
+              ) : undefined)
+            }
+            emptyText={
+              openFolder
+                ? openFolderDone > 0
+                  ? t('warming.folders.allWarmed', { count: openFolderDone })
+                  : t('warming.folders.empty')
+                : undefined
+            }
+            dragging={draggingId !== null && openFolder !== undefined}
+            onDropAccount={
+              openFolder
+                ? (accountId) => {
+                    dropIntoFolder(openFolder.id, accountId);
+                  }
+                : undefined
+            }
             onStop={(id) => {
               void stopAccount(id);
             }}
@@ -732,19 +1272,106 @@ export function WarmingPage() {
             channelLabels={channelLabels}
             defaultTargetDays={data.default_target_days}
           />
-
-          {/* Настройки прогрева ОБЩИЕ, а не по аккаунту, поэтому карточка одна:
-              шестерёнка на карточке аккаунта обещала «настройку этого аккаунта» и
-              писала всем (#194-#196 оставили те же четыре поля глобальными).
-              Стоит она ПОД доской, в её же колонке, а не во всю ширину под сеткой:
-              полосой она оставляла под левой колонкой пустое поле в рост складных
-              карточек, а тумблерам левая колонка мала — 340px не держат и двух
-              столбцов. */}
-          <ActionTuningCard />
-          {/* Темп всего прогрева (5.2) — тоже общий, поэтому рядом с тумблерами. */}
-          <PaceCard />
         </div>
       </div>
+
+      {/* Выбрано несколько готовых: действия над ними — в закреплённой панели снизу,
+          чтобы не искать их в начале длинного списка. */}
+      {/* Порталом в body: у обёртки страницы анимация с transform, и `fixed` внутри неё
+          считался бы от обёртки, а не от окна — панель висела посреди страницы. */}
+      {picked.length > 0
+        ? createPortal(
+            <div className="pointer-events-none fixed inset-x-0 bottom-4 z-sticky flex justify-center px-4">
+              <div
+                role="toolbar"
+                aria-label={t('warming.ready.picked', { count: picked.length })}
+                className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-full border border-line bg-surface-card py-2 pl-4 pr-2 shadow-pop"
+              >
+                <span className="type-body-medium">
+                  {t('warming.ready.picked', { count: picked.length })}
+                </span>
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  disabled={bulkBusy}
+                  onClick={() => {
+                    openAddTo(pickedIds);
+                  }}
+                >
+                  <Icon name="folder" size={14} />
+                  {t('warming.folders.add.button')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="gap-2"
+                  disabled={bulkBusy}
+                  onClick={() => {
+                    setPoolStart({ ids: pickedIds, skipped: 0, geo: batchGeoOf(picked) });
+                  }}
+                >
+                  <Icon name="play" size={14} />
+                  {t('warming.ready.startPicked', { count: picked.length })}
+                </Button>
+                <IconButton
+                  shape="circle"
+                  aria-label={t('warming.ready.clearPick')}
+                  title={t('warming.ready.clearPick')}
+                  onClick={clearPicked}
+                >
+                  <Icon name="close" size={14} />
+                </IconButton>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {folderEdit ? (
+        <FolderSettingsModal
+          initial={folderEdit.folder}
+          members={folderEdit.folder.id ? folderMembers(folderEdit.folder.id) : 0}
+          onClose={() => {
+            const { returnTo } = folderEdit;
+            setFolderEdit(null);
+            // Закрыли без сохранения — назад к тому же добавлению, ничего не запуская.
+            if (returnTo) setAddTo((current) => current ?? returnTo);
+          }}
+          onSave={(folder) => {
+            const id = folderStore.save(folder);
+            // Из «В папку» — обратно к добавлению с новой папкой; запуск — только по
+            // кнопке оператора там.
+            if (folderEdit.returnTo) setAddTo({ ...folderEdit.returnTo, folderId: id });
+            else setFolderView(id);
+          }}
+          onDelete={() => {
+            folderStore.remove(folderEdit.folder.id);
+            setFolderView(null);
+          }}
+        />
+      ) : null}
+
+      {addTo ? (
+        <AddToFolderModal
+          accountIds={addTo.ids}
+          initialFolderId={addTo.folderId}
+          skipped={addTo.skipped}
+          geoPairs={Object.values(addTo.geo)}
+          folders={folders}
+          startIndex={folderMembers}
+          onCreateFolder={() => {
+            setAddTo(null);
+            createFolder(addTo);
+          }}
+          onClose={() => {
+            setAddTo(null);
+          }}
+          onConfirm={(folderId, onlyGeoMatching) => {
+            startIntoFolder(folderId, onlyGeoMatching, addTo);
+            clearPicked();
+          }}
+        />
+      ) : null}
 
       {warmDaysFor ? (
         <WarmDaysModal
@@ -758,7 +1385,12 @@ export function WarmingPage() {
           }}
           geo={geoOf(warmDaysFor)}
           onConfirm={(choice) => {
-            void startAccount(warmDaysFor.account_id, startChoice(choice));
+            // Окно могло пролежать открытым: аккаунт уже запущен (из пула, «В папку»)
+            // или больше не готов — второй старт не уходит.
+            const ready = launchable([warmDaysFor.account_id]);
+            reportDropped(1, ready.length);
+            if (ready.length === 0) return;
+            void startAccount(warmDaysFor.account_id, startChoice(choice, geoOf(warmDaysFor)));
           }}
         />
       ) : null}
@@ -776,7 +1408,7 @@ export function WarmingPage() {
             setRewarmFor(null);
           }}
           onConfirm={(choice) => {
-            void rewarmAccount(rewarmFor.account_id, startChoice(choice));
+            void rewarmAccount(rewarmFor.account_id, startChoice(choice, geoOf(rewarmFor)));
           }}
         />
       ) : null}
@@ -810,29 +1442,36 @@ export function WarmingPage() {
         />
       ) : null}
 
-      {poolStartOpen ? (
+      {poolStart ? (
         <WarmDaysModal
-          poolAccountIds={poolIdle.map((a) => a.account_id)}
-          poolSkipped={idle.length - poolIdle.length}
-          poolGeoMismatch={poolGeoMismatch}
+          poolAccountIds={poolStart.ids}
+          poolSkipped={poolStart.skipped}
+          poolGeoMismatch={Object.keys(poolStart.geo).length}
+          poolGeoPairs={Object.values(poolStart.geo)}
           defaultDays={data.default_target_days}
           cadence={data.cadence_preview}
           onClose={() => {
-            setPoolStartOpen(false);
+            setPoolStart(null);
           }}
           onConfirm={(choice) => {
             // Same length, cadence and window for all; the backend draws each account
             // its own moment inside the window. «Только совпадающие» leaves out every
             // account whose geo still waits for a consent.
+            // Each account consents only to the pair the dialog showed it.
             const request = { ...startChoice(choice), spread_start: true };
-            const targets = choice.onlyGeoMatching
-              ? poolIdle.filter((a) => !needsGeoConsent(a))
-              : poolIdle;
+            const ready = launchable(poolStart.ids);
+            const targets = geoTargets(ready, poolStart.geo, choice.onlyGeoMatching);
+            reportDropped(poolStart.ids.length, ready.length);
+            clearPicked();
             // Each account warms through its primary device: a phone-only account has no
             // desktop sign-in to fall back on.
             runBatch(
               targets.map((a) =>
-                startAccount(a.account_id, { ...request, device_mode: a.devices?.[0] }),
+                startAccount(a.account_id, {
+                  ...request,
+                  ...batchConsent(poolStart.geo, a.account_id, choice.onlyGeoMatching),
+                  device_mode: a.devices?.[0],
+                }),
               ),
             );
           }}
@@ -848,6 +1487,20 @@ export function WarmingPage() {
         />
       ) : null}
 
+      {stopPoolOpen ? (
+        <ConfirmModal
+          title={t('warming.pool.stopConfirm.title')}
+          body={t('warming.pool.stopConfirm.body', { count: warming.length })}
+          confirmLabel={t('warming.pool.stopConfirm.confirm')}
+          cancelLabel={t('warming.channels.cancel')}
+          onClose={() => {
+            setStopPoolOpen(false);
+          }}
+          onConfirm={() => {
+            runBatch(warming.map((a) => stopAccount(a.account_id)));
+          }}
+        />
+      ) : null}
       {channelToRemove ? (
         <ConfirmModal
           title={t('warming.channels.removeTitle', { channel: channelToRemove })}

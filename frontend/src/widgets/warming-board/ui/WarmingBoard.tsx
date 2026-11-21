@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
@@ -9,7 +9,7 @@ import { SpamBlockBadge, SurvivalBadge, WaveChip } from '@/entities/warming';
 import { PhoneScreen } from '@/features/phone-screen';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
-import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
+import { cn, eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -24,9 +24,19 @@ import {
   TerminalPane,
 } from '@/shared/ui';
 
+import { useAccountDrop } from '../model/useAccountDrop';
+
+import { type BoardTool, BoardTools } from './BoardTools';
 import { FloodMemoryLine } from './FloodMemoryLine';
 import { SpamBlockPanel } from './SpamBlockPanel';
-import { AttentionRow, MechanicsRow, PhaseRow, TodayRow, VisitRow } from './WarmingCardRows';
+import {
+  AttentionRow,
+  CardAlert,
+  MechanicsRow,
+  PhaseRow,
+  TodayRow,
+  VisitRow,
+} from './WarmingCardRows';
 import { WarmDayCount } from './WarmDayCount';
 import { WarmStopModal } from './WarmStopModal';
 
@@ -48,6 +58,17 @@ interface WarmingBoardProps {
   // The target a card falls back to when its stint carries none — the board's
   // `default_target_days`, the same length a start without a pick runs for.
   defaultTargetDays?: number;
+  // «Прогрев пачками»: «назад к папкам» и сводка открытой папки над карточками.
+  toolbar?: ReactNode;
+  // Иконки в шапке рядом с действиями и темпом: переписка и каналы (их даёт страница).
+  tools?: BoardTool[];
+  // Открытая папка принимает брошенный готовый аккаунт.
+  dragging?: boolean;
+  onDropAccount?: (accountId: string) => void;
+  // Экран всех папок: рисуется вместо карточек аккаунтов.
+  overview?: ReactNode;
+  // Пусто в папке — своя подсказка вместо «перенесите аккаунты сюда».
+  emptyText?: string;
 }
 
 type WarmingState = WarmingAccountState['state'];
@@ -203,11 +224,27 @@ function WarmingCard({
   const complete = elapsed >= target && !blocked;
   const statusTone = badgeTone(WARM_STATUS[account.state]);
   const primaryId = accountDisplayName(account);
+  // Карточка белая; цвет рамки — только когда есть что сказать: ошибка, внимание,
+  // готово. Голубая подложка у всех подряд ничего не различала.
+  const needsAttention =
+    account.attention != null ||
+    account.spam_check_warning === true ||
+    account.mobile_emulator_off === true ||
+    account.phone_prep?.status === 'failed' ||
+    account.phone_no_channels === true;
+  const frame =
+    blocked || account.state === 'error'
+      ? 'border-danger-line'
+      : complete
+        ? 'border-success-line'
+        : needsAttention
+          ? 'border-warning-line'
+          : 'border-line';
 
   return (
-    <div className="rounded-md border border-info-line bg-info-tint px-6 py-4">
+    <div className={cn('rounded-md border bg-surface-card p-4', frame)}>
       {/* header */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           <AccountAvatar
             account={account}
@@ -220,7 +257,7 @@ function WarmingCard({
                 border. The card's own grid track has a fixed 320px minimum, so the
                 name cannot widen the track — it can only spill. `title` keeps the
                 whole name reachable now that the card shows a prefix of it. */}
-            <div className="truncate type-h3" title={primaryId}>
+            <div className="truncate type-body-medium" title={primaryId}>
               {primaryId}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -265,13 +302,14 @@ function WarmingCard({
           {!complete && !blocked ? (
             <>
               <FeedbackMark result={result} />
+              {/* Тихая кнопка: остановка нужна редко и не должна спорить с именем. */}
               <Button
                 size="sm"
+                variant="ghost"
                 disabled={busy}
                 onClick={() => {
                   setStopOpen(true);
                 }}
-                className="text-content-muted"
               >
                 {t('warming.actions.stopShort')}
               </Button>
@@ -316,9 +354,9 @@ function WarmingCard({
           blues used to meet, and with them collapsed it would paint its parent's
           colour and have no edge at all. `primary-hairline` is the rung for exactly
           this — faint enough to double as a divider fill. */}
-      <div className="rounded-md border border-info-hairline bg-info-tint px-4 pb-3 pt-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="type-small-medium">{t('warming.inProgress.days')}</span>
+      <div>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="type-small text-content-muted">{t('warming.inProgress.days')}</span>
           <WarmDayCount days={days} target={target} idle={account.idle_days ?? 0} />
         </div>
 
@@ -332,7 +370,6 @@ function WarmingCard({
       </div>
 
       {!complete && !blocked ? <TodayRow account={account} /> : null}
-      {!complete && !blocked ? <MechanicsRow account={account} /> : null}
       <VisitRow account={account} />
       {blocked ? (
         <SpamBlockPanel
@@ -349,60 +386,30 @@ function WarmingCard({
       )}
 
       {/* The backend decides when @SpamBot has been silent long enough to say so. */}
-      {account.spam_check_warning ? (
-        <div
-          role="status"
-          className="mt-3 flex items-center gap-2 rounded-sm border border-warning-line bg-warning-tint px-3 py-2 type-small text-warning-deep"
-        >
-          <Icon name="alert-triangle" size={14} className="shrink-0" />
-          {t('warming.card.spamUnknown')}
-        </div>
-      ) : null}
+      {account.spam_check_warning ? <CardAlert>{t('warming.card.spamUnknown')}</CardAlert> : null}
 
       {/* A phone stint never falls back to Telethon: its visits wait for the emulator. */}
-      {account.mobile_emulator_off ? (
-        <div
-          role="status"
-          className="mt-3 flex items-center gap-2 rounded-sm border border-warning-line bg-warning-tint px-3 py-2 type-small text-warning-deep"
-        >
-          <Icon name="alert-triangle" size={14} className="shrink-0" />
-          {t('warming.card.emulatorOff')}
-        </div>
-      ) : null}
+      {account.mobile_emulator_off ? <CardAlert>{t('warming.card.emulatorOff')}</CardAlert> : null}
 
       {/* A phone stint's phone is readied at its start; its visits wait for it. */}
       {account.phone_prep?.status === 'preparing' ? (
-        <div
-          role="status"
-          className="mt-3 flex items-center gap-2 rounded-sm border border-info-line bg-info-tint px-3 py-2 type-small text-info-strong"
-        >
-          <Icon name="smartphone" size={14} className="shrink-0" />
+        <CardAlert tone="info" icon="smartphone">
           {t('warming.card.phonePreparing')}
-        </div>
+        </CardAlert>
       ) : null}
       {account.phone_prep?.status === 'failed' ? (
-        <div
-          role="status"
-          className="mt-3 flex items-center gap-2 rounded-sm border border-warning-line bg-warning-tint px-3 py-2 type-small text-warning-deep"
-        >
-          <Icon name="alert-triangle" size={14} className="shrink-0" />
+        <CardAlert>
           {t('warming.card.phonePrepFailed', {
             reason: t(`shell.code.${account.phone_prep.code ?? ''}`, {
               defaultValue: account.phone_prep.code ?? '',
             }),
           })}
-        </div>
+        </CardAlert>
       ) : null}
 
       {/* A phone visit reads the channels its app already has; it never joins one. */}
       {account.phone_no_channels ? (
-        <div
-          role="status"
-          className="mt-3 flex items-center gap-2 rounded-sm border border-warning-line bg-warning-tint px-3 py-2 type-small text-warning-deep"
-        >
-          <Icon name="alert-triangle" size={14} className="shrink-0" />
-          {t('warming.card.phoneNoChannels')}
-        </div>
+        <CardAlert>{t('warming.card.phoneNoChannels')}</CardAlert>
       ) : null}
 
       {!complete ? (
@@ -413,7 +420,7 @@ function WarmingCard({
             onClick={() => {
               setOpen((v) => !v);
             }}
-            className="mt-3 flex w-full items-center justify-center gap-1 border-t border-canvas pt-3 text-small text-content-muted"
+            className="mt-3 flex w-full items-center justify-center gap-1 border-t border-line pt-3 text-small text-content-muted hover:text-content-primary"
           >
             {t('warming.card.logToggle')}
             <span
@@ -424,6 +431,12 @@ function WarmingCard({
           </button>
           {open ? (
             <div className="mt-3">
+              {/* Что делает этот прогрев — подробность, а не то, что нужно видеть всегда. */}
+              {!blocked ? (
+                <div className="mb-2">
+                  <MechanicsRow account={account} />
+                </div>
+              ) : null}
               {visibleLines.length > 0 ? (
                 <div className="mb-2 flex justify-end">
                   <Button
@@ -558,13 +571,29 @@ export function WarmingBoard({
   logLimit = DEFAULT_CARD_LOG_LIMIT,
   channelLabels = {},
   defaultTargetDays = TWO_WEEK_DAYS,
+  toolbar,
+  tools,
+  dragging = false,
+  onDropAccount,
+  overview,
+  emptyText,
 }: WarmingBoardProps) {
   const { t } = useTranslation();
+  const drop = useAccountDrop(onDropAccount);
   return (
-    <Card className="p-4">
+    <Card
+      {...drop.handlers}
+      className={cn(
+        'p-4 transition-colors',
+        drop.over
+          ? 'outline-dashed outline-2 outline-action-primary'
+          : dragging && 'outline-dashed outline-2 outline-info-line',
+      )}
+    >
       <CardHeader
         className="mb-4"
         title={t('warming.inProgress.title')}
+        aside={<BoardTools extra={tools} />}
         icon={
           <svg
             width="16"
@@ -587,28 +616,33 @@ export function WarmingBoard({
         ) : null}
       </CardHeader>
 
-      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
-        {warming.map((account) => (
-          <WarmingCard
-            key={account.account_id}
-            account={account}
-            onStop={onStop}
-            onPromote={onPromote}
-            onDelete={onDelete}
-            onKeep={onKeep}
-            busy={busyIds.has(account.account_id)}
-            result={feedback[account.account_id]}
-            logLimit={logLimit}
-            channelLabels={channelLabels}
-            defaultTargetDays={defaultTargetDays}
-          />
-        ))}
-        {warming.length === 0 ? (
-          <div className="col-span-full rounded-md border-[1.5px] border-dashed border-info-line px-3 py-16 text-center type-body text-content-subtle">
-            {t('warming.column.empty')}
-          </div>
-        ) : null}
-      </div>
+      {toolbar}
+
+      {overview ?? (
+        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
+          {warming.map((account) => (
+            <WarmingCard
+              key={account.account_id}
+              account={account}
+              onStop={onStop}
+              onPromote={onPromote}
+              onDelete={onDelete}
+              onKeep={onKeep}
+              busy={busyIds.has(account.account_id)}
+              result={feedback[account.account_id]}
+              logLimit={logLimit}
+              channelLabels={channelLabels}
+              defaultTargetDays={defaultTargetDays}
+            />
+          ))}
+          {warming.length === 0 ? (
+            <div className="col-span-full flex flex-col items-center gap-2 rounded-md border-[1.5px] border-dashed border-info-line px-3 py-16 text-center type-body text-content-subtle">
+              <Icon name="folder-plus" size={16} className="text-info-strong" />
+              {emptyText ?? t('warming.column.empty')}
+            </div>
+          ) : null}
+        </div>
+      )}
     </Card>
   );
 }

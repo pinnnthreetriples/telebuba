@@ -362,3 +362,25 @@ test('hides the typing indicator once the newest reply has gone stale', () => {
   );
   expect(screen.queryByText('печатает…')).not.toBeInTheDocument();
 });
+
+test('while the first answer is in flight it shows skeleton rows, not «no chats yet»', async () => {
+  let release: (() => void) | undefined;
+  vi.mocked(fetch).mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        release = () => {
+          resolve(new Response(JSON.stringify({ messages: [] }), { status: 200 }));
+        };
+      }),
+  );
+  const { container } = renderWithClient(<DialogueFeed bare />);
+  expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+  expect(screen.queryByText('Пока нет переписки')).toBeNull();
+  await waitFor(() => {
+    expect(release).toBeDefined();
+  });
+  act(() => {
+    release?.();
+  });
+  expect(await screen.findByText('Пока нет переписки')).toBeInTheDocument();
+});
