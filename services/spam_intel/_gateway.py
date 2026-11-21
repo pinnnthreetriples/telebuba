@@ -109,7 +109,11 @@ def reset_for_tests() -> None:
     _admission.reset()
     forget_logged()
     forget_served()
-    _STARTED = datetime.now(UTC) - timedelta(days=1)
+    # A fixed instant older than any clock a test sets, not "a day before the real now": the
+    # tests freeze the gateway's clock on fixed dates, and once the calendar passed them the
+    # "aged" process started AFTER the frozen now — a negative age that read as the quiet start
+    # and deferred every routine ask. A test that wants a young process sets `_STARTED` itself.
+    _STARTED = datetime(2000, 1, 1, tzinfo=UTC)
 
 
 def _human_plan() -> dict[str, HumanProbePlan]:
