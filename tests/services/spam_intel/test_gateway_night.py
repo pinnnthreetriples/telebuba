@@ -30,6 +30,16 @@ _NIGHT = datetime(2026, 11, 18, 23, 30, tzinfo=UTC)  # 02:30 local
 _DAY = datetime(2026, 11, 18, 9, 0, tzinfo=UTC)  # 12:00 local
 
 
+@pytest.fixture(autouse=True)
+def _long_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start the process well before the fixed clock readings, so the startup quiet never applies.
+
+    ``_STARTED`` is the real import time; once the wall clock passes ``_NIGHT``/``_DAY`` the
+    process age would go negative and every routine ask would defer as ``startup_quiet``.
+    """
+    monkeypatch.setattr(_gateway, "_STARTED", datetime(2026, 11, 1, tzinfo=UTC))
+
+
 @pytest.fixture
 def zone(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_gateway, "timezone_for_phone", lambda _phone: _FIXED)
