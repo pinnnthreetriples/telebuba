@@ -123,6 +123,10 @@ override-dependencies = [
     # CVE-2026-112914/112940 in filelock <4.2.1 (via virtualenv and pip-audit's
     # cachecontrol). Recheck when those dependents require the patched line.
     "filelock>=4.2.1",
+    # CVE-2026-132276 in wcmatch <11.2, reached only through semgrep, which
+    # pins wcmatch~=8.3 up to 1.186.0. semgrep runs on 11.2 (`semgrep --config
+    # auto --error .` passes). Recheck when semgrep's wcmatch pin catches up.
+    "wcmatch>=11.2",
 ]
 
 # ============================================================================
