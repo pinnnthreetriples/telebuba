@@ -310,6 +310,24 @@ async def test_a_recreated_account_does_not_inherit_a_stale_primary_device() -> 
 
 
 @pytest.mark.asyncio
+async def test_an_app_api_id_telegram_refused_sent_no_code_and_keeps_the_pacing_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # SendCode itself was refused, so no login code reached the account: a retry after
+    # the operator fixes TELEGRAM__MOBILE_API_ID must not wait out a cooldown.
+    await _desktop()
+    _fake_sign_in(monkeypatch, code="device_api_id_rejected")
+    with pytest.raises(DeviceRefusedError) as refused:
+        await add_account_device("acc", "mobile")
+    assert refused.value.code == "device_api_id_rejected"
+    calls = _fake_sign_in(monkeypatch)
+
+    await add_account_device("acc", "mobile")
+
+    assert len(calls) == 1, "the retry is not blocked by a cooldown no code started"
+
+
+@pytest.mark.asyncio
 async def test_a_refusal_before_any_code_was_asked_for_keeps_the_pacing_free(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

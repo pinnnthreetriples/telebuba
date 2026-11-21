@@ -109,10 +109,8 @@ def reset_for_tests() -> None:
     _admission.reset()
     forget_logged()
     forget_served()
-    # A fixed instant older than any clock a test sets, not "a day before the real now": the
-    # tests freeze the gateway's clock on fixed dates, and once the calendar passed them the
-    # "aged" process started AFTER the frozen now — a negative age that read as the quiet start
-    # and deferred every routine ask. A test that wants a young process sets `_STARTED` itself.
+    # A fixed instant long past, not "a day before the wall clock": tests pin the
+    # gateway's clock to fixed dates, and those must not fall before the start.
     _STARTED = datetime(2000, 1, 1, tzinfo=UTC)
 
 
