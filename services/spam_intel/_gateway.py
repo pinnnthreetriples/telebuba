@@ -109,7 +109,9 @@ def reset_for_tests() -> None:
     _admission.reset()
     forget_logged()
     forget_served()
-    _STARTED = datetime.now(UTC) - timedelta(days=1)
+    # A fixed instant long past, not "a day before the wall clock": tests pin the
+    # gateway's clock to fixed dates, and those must not fall before the start.
+    _STARTED = datetime(2000, 1, 1, tzinfo=UTC)
 
 
 def _human_plan() -> dict[str, HumanProbePlan]:

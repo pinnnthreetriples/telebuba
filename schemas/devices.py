@@ -30,6 +30,8 @@ DeviceRefusalCode = Literal[
     "device_user_mismatch",
     "device_flood_wait",
     "device_lang_pack_invalid",
+    # Telegram refused the app's api_id itself (published or invalid): no code was sent.
+    "device_api_id_rejected",
     "device_primary_unavailable",
     "device_auth_failed",
     "device_unreachable",
