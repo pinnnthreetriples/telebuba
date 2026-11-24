@@ -39,7 +39,7 @@ from telethon import TelegramClient, errors
 from telethon.tl.functions.auth import LogOutRequest
 
 from core.config import settings
-from core.session_vault import quarantine_file, snapshot_session
+from core.session_vault import copy_meta, quarantine_file, snapshot_session
 from core.telegram_client._api_credentials import record_key_api
 from core.telegram_client._auth_bounds import (
     UNREACHABLE_ERRORS,
@@ -52,6 +52,7 @@ from core.telegram_client._client import (
     create_telegram_client,
     prepare_telegram_client_profile,
 )
+from core.telegram_client._key_intent import sign_in_intent
 from core.telegram_client._pool import removing_client
 from core.telegram_client._profile import _DEAD_SESSION_ERRORS
 from core.telegram_client._twofa_candidates import sign_in_with_passwords
@@ -156,6 +157,7 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
     async with (
         _auth_lock(request.account_id),
         removing_client(request.account_id, profile.device_type),
+        sign_in_intent(profile, new_key=request.new_key),
     ):
         client = create_telegram_client(profile)
         attempted: list[str] = []
@@ -416,9 +418,13 @@ async def back_up_account_session(account_id: str, session_name: str | None = No
 
     ``True`` when a new version was written; ``False`` when the vault is off, the file is not
     there or nothing changed since the last copy. Path composition is the client's own, so
-    the copy is of exactly the file a client would open.
+    the copy is of exactly the file a client would open. The recovery bundle the service
+    built travels in ``core.session_vault.copy_meta`` (kept out of the signature on purpose)
+    and is stored next to the version.
     """
     session_file = PlainPath(
         f"{await _session_path(_login_request(account_id, session_name))}.session"
     )
-    return await to_thread.run_sync(snapshot_session, session_file) is not None
+    meta = copy_meta.get()
+    copy = await to_thread.run_sync(lambda: snapshot_session(session_file, meta=meta))
+    return copy is not None

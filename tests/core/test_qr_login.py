@@ -102,8 +102,10 @@ class FakeClient:
     async def disconnect(self) -> None:
         self.disconnected = True
 
-    async def is_user_authorized(self) -> bool:
-        return self.authorized
+    async def __call__(self, _request: object) -> None:
+        # ``probe_authorized`` sends ``GetStateRequest``; a refusal is a 401.
+        if not self.authorized:
+            raise errors.AuthKeyUnregisteredError(request=None)
 
     async def get_me(self) -> FakeUser:
         return FakeUser()

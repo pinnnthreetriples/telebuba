@@ -251,6 +251,13 @@ async def check_account_session(data: AccountCheckRequest) -> AccountRead:
     )
     if result.status == "session_file_missing" and account.status in _NO_KEY_EXPECTED:
         result = result.model_copy(update={"status": "unauthorized"})
+    if result.status == "alive" and account.user_id not in {None, result.user_id}:
+        # The file holds a key of ANOTHER Telegram user (a QR scanned by the wrong phone whose
+        # session could not be set aside, a file put there by hand). The row's cloud password,
+        # passkey and proxy belong to the user it was: it is never rewritten into someone else.
+        await log_event("WARNING", "account_session_user_mismatch", account_id=account.account_id)
+        code = "session_user_mismatch"
+        raise AccountActionError(code)
     saved = await update_account_from_session_check(result)
     if result.status == "session_file_missing":
         # Not a death (the key may be alive): told once per outage, with how to put it back.

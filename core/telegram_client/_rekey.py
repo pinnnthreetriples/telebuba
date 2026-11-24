@@ -26,6 +26,14 @@ The old AUTHORIZATION (the seller-known key) is ended later, by the service
 ``hash=0``, so the new session names it: the one entry in its list the approver's lacked
 (created when the approver's entry says). Anything but exactly one is a refusal, never ``0``.
 Every failure is a bounded code; the cloud password is only passed to Telegram.
+
+The flow is journaled (``account_key_intents``, see ``_key_intent``): written before the new key
+exists, advanced when the login is accepted (from then on the new authorization exists whatever
+happens next), when the old hash is known and when the swap landed. The gateway never closes a
+successful intent: the service does, once the ``account_rekeys`` row is stored. A crash leaves
+the intent open for ``services.accounts._key_repair``, and an undo whose logout Telegram did
+not confirm keeps the scratch file and the intent open for the same reason. Every network call
+is bounded: one hung call must not leave the account tombstoned until a restart.
 """
 
 from __future__ import annotations
@@ -38,34 +46,32 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from anyio import Path as AsyncPath
-from telethon import errors
-from telethon.tl.functions.account import ChangeAuthorizationSettingsRequest
-from telethon.tl.functions.auth import AcceptLoginTokenRequest
 
-from core.config import settings
+from core.repositories.account_key_intents import open_intent
 from core.telegram_client import _rekey_files as _files
 from core.telegram_client._api_credentials import record_key_api
-from core.telegram_client._auth import _auth_lock, _remove_session_file
+from core.telegram_client._auth import _auth_lock
+from core.telegram_client._auth_bounds import auth_deadline, safe_disconnect
 from core.telegram_client._client import (
     create_telegram_client,
     prepare_telegram_client_profile,
 )
+from core.telegram_client._key_intent import advance_quietly, close_quietly
 from core.telegram_client._pool import get_client, removing_client
 from core.telegram_client._rekey_errors import (
     _APPROVER,
     _CONFLICT,
-    _FAILED,
     _INCOMPLETE,
     _MISMATCH,
     _OLD_UNKNOWN,
     _SWAP,
-    _TWOFA_MISSING,
     RekeyGatewayError,
     _classify,
     _refusal,
 )
+from core.telegram_client._rekey_token import _sign_in_by_token
+from core.telegram_client._rekey_undo import _discard, _disconnect_quietly
 from core.telegram_client._session_audit import _listing
-from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.session_rekey import RekeyResult
 
@@ -80,100 +86,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def _sign_in_by_token(
-    new: TelegramClient, approver: TelegramClient, account_id: str, passwords: Sequence[str]
-) -> str:
-    """Log ``new`` in with a token ``approver`` accepts; the new authorization's hash."""
-    await new.connect()
-    qr = await new.qr_login()
-    # Telegram answers the acceptance with an update that ``qr.wait`` listens for only once
-    # it runs: start waiting BEFORE accepting, or the update lands unheard and the login
-    # times out with the token already accepted.
-    timeout = settings.telegram.session_check_timeout_seconds
-    waiting = asyncio.ensure_future(qr.wait(timeout=timeout))
-    await asyncio.sleep(0)
-    try:
-        new_hash = await _accept_token(approver, qr.token)
-    except BaseException:
-        waiting.cancel()
-        raise
-    try:
-        await waiting
-    except errors.SessionPasswordNeededError:
-        if not passwords:
-            raise _refusal(_TWOFA_MISSING) from None
-        await sign_in_with_passwords(new, account_id, passwords)
-    return str(new_hash)
-
-
-async def _accept_token(approver: TelegramClient, token: bytes) -> int:
-    """Have the imported session accept ``token``; the new authorization's hash."""
-    accepted = await approver(AcceptLoginTokenRequest(token=token))
-    new_hash = getattr(accepted, "hash", None)
-    if not isinstance(new_hash, int):
-        raise _refusal(_FAILED, "AuthorizationWithoutHash")
-    if getattr(accepted, "unconfirmed", None):
-        # A login by a session that is old enough to approve it is the owner's own: say so,
-        # as an official client does when the user recognises the new session.
-        await approver(ChangeAuthorizationSettingsRequest(hash=new_hash, confirmed=True))
-    return new_hash
-
-
-_RECONNECT_TIMEOUT_S = 20.0
-
-
-def _client_key(client: object) -> bytes | None:
-    """The auth key a client holds in memory (kept after ``disconnect``); ``None`` if unknown."""
-    key = getattr(getattr(getattr(client, "session", None), "auth_key", None), "key", None)
-    return bytes(key) if isinstance(key, (bytes, bytearray)) else None
-
-
-async def _may_hold_new_key(new: TelegramClient, final_file: str) -> bool:
-    """Whether the account's own file may hold ``new``'s key: anything but proof it does not."""
-    held = await asyncio.to_thread(_files.file_key, final_file)
-    mine = _client_key(new)
-    return held is None or mine is None or held == mine
-
-
-async def _discard(
-    new: TelegramClient, scratch_path: str, *, signed_in: bool, final_file: str | None = None
-) -> None:
-    """Undo a failed attempt: end the new authorization, disconnect, remove its file.
-
-    Each step runs whatever the one before did: a logout or disconnect that raises must not
-    leave the half-made ``.session`` behind to refuse every retry.
-
-    ``final_file`` is the account's own file once the swap may have written it. The new
-    authorization is then ended only on proof that this file does not hold its key: ending
-    it otherwise could end the account's only working key. Kept, it stays signed in with its
-    scratch file in place, and the warning says so.
-    """
-    if signed_in and final_file is not None and await _may_hold_new_key(new, final_file):
-        logger.warning("re-key undo kept the new authorization: the account's file may hold it")
-        await _disconnect_quietly(new)
-        return
-    if signed_in and not new.is_connected():
-        # The swap stage disconnects ``new`` first; ``log_out`` on a closed client would
-        # fail and leave the new authorization standing, orphaned with no session file.
-        try:
-            await asyncio.wait_for(new.connect(), _RECONNECT_TIMEOUT_S)
-        except Exception as exc:  # noqa: BLE001 - the logout below then fails too; logged.
-            logger.warning("re-key reconnect failed (%s)", type(exc).__name__)
-    steps = (("logout", new.log_out),) if signed_in else ()
-    for step, call in (*steps, ("disconnect", new.disconnect)):
-        try:
-            await call()
-        except Exception as exc:  # noqa: BLE001 - best effort; the file still goes below.
-            logger.warning("re-key %s failed (%s)", step, type(exc).__name__)
-    try:
-        await _remove_session_file(scratch_path)
-    except OSError as exc:
-        logger.warning("re-key scratch session kept (%s)", type(exc).__name__)
-
-
 async def _require_same_user(client: TelegramClient, user_id: int, code: str) -> None:
     """Refuse (``code``) when ``client`` is not the Telegram user ``user_id``."""
-    me = await client.get_me()
+    async with asyncio.timeout(auth_deadline()):
+        me = await client.get_me()
     if getattr(me, "id", None) != user_id:
         raise _refusal(code)
 
@@ -203,10 +119,11 @@ def _real_hashes(authorizations: Sequence[object]) -> dict[int, object]:
 
 async def _approver_identity(approver: TelegramClient) -> _Approver:
     """The imported session's Telegram user id and the authorizations it lists."""
-    authorizations, _ttl = await _listing(approver)
+    async with asyncio.timeout(auth_deadline()):
+        authorizations, _ttl = await _listing(approver)
+        me = await approver.get_me()
     current = next((a for a in authorizations if getattr(a, "current", None)), None)
     created = getattr(current, "date_created", None)
-    me = await approver.get_me()
     user_id = getattr(me, "id", None)
     if not isinstance(user_id, int):
         raise _refusal(_APPROVER)
@@ -223,7 +140,8 @@ async def _old_hash(new: TelegramClient, before: _Approver, new_hash: str) -> st
     Refused when the approver's own creation date is not known: without it a stranger who
     logged in between the two reads could not be told from the imported session.
     """
-    authorizations, _ttl = await _listing(new)
+    async with asyncio.timeout(auth_deadline()):
+        authorizations, _ttl = await _listing(new)
     fresh = {
         h: a
         for h, a in _real_hashes(authorizations).items()
@@ -260,21 +178,15 @@ async def _require_no_aside(final_session_path: str) -> None:
     await _files.tidy(aside)
 
 
-async def _disconnect_quietly(client: TelegramClient) -> None:
-    try:
-        await client.disconnect()
-    except Exception as exc:  # noqa: BLE001 - best effort; the authorization is kept on purpose.
-        logger.warning("re-key disconnect failed (%s)", type(exc).__name__)
-
-
 async def _require_works(profile: TelegramClientProfile, user_id: int) -> None:
     """Open the account's own file once: it must answer as ``user_id``."""
     check = create_telegram_client(profile)
     try:
-        await check.connect()
+        async with asyncio.timeout(auth_deadline()):
+            await check.connect()
         await _require_same_user(check, user_id, _SWAP)
     finally:
-        await check.disconnect()
+        await safe_disconnect(check)
 
 
 async def _swap(
@@ -369,36 +281,89 @@ async def rekey_session(
             )
             await _require_free(scratch.session_path)
             await _require_no_aside(final.session_path)
-            new = create_telegram_client(scratch)
+            final_file = f"{final.session_path}.session"
+            intent_id = await _open_rekey_intent(account_id, device, scratch_name, final)
+            try:
+                new = create_telegram_client(scratch)
+            except BaseException:
+                await asyncio.shield(close_quietly(intent_id, "undone"))
+                raise
             signed_in = False
             # Set once the swap may have written the account's own file.
-            final_file: str | None = None
+            swap_file: str | None = None
             old_hash = ""
-            try:
-                new_hash = await _sign_in_by_token(new, approver, account_id, passwords)
+
+            async def accepted(new_hash: str | None) -> None:
+                # An authorization exists (or may: ``None``) from here on, whatever follows.
+                nonlocal signed_in
                 signed_in = True
+                await advance_quietly(intent_id, stage="signed_in", new_hash=new_hash)
+
+            try:
+                new_hash = await _sign_in_by_token(new, approver, account_id, passwords, accepted)
                 await _require_same_user(new, user_id, _MISMATCH)
                 old_hash = await _old_hash(new, before, new_hash)
-                await new.disconnect()
-                final_file = f"{final.session_path}.session"
+                await advance_quietly(intent_id, old_hash=old_hash)
+                await safe_disconnect(new)
+                swap_file = final_file
                 await _swap(final, scratch.session_path, user_id, device)
-                # The account's file holds the new key now: it keeps the API that made it.
-                await record_key_api(final)
+                await advance_quietly(intent_id, stage="swapped")
+                await _record_final_api(final)
             except RekeyGatewayError as exc:
                 if exc.code == _INCOMPLETE:
                     # Neither key is ended and no file dropped: a person sorts it out.
                     exc.old_hash = old_hash
                     await asyncio.shield(_disconnect_quietly(new))
+                    await asyncio.shield(close_quietly(intent_id, "incomplete"))
                     raise
                 await asyncio.shield(
-                    _discard(new, scratch.session_path, signed_in=signed_in, final_file=final_file)
+                    _discard(
+                        new,
+                        scratch.session_path,
+                        signed_in=signed_in,
+                        final_file=swap_file,
+                        intent_id=intent_id,
+                    )
                 )
                 raise
             except BaseException:
                 await asyncio.shield(
-                    _discard(new, scratch.session_path, signed_in=signed_in, final_file=final_file)
+                    _discard(
+                        new,
+                        scratch.session_path,
+                        signed_in=signed_in,
+                        final_file=swap_file,
+                        intent_id=intent_id,
+                    )
                 )
                 raise
         except Exception as exc:
             raise _classify(exc) from exc
-    return RekeyResult(old_hash=old_hash, new_hash=new_hash)
+    return RekeyResult(old_hash=old_hash, new_hash=new_hash, intent_id=intent_id)
+
+
+async def _open_rekey_intent(
+    account_id: str, device: DeviceType, scratch_name: str, final: TelegramClientProfile
+) -> int:
+    """Journal the re-key before the new key exists; what the repair needs after a crash."""
+    mark = await asyncio.to_thread(_files.key_mark, f"{final.session_path}.session")
+    return await open_intent(
+        account_id=account_id,
+        kind="rekey",
+        device_type=device,
+        session_name=scratch_name,
+        api_id=getattr(getattr(final, "device", None), "api_id", None),
+        old_key_mark=mark,
+    )
+
+
+async def _record_final_api(final: TelegramClientProfile) -> None:
+    """The account's file holds the new key now: it keeps the API that made it.
+
+    Never fails the re-key: the swap is done, and ending it over a bookkeeping write would
+    undo nothing. The intent keeps the API id, and the service records it when it finishes.
+    """
+    try:
+        await record_key_api(final)
+    except Exception as exc:  # noqa: BLE001 - see above; the class is the only note.
+        logger.warning("re-key could not record the key's API (%s)", type(exc).__name__)

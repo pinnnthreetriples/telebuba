@@ -209,7 +209,8 @@ async def test_update_account_from_temporary_session_check_keeps_identity(tmp_pa
         ),
     )
 
-    assert updated.status == "network_error"
+    # A transport fault says nothing about the key: ``status`` stays, the link is noted beside it.
+    assert (updated.status, updated.link_status) == ("alive", "network_error")
     assert updated.user_id == 456
     assert updated.username == "saved"
 

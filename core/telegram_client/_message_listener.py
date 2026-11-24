@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from telethon import events
 
+from core.telegram_client._authorized import probe_authorized
+from core.telegram_client._login_code import SERVICE_USER_ID, has_login_code
 from core.telegram_client._pool import (
     get_client,
     register_rebuild_hook,
@@ -82,17 +84,32 @@ async def _reattach_on_rebuild(account_id: str, client: TelegramClient) -> None:
 register_rebuild_hook(_reattach_on_rebuild)
 
 
+def _service_kind(
+    peer_type: str, peer_id: object, message: object
+) -> Literal["login_code", "other"] | None:
+    """What a message from Telegram's service user is; ``None`` for everyone else."""
+    if peer_type != "user" or peer_id != SERVICE_USER_ID:
+        return None
+    try:
+        return "login_code" if has_login_code(getattr(message, "message", None)) else "other"
+    except Exception:  # noqa: BLE001 - classification must never cost the inbox its delivery.
+        return "other"
+
+
 async def subscribe_incoming_messages(  # noqa: C901 - handler fencing and peer normalization.
     account_id: str,
     on_message: Callable[[InboxMessageReceived], Awaitable[None]],
 ) -> bool:
-    """Watch every peer on one authorized pooled account; return False if unauthorized."""
+    """Watch every peer on one authorized pooled account; return False if unauthorized.
+
+    A transient refusal of the probe (flood wait, server error) raises: it is not "unauthorized".
+    """
     async with _lock(account_id):
         generation = _next_generation(account_id)
         _detach_locked(account_id)
 
     client = await get_client(account_id)
-    if not await client.is_user_authorized():
+    if not await probe_authorized(client):
         return False
     event_filter = events.NewMessage(incoming=True)
 
@@ -121,6 +138,7 @@ async def subscribe_incoming_messages(  # noqa: C901 - handler fencing and peer 
                     peer_type=peer_type,
                     peer_id=str(peer_id),
                     message_id=message_id,
+                    service_kind=_service_kind(peer_type, peer_id, message),
                 ),
             )
         except Exception as exc:  # one update must not tear down the subscription.

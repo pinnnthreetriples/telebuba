@@ -96,6 +96,7 @@ from services.accounts._mobile_start import (
     show,
     start_and_sign_in,
 )
+from services.accounts._pod_cleanup import remove_with_tombstone, stop_after_proxy_change
 from services.accounts._result import AccountActionError
 from services.accounts.devices import DeviceRefusedError
 from services.accounts.lifecycle import require_account
@@ -390,39 +391,29 @@ async def _serial_on_current_proxy(account_id: str) -> str:
 async def stop_account_pod(account_id: str) -> None:
     """Stop the account's pod after its proxy changed; never fails the proxy change.
 
-    Waits for a start in flight, which may have read the old proxy. The next open
-    starts the pod on the new one; ``_open`` also restarts a running pod whose gateway
-    runs another proxy, which covers a change made while this process was down.
+    Waits for a start in flight only briefly (``_pod_cleanup``): one still going is made to
+    abort before it signs in, and the stop runs after it. The next open starts the pod on
+    the new proxy; ``_open`` also restarts a running pod whose gateway runs another proxy,
+    which covers a change made while this process was down.
     """
-    if not settings.emulator.enabled:
-        return
-    lock = _LOCKS.setdefault(account_id, asyncio.Lock())
-    _OPERATOR.discard(account_id)
-    try:
-        async with lock:
-            await stop_pod(container_name(account_id))
-    except EmulatorError as exc:
-        await log_event(
-            "WARNING",
-            "account_mobile_pod_stop_failed",
-            account_id=account_id,
-            extra={"reason": exc.code},
-        )
+    if settings.emulator.enabled:
+        await stop_after_proxy_change(account_id, stop_pod)
 
 
 async def remove_account_container(account_id: str) -> None:
     """Delete a removed account's pod, if it has one; never blocks the deletion.
 
     Waits for a start of the same account in flight, so that start cannot create a
-    pod after this one is gone. It alone drops the account's lock: the account
-    row is already deleted, so a later start finds no account under a fresh lock.
+    pod after this one is gone. The removal is a tombstone first (``_pod_cleanup``). It alone
+    drops the account's lock: the account row is already deleted, so a later start finds no
+    account under a fresh lock.
     """
     lock = _LOCKS.setdefault(account_id, asyncio.Lock())
     _OPERATOR.discard(account_id)
     forget_progress(account_id)
     try:
         async with lock:
-            removed = await remove_pod(container_name(account_id))
+            removed = await remove_with_tombstone(account_id, remove_pod)
     except EmulatorError as exc:
         await log_event(
             "WARNING",

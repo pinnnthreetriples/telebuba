@@ -137,8 +137,14 @@ readable to whoever may `docker exec` (root on the Docker host anyway).
 
 ### Changing an account's proxy
 
-Assigning, unassigning or removing the proxy stops the account's pod (after a start in flight,
-which may have read the old proxy). Opening a running pod first compares its gateway's proxy file
+Assigning, unassigning or removing the proxy stops the account's pod. The change waits for a
+start in flight at most 5 s (`_pod_cleanup._LOCK_WAIT_SECONDS`): that start is then marked, aborts
+before it asks Telegram for a login code (`emulator_not_running`) and the stop runs in a tracked
+background task once the lock frees (cancelled at shutdown). A stop that failed is tried three
+more times with growing pauses and logged once (`account_mobile_pod_stop_failed`). What still
+survives, a pod whose gateway runs another proxy or whose account has none, is stopped by
+`mobile_pods.stop_pods_off_proxy()` (for the session guard's loop; never raises, returns the
+count). Opening a running pod first compares its gateway's proxy file
 with the account's current proxy by sha256 (`docker exec … sha256sum`, so the credentials never
 leave the container); a pod on another proxy, whose gateway died, or whose gateway was started
 again after Android (`State.StartedAt`: Android is then left in the old namespace, cut off) is
@@ -425,6 +431,33 @@ presses BACK to the phone screen and signs in from there. A cloud password still
 after its submit is `emulator_password_rejected`: Telegram empties the field of a wrong one.
 It is not a passing cause, so warming parks the account instead of requesting a new login
 code at every visit. Before ENTER the masked box is read back; a short count is retyped once.
+
+## The phone app's authorization, and a removal that failed
+
+The sign-in creates an authorization of the account that no Telethon client is, which the audit
+would call foreign (watch alert, closable). So `_phone_authorization` takes a baseline of the
+account's authorization hashes through its own session right before the number is typed, and
+once the chat list shows records the ONE authorization that is new against it, not ours, not the
+asking session, an official Android app, as `phone` in `account_own_authorizations` (ours in
+the audit, never closed). Zero or several candidates record nothing
+(`own_phone_login_not_recorded`); an unreadable list never fails the sign-in.
+
+The row is also what tells a signed-out app from a first sign-in. An entry screen with a `phone`
+row recorded means the container lost its data (or the authorization was ended on purpose): the
+row is forgotten, and when Telegram still lists the hash it is now truthfully foreign
+(`phone_authorization_orphaned`). Warming does not sign in again (`emulator_signed_out`,
+`phone_signed_out`, a cause that needs the operator); only the operator's own open does, and it
+records the new authorization. An account with no `phone` row signs in automatically as before.
+
+A code request Telegram refuses (its «too many attempts» dialog over the number, read with
+`app_error`) is `emulator_code_refused`, not `emulator_field_missing`.
+
+An account's deletion writes a tombstone `("pod", container name)` into `pending_cleanups`
+BEFORE `remove_pod` and deletes it once the removal is confirmed (a pod that was never there
+is confirmed too). A failed removal keeps the row, and startup (`retry_pending_pod_removals`,
+right after `stop_orphaned_pods`) retries exactly what the rows name, never a pod for lack of an
+account: a wrong or empty database cannot delete phones. A row whose account exists again is
+dropped, not acted on.
 
 ## A phone stint prepares its phone
 

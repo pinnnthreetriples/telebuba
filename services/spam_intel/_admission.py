@@ -19,7 +19,13 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.repositories.spam_probe_ledger import start_attempt
 from schemas.spam_intel import ProbeAttemptStart
-from services.spam_intel._answers import ASKABLE, TRANSIENT, log_unasked, unasked
+from services.spam_intel._answers import (
+    ASKABLE,
+    TRANSIENT,
+    link_failed,
+    log_unasked,
+    unasked,
+)
 from services.spam_intel._policy import Decision
 
 if TYPE_CHECKING:
@@ -78,7 +84,9 @@ def unaskable(account: AccountRead, at: datetime) -> Held | None:
         return "account_not_alive", None
     if account.proxy_id is None:
         return "no_proxy", None
-    if account.status in TRANSIENT:
+    # ``link_status``: the last session check could not reach Telegram (the key's own status
+    # is kept beside it); the same deferral the transient statuses got when they sat in ``status``.
+    if link_failed(account):
         retry = at + timedelta(minutes=settings.spam_intel.account_status_retry_minutes)
         return "account_status_transient", retry
     return None

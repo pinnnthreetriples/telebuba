@@ -197,6 +197,20 @@ export function FilterMenu({
                 </FilterPill>
               ))}
             </Group>
+            <Group label={t('accounts.filters.protection')}>
+              <FilterPill
+                selected={!filters.unprotected}
+                onSelect={() => set({ unprotected: null })}
+              >
+                {t('accounts.filters.all')}
+              </FilterPill>
+              <FilterPill
+                selected={filters.unprotected === true}
+                onSelect={() => set({ unprotected: true })}
+              >
+                {t('accounts.filters.unprotected')}
+              </FilterPill>
+            </Group>
           </div>
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4">
             <span className="type-small" aria-live="polite">

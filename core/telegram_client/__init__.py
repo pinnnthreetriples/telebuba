@@ -12,6 +12,7 @@ to keep each file small:
 - ``_session_audit`` — the account's authorizations, ours told from the rest
 - ``_session_close`` — ends named foreign authorizations, one paced call each
 - ``_rekey`` — replaces an imported session with a login of the account's own
+- ``_leftover`` — ends the authorization of a session file a crashed flow left behind
 - ``_spam``    — @SpamBot probe + self-restriction read
 - ``_actions`` — typed-action executor + dispatch (uses the pool)
 - ``_read``    — read-action executor + batch dispatch (uses the pool)
@@ -58,6 +59,7 @@ from core.telegram_client._client import (
     prepare_telegram_client_profile,
     telegram_client,
 )
+from core.telegram_client._leftover import end_leftover_session
 from core.telegram_client._listener import (
     fetch_recent_posts,
     forget_post_listener,
@@ -66,7 +68,11 @@ from core.telegram_client._listener import (
     take_lost_access_channels,
     update_post_subscription,
 )
-from core.telegram_client._login_code import login_code_cutoff, wait_account_login_code
+from core.telegram_client._login_code import (
+    has_login_code,
+    login_code_cutoff,
+    wait_account_login_code,
+)
 from core.telegram_client._media import refresh_account_avatar
 from core.telegram_client._message_listener import (
     ensure_incoming_message_connection,
@@ -109,6 +115,9 @@ from core.telegram_client._read import (
 )
 from core.telegram_client._read_post_image import download_post_image
 from core.telegram_client._rekey import RekeyGatewayError, rekey_session
+from core.telegram_client._rekey_files import ASIDE_SUFFIX as REKEY_ASIDE_SUFFIX
+from core.telegram_client._rekey_files import key_mark as session_key_mark
+from core.telegram_client._rekey_files import same_key as same_session_key
 from core.telegram_client._second_device import authorize_second_device, remove_second_device
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._session_audit import SessionAuditGatewayError, read_account_sessions
@@ -122,6 +131,7 @@ from core.telegram_client._story_image import is_known_collage_layout
 from core.telegram_client._web_login import WebLoginTransientError, accept_web_login_token
 
 __all__ = [
+    "REKEY_ASIDE_SUFFIX",
     "UNCONFIRMED_ERROR_TYPE",
     "ChatGatewayError",
     "DeviceUnavailableError",
@@ -146,6 +156,7 @@ __all__ = [
     "create_telegram_client",
     "delete_passkey",
     "download_post_image",
+    "end_leftover_session",
     "ensure_incoming_message_connection",
     "evict_client",
     "execute",
@@ -158,6 +169,7 @@ __all__ = [
     "forget_qr_login",
     "get_client",
     "has_live_client",
+    "has_login_code",
     "invalidate_reaction_whitelist_cache",
     "is_known_collage_layout",
     "is_passkey_listed",
@@ -181,7 +193,9 @@ __all__ = [
     "remove_second_device",
     "removing_client",
     "request_phone_code",
+    "same_session_key",
     "send_message",
+    "session_key_mark",
     "shutdown_qr_logins",
     "shutdown_telegram_pool",
     "start_qr_login",

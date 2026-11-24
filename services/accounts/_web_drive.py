@@ -71,6 +71,14 @@ _ACCEPT_BACKOFF_MAX = 20.0
 _accepted_hashes: weakref.WeakKeyDictionary[WebWindow, str] = weakref.WeakKeyDictionary()
 
 
+async def _record_accepted(account_id: str, new_hash: str) -> None:
+    from services.accounts.own_authorizations import (  # noqa: PLC0415 - import cycle
+        record_accepted_web_login,
+    )
+
+    await record_accepted_web_login(account_id, new_hash)
+
+
 def accepted_login_hash(window: WebWindow) -> str | None:
     """The hash of the authorization our accept created in ``window``, when one was seen."""
     return _accepted_hashes.get(window)
@@ -309,6 +317,7 @@ async def _accept_fresh_token(
         if new_hash is not None:
             trace.tokens_accepted += 1
             if new_hash:
+                await _record_accepted(account_id, new_hash)
                 _accepted_hashes[window] = new_hash
     except WebLoginTransientError as exc:
         accepted.discard(token)

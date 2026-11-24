@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
 import pytest
+from telethon import errors
 
 from core.telegram_client import _message_listener as listener
 
@@ -26,8 +27,10 @@ class _FakeClient:
         self.removed: list[tuple[object, object]] = []
         self.calls: list[str] = []
 
-    async def is_user_authorized(self) -> bool:
-        return self.authorized
+    async def __call__(self, _request: object) -> None:
+        # ``probe_authorized`` sends ``GetStateRequest``; a refusal is a 401.
+        if not self.authorized:
+            raise errors.AuthKeyUnregisteredError(request=None)
 
     def add_event_handler(self, handler: object, event_filter: object) -> None:
         self.calls.append("add")
@@ -120,3 +123,24 @@ async def _ready(client: _FakeClient) -> _FakeClient:
 
 async def _noop(_event: object) -> None:
     return None
+
+
+@pytest.mark.asyncio
+async def test_a_probe_hiccup_raises_instead_of_reading_as_unauthorized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # ``False`` means "not subscribed" to the inbox runtime; a flood wait must reach its retry.
+    class _Flooded:
+        async def __call__(self, _request: object) -> None:
+            raise errors.FloodWaitError(request=None, capture=5)
+
+    async def fake_get_client(_account_id: str) -> object:
+        return _Flooded()
+
+    monkeypatch.setattr(listener, "get_client", fake_get_client)
+
+    async def on_message(_message: object) -> None:
+        return None
+
+    with pytest.raises(errors.FloodWaitError):
+        await listener.subscribe_incoming_messages("acc-1", on_message)

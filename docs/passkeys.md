@@ -96,3 +96,12 @@ key (`core/passkey_vault.py`); Telebuba only ever sees the public half and signa
 
 Losing the vault data or the unseal key loses every passkey; the accounts then fall back to SMS
 login.
+
+### Snapshots of the key vault (optional)
+
+`PASSKEY_VAULT__SNAPSHOT_TOKEN` (empty = off) makes Telebuba fetch `GET /v1/sys/storage/raft/snapshot` once a day (`core/passkey_vault_snapshot.py`, driven by the session guard's pass) into `backups/openbao-<time>.snap`, keeping the newest 7 and copying each to `<SESSION_VAULT__MIRROR_DIR>/openbao/` when a mirror is set. A snapshot is already encrypted by the vault's barrier, so it is copied as it is. Failures are logged as `passkey_vault_snapshot_failed` and never raise.
+
+- It works only with the integrated-storage (**raft**) backend.
+- Give it a token of its own whose policy allows only `read` on `sys/storage/raft/snapshot`; never the app token.
+- A restore (`bao operator raft snapshot restore`) needs the SAME unseal keys as the vault that made it: keep them off the machine.
+- The only proof that the non-exportable Transit keys survive a snapshot is a TRIAL RESTORE on a scratch instance, followed by a signature with one key. That has NOT been done here: until it is, treat this as a probable, not a proven, backup.

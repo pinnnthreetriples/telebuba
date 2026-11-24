@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from core.db import update_account_from_session_check, update_proxy_check, upsert_spam_status
+from core.db import (
+    set_account_twofa_password,
+    update_account_from_session_check,
+    update_proxy_check,
+    upsert_spam_status,
+)
 from schemas.accounts import AccountCreate, AccountPage, AccountStatus
 from schemas.proxy import ProxyCheckUpdate
 from schemas.spam_status import SpamStatusVerdict
@@ -114,3 +119,27 @@ async def test_phone_code_and_trust_filter_in_python_and_still_paginate() -> Non
     assert "de" not in _ids(trusted)
     assert trusted.total == 5
     assert _ids(await list_accounts_page(min_trust=0)) == sorted([*scores])
+
+
+@pytest.mark.asyncio
+async def test_each_row_of_the_page_carries_its_protection_summary() -> None:
+    await _account("one")
+    await _account("two")
+
+    page = await list_accounts_page()
+
+    assert all(item.protection is not None and item.protection.total == 7 for item in page.items)
+
+
+@pytest.mark.asyncio
+async def test_unprotected_keeps_only_accounts_missing_a_protection() -> None:
+    await _account("bare")
+    await _account("partial")
+    await set_account_twofa_password("partial", "pw")
+
+    everything = await list_accounts_page(unprotected=True)
+    assert _ids(everything) == ["bare", "partial"]
+    assert everything.total == 2
+    assert all(item.protection and item.protection.missing for item in everything.items)
+    # Combined with another Python-side filter it still pages the survivors.
+    assert _ids(await list_accounts_page(unprotected=True, min_trust=101)) == []

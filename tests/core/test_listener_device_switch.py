@@ -45,8 +45,8 @@ class _Client:
     async def get_peer_id(self, _channel: str) -> int:
         return -100
 
-    async def is_user_authorized(self) -> bool:
-        return True
+    async def __call__(self, _request: object) -> None:
+        return None
 
     async def catch_up(self) -> None:
         return None

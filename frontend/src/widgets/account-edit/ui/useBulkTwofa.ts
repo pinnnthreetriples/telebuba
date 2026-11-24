@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { setAccountTwofaMutation } from '@/entities/account';
 import type { AccountTwoFactorCreated, AccountTwoFactorUpdateRequest } from '@/shared/api';
 
+import { useResumableRun } from './useResumableRun';
+
 export type BulkTwofaRow = {
   accountId: string;
   state: 'queued' | 'running' | 'ok' | 'error';
@@ -21,8 +23,13 @@ export type BulkTwofaRow = {
 //
 // `mutateAsync` in a plain `for`, never `.mutate` per row: one useMutation
 // observer is a single callback slot (and the ESLint rule that says so).
+//
+// Progress (account ids and ok/error only, never the password or what was created) is kept
+// in localStorage as each account finishes, so a closed tab can offer to go on with the
+// rest. The password is not kept: resuming asks for it again.
 export function useBulkTwofa() {
   const [rows, setRows] = useState<BulkTwofaRow[]>([]);
+  const resumable = useResumableRun('bulk-twofa');
   // Bumped by a new run and by unmount: a request settling afterwards must not
   // patch the list it no longer belongs to.
   const generation = useRef(0);
@@ -60,8 +67,13 @@ export function useBulkTwofa() {
         error: null,
       })),
     );
+    resumable.begin(accountIds);
+    let completed = true;
     for (const accountId of accountIds) {
-      if (stopped.current || gen !== generation.current) break;
+      if (stopped.current || gen !== generation.current) {
+        completed = false;
+        break;
+      }
       patch(accountId, gen, { state: 'running' });
       try {
         const created = await setTwofa.mutateAsync({
@@ -71,12 +83,16 @@ export function useBulkTwofa() {
         // Read, then drop: the response and the variables both carry the
         // plaintext, and the rows below are the only copy this step keeps.
         setTwofa.reset();
+        resumable.mark(accountId, 'done');
         patch(accountId, gen, { state: 'ok', created });
       } catch (error) {
         setTwofa.reset();
+        resumable.mark(accountId, 'failed');
         patch(accountId, gen, { state: 'error', error });
       }
     }
+    // A stopped or abandoned run keeps its progress; one that went through leaves none.
+    if (completed) resumable.finish();
   };
 
   // The in-flight account still finishes — its password exists on Telegram
@@ -85,5 +101,12 @@ export function useBulkTwofa() {
     stopped.current = true;
   };
 
-  return { rows, run, stop };
+  return {
+    rows,
+    run,
+    stop,
+    interrupted: resumable.interrupted,
+    resume: resumable.resume,
+    reset: resumable.reset,
+  };
 }

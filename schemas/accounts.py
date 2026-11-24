@@ -7,6 +7,7 @@ from pydantic import AfterValidator, BaseModel, Field
 
 # Pydantic resolves these annotations at runtime to build the model fields,
 # so they cannot live in a TYPE_CHECKING block.
+from schemas.account_protection import AccountProtection  # noqa: TC001
 from schemas.api import Page
 from schemas.device_fingerprint import DeviceFingerprint, DeviceType, desktop_only
 from schemas.session_json import SellerSessionMeta  # noqa: TC001
@@ -155,6 +156,10 @@ class AccountRead(BaseModel):
     # renders <img src=".../avatar?v={avatar_etag}"> when set, initials otherwise.
     avatar_etag: str | None = None
     last_checked_at: str | None = None
+    # The last check could not reach Telegram (flood_wait | network_error | proxy_error |
+    # unknown_error); ``status`` keeps the key state. None = the last check got an answer.
+    link_status: str | None = None
+    link_checked_at: str | None = None
     created_at: str
     updated_at: str
     # When the account was registered in Telegram (ISO date), only ever as the operator
@@ -212,6 +217,8 @@ class AccountRead(BaseModel):
     # Whether a passkey is stored: with it a dead key can be signed in again without an
     # SMS or a code (``services.accounts.passkey``). List page only; ``None`` elsewhere.
     has_passkey: bool | None = None
+    # Which protections the account has (``services.accounts._protection``); list page only.
+    protection: AccountProtection | None = None
     # The account's folders (``schemas.account_folders``) in tab order; enriched by
     # the list page only, empty elsewhere and for an account in no folder.
     folder_ids: list[str] = Field(default_factory=list)

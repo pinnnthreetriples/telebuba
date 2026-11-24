@@ -20,6 +20,9 @@ export interface AccountFilters {
   proxy: string | null;
   status: StatusBucket | null;
   minTrust: number | null;
+  // Only accounts missing a protection (`protection.missing` is not empty). Optional so a
+  // filter object written before it existed still reads as "not set".
+  unprotected?: true | null;
 }
 
 export const NO_FILTERS: AccountFilters = {
@@ -27,13 +30,20 @@ export const NO_FILTERS: AccountFilters = {
   proxy: null,
   status: null,
   minTrust: null,
+  unprotected: null,
 };
 
 export type FilterKey = keyof AccountFilters;
-export const FILTER_KEYS: readonly FilterKey[] = ['phone', 'proxy', 'status', 'minTrust'];
+export const FILTER_KEYS: readonly FilterKey[] = [
+  'phone',
+  'proxy',
+  'status',
+  'minTrust',
+  'unprotected',
+];
 
 export function activeFilterKeys(filters: AccountFilters): FilterKey[] {
-  return FILTER_KEYS.filter((key) => filters[key] !== null);
+  return FILTER_KEYS.filter((key) => filters[key] != null);
 }
 
 type ListQuery = NonNullable<ListAccountsData['query']>;
@@ -46,6 +56,7 @@ export function listQuery(view: FolderView, filters: AccountFilters): ListQuery 
   if (filters.phone !== null) query.phone_code = filters.phone;
   if (filters.proxy !== null) query.proxy_country = filters.proxy;
   if (filters.minTrust !== null) query.min_trust = filters.minTrust;
+  if (filters.unprotected) query.unprotected = true;
   return query;
 }
 

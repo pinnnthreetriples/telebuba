@@ -30,6 +30,7 @@ from core.config import settings
 from core.db import fetch_account_twofa_pair, set_account_twofa_password
 from core.logging import log_event
 from core.repositories._accounts_twofa import fetch_account_twofa_state
+from core.repositories.account_security_snapshots import forget_security_snapshot
 from core.telegram_client import (
     UNCONFIRMED_ERROR_TYPE,
     TelegramAccountNotFoundError,
@@ -259,6 +260,9 @@ async def set_account_twofa(
         stored = True if kept else await promote_pending(account_id, password)
         # ponytail: INFO even when ``confirmed`` is False (the event name keys the i18n
         # table and log filters); the extra carries the flag.
+        await forget_security_snapshot(
+            account_id
+        )  # our own change: the next watch pass re-baselines
         await log_event(
             "INFO",
             "account_twofa_set",
@@ -402,6 +406,9 @@ async def remove_account_twofa(
             remove = SetTwoFactorPassword(current_password=current)
             raise_for_result(await execute(account_id, remove))
         await _remember_password(account_id, None)
+        await forget_security_snapshot(
+            account_id
+        )  # our own change: the next watch pass re-baselines
         await log_event(
             "INFO",
             "account_twofa_removed",

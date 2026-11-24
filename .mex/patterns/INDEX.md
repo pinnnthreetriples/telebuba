@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-10-26
+last_updated: 2026-11-24
 edges:
   - target: context/architecture.md
     condition: the task needs system design context first
@@ -21,3 +21,4 @@ edges:
 | [change-channel-pool.md](change-channel-pool.md) | Change the warming channel pool search, filters, refill or consent pull |
 | [account-devices.md](account-devices.md) | Change account devices or the mobile container |
 | [import-seller-session.md](import-seller-session.md) | Change the seller `.session` + `.json` import or 2FA recording |
+| [change-key-custody.md](change-key-custody.md) | Change how an auth key is made, replaced, ended or restored |

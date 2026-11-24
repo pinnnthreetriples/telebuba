@@ -29,6 +29,15 @@ test('only the filters that are set count as active, in display order', () => {
   ]);
 });
 
+test('the not-fully-protected filter goes over as a flag, and only when it is set', () => {
+  expect(listQuery('all', { ...NO_FILTERS, unprotected: true })).toEqual({
+    status: 'all',
+    unprotected: true,
+  });
+  expect(listQuery('all', { ...NO_FILTERS, unprotected: null })).toEqual({ status: 'all' });
+  expect(activeFilterKeys({ ...NO_FILTERS, unprotected: true })).toEqual(['unprotected']);
+});
+
 test('a country is named in the UI language, else by the given name, else by its code', () => {
   expect(countryName('de', 'ru')).toBe('Германия');
   expect(countryName('DE', 'en')).toBe('Germany');

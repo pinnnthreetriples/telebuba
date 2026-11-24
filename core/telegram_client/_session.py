@@ -10,6 +10,7 @@ from telethon import errors
 from telethon.tl.functions.help import GetAppConfigRequest
 
 from core.config import settings
+from core.telegram_client._authorized import probe_authorized
 from core.telegram_client._client import DeviceUnavailableError, prepare_session_check_profile
 from core.telegram_client._pool import (
     TelegramClientPoolError,
@@ -70,7 +71,7 @@ async def check_telegram_session(  # noqa: C901 - one flat ladder of verdicts, o
     try:
         # One deadline over the whole probe — see ``session_check_timeout_seconds``.
         # Nothing below bounds itself: the borrow queues on the pool's per-account
-        # connect lock with no timeout, and every RPC after it (``is_user_authorized``,
+        # connect lock with no timeout, and every RPC after it (``probe_authorized``,
         # ``get_me``, the freeze probe, the avatar) rides Telethon's ``users._call``,
         # which awaits the response future forever. Expiry raises ``TimeoutError``,
         # which ``_NETWORK_ERRORS`` already classifies as a temporary transport fault —
@@ -78,7 +79,7 @@ async def check_telegram_session(  # noqa: C901 - one flat ladder of verdicts, o
         # was learned about this session, so the row must not be marked broken.
         async with asyncio.timeout(settings.telegram.session_check_timeout_seconds):
             client = await _probe_client(profile.account_id, profile.device_type)
-            if not await client.is_user_authorized():
+            if not await probe_authorized(client):
                 result = _status_session_check_result(profile, status="unauthorized")
             else:
                 me = await client.get_me()

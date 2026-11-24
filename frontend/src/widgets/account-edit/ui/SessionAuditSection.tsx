@@ -40,9 +40,13 @@ function SessionRow({
   const manual = session.kind === 'manual';
   const when = (iso: string) => formatLocalDateTime(Date.parse(iso), i18n.language);
   const isWeb = session.kind === 'web';
+  const details = [session.device_model, session.app_name].filter(Boolean).join(' · ');
+  // The phone app's own sign-in keeps its device line and is named as Telebuba's phone.
   const device = isWeb
     ? t('accounts.edit.sessionsWebTelebuba')
-    : [session.device_model, session.app_name].filter(Boolean).join(' · ');
+    : session.kind === 'phone'
+      ? [t('accounts.edit.sessionsPhoneTelebuba'), details].filter(Boolean).join(' · ')
+      : details;
   const system = [session.platform, session.system_version].filter(Boolean).join(' ');
   const place = [session.ip, session.country].filter(Boolean).join(' · ');
   const times = [

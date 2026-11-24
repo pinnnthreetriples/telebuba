@@ -29,6 +29,8 @@ EmulatorRefusalCode = Literal[
     "emulator_field_missing",
     "emulator_phone_invalid",
     "emulator_code_timeout",
+    # Telegram refused to send a login code: its "too many attempts" dialog is on the screen.
+    "emulator_code_refused",
     "emulator_twofa_missing",
     "emulator_password_rejected",
     "emulator_not_running",
@@ -49,6 +51,9 @@ EmulatorRefusalCode = Literal[
     "emulator_app_offline",
     "emulator_app_unresponsive",
     "emulator_screen_unknown",
+    # The app shows an entry screen although its sign-in was recorded: warming never
+    # signs it in again; the operator opens the phone and signs it in.
+    "emulator_signed_out",
 ]
 
 # A search query ``input text`` can type: 2-32 letters, digits and spaces.

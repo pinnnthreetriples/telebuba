@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 from python_socks import ProxyConnectionError
+from telethon import errors
+from telethon.tl.functions.updates import GetStateRequest
 
 from core.config import settings
 from core.db import configure_database
@@ -92,15 +94,14 @@ async def test_download_avatar_thumb_none_when_no_photo() -> None:
 class _PooledClient:
     """Minimal pooled-client stand-in: authorized, no app config, no avatar."""
 
-    async def is_user_authorized(self) -> bool:
-        return True
-
     async def get_me(self) -> object:
         return SimpleNamespace(
             id=7, phone="79990000000", username="u", first_name="F", premium=True
         )
 
-    async def __call__(self, _request: object) -> object:
+    async def __call__(self, request: object) -> object:
+        if isinstance(request, GetStateRequest):
+            return None  # the authorization probe: signed in
         # The freeze probe degrades to "not frozen" on any failure.
         msg = "no app config"
         raise RuntimeError(msg)
@@ -204,9 +205,8 @@ async def test_a_live_tombstone_does_not_become_an_unknown_error_verdict(
 class _MuteClient:
     """A borrowed client whose first RPC never answers (half-open socket)."""
 
-    async def is_user_authorized(self) -> bool:
+    async def __call__(self, _request: object) -> None:
         await asyncio.Event().wait()
-        return True
 
 
 @pytest.mark.asyncio
@@ -267,3 +267,40 @@ async def test_missing_api_hash_returns_typed_session_error(
 
     assert result.status == "session_error"
     assert result.error_type == "MissingCredentials"
+
+
+class _HiccupClient:
+    """A pooled client whose authorization probe (``GetStateRequest``) fails with ``error``."""
+
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+
+    async def __call__(self, _request: object) -> object:
+        raise self._error
+
+
+@pytest.mark.parametrize(
+    ("error", "status"),
+    [
+        (errors.FloodWaitError(request=None, capture=30), "flood_wait"),
+        (errors.ServerError(request=None, message="INTERNAL"), "unknown_error"),
+        (errors.AuthKeyUnregisteredError(request=None), "unauthorized"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_only_a_refused_key_reads_unauthorized(
+    monkeypatch: pytest.MonkeyPatch, error: Exception, status: str
+) -> None:
+    # Telethon's ``is_user_authorized()`` answered False for ALL of these: a hiccup wrote a
+    # live account ``unauthorized`` and offered it a login with a new key.
+    _with_credentials(monkeypatch)
+
+    async def fake_get_client(_account_id: str, _device_type: str | None = None) -> object:
+        return _HiccupClient(error)
+
+    monkeypatch.setattr("core.telegram_client._session.get_client", fake_get_client)
+
+    result = await check_telegram_session(TelegramSessionCheckRequest(account_id="acc-1"))
+
+    assert result.status == status
+    assert result.is_temporary is (status != "unauthorized")

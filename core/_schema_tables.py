@@ -81,6 +81,10 @@ _accounts = Table(
     Column("avatar_thumb", LargeBinary, nullable=True),
     Column("avatar_etag", String, nullable=True),
     Column("last_checked_at", String, nullable=True),
+    # The last check that could not reach Telegram (a transport value), NULL once a real
+    # verdict arrives; ``status`` is the key state and is NOT touched by it (migration 124).
+    Column("link_status", String, nullable=True),
+    Column("link_checked_at", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
     # When the account was registered in Telegram, as the operator gave it (migration

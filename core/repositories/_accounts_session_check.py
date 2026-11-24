@@ -31,10 +31,18 @@ def _update_account_from_session_check(result: TelegramSessionCheckResult) -> Ac
 
     now = _now_iso()
     values: dict[str, object] = {
-        "status": result.status,
         "last_checked_at": now,
+        "link_checked_at": now,
         "updated_at": now,
     }
+    if result.is_temporary:
+        # Nothing was learned about the KEY (flood wait, proxy, network): ``status`` stays as
+        # it was, and the failed link is noted beside it. Writing it into ``status`` dropped
+        # a live account from every consumer that filters on ``alive``, with no re-check.
+        values["link_status"] = result.status
+    else:
+        values["status"] = result.status
+        values["link_status"] = None
     if result.status == "alive":
         values.update(
             {

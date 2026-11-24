@@ -296,7 +296,7 @@
           "accounts"
         ],
         "summary": "List Accounts",
-        "description": "One page of accounts; ``total`` counts every account the filters match.\n\n``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /\n``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.\n``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.",
+        "description": "One page of accounts; ``total`` counts every account the filters match.\n\n``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /\n``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.\n``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.\n``unprotected``: only accounts that miss a protection (the row's ``protection.missing``).",
         "operationId": "listAccounts",
         "parameters": [
           {
@@ -388,6 +388,16 @@
                 }
               ],
               "title": "Min Trust"
+            }
+          },
+          {
+            "name": "unprotected",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Unprotected"
             }
           },
           {
@@ -11959,6 +11969,228 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/session/copies": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Account Session Copies",
+        "description": "How many vault copies the account's own session has and when the newest was made.",
+        "operationId": "getAccountSessionCopies",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionCopies"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/session/restore": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Restore Account Session Route",
+        "description": "Put the newest vault copy back when the account's session file is missing or keyless.\n\nRefused with a stable code (``session_restore_file_present``, ``session_vault_off``,\n``session_restore_no_copy``); never over a file that holds a key.",
+        "operationId": "restoreAccountSession",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -26626,6 +26858,43 @@
         "title": "AccountProfileView",
         "description": "JSON-safe live profile for the edit-profile modal."
       },
+      "AccountProtection": {
+        "properties": {
+          "score": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Score"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Total"
+          },
+          "missing": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "proxy",
+                "session_copy",
+                "own_key",
+                "old_key_closed",
+                "twofa_stored",
+                "passkey",
+                "audit_clean"
+              ]
+            },
+            "type": "array",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "total"
+        ],
+        "title": "AccountProtection",
+        "description": "How many of the protections an account has, and which are missing."
+      },
       "AccountRead": {
         "properties": {
           "account_id": {
@@ -26790,6 +27059,28 @@
               }
             ],
             "title": "Last Checked At"
+          },
+          "link_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Status"
+          },
+          "link_checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Checked At"
           },
           "created_at": {
             "type": "string",
@@ -27257,6 +27548,16 @@
             ],
             "title": "Has Passkey"
           },
+          "protection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccountProtection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "folder_ids": {
             "items": {
               "type": "string"
@@ -27389,6 +27690,7 @@
                 "type": "string",
                 "enum": [
                   "web",
+                  "phone",
                   "manual"
                 ]
               },
@@ -36748,6 +37050,7 @@
                   "emulator_field_missing",
                   "emulator_phone_invalid",
                   "emulator_code_timeout",
+                  "emulator_code_refused",
                   "emulator_twofa_missing",
                   "emulator_password_rejected",
                   "emulator_not_running",
@@ -36767,7 +37070,8 @@
                   "emulator_screen_timeout",
                   "emulator_app_offline",
                   "emulator_app_unresponsive",
-                  "emulator_screen_unknown"
+                  "emulator_screen_unknown",
+                  "emulator_signed_out"
                 ]
               },
               {
@@ -37988,7 +38292,8 @@
                   "password_invalid",
                   "flood_wait",
                   "connection_failed",
-                  "session_not_dead"
+                  "session_not_dead",
+                  "qr_user_mismatch"
                 ]
               },
               {
@@ -38719,6 +39024,22 @@
             "title": "Db Backup Overdue",
             "default": false
           },
+          "db_mirror_enabled": {
+            "type": "boolean",
+            "title": "Db Mirror Enabled",
+            "default": false
+          },
+          "db_mirror_last_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Db Mirror Last At"
+          },
           "passkey_vault": {
             "type": "string",
             "enum": [
@@ -38854,6 +39175,41 @@
         ],
         "title": "SessionCloseResult",
         "description": "A run's outcomes, and the account's sessions read again afterwards.\n\n``audit`` is ``None`` only when the re-read itself failed: the closes already happened,\nso they are reported all the same.\n\n\"Close everything foreign\" ends only sessions the operator has been shown, that is, the\nforeign ones of the saved audit that Telegram still lists. ``unseen_count`` is the\nforeign sessions that first appeared in this run's read: not closed, saved to the audit so\nthe card shows them. ``no_prior_audit`` says there was no saved audit at all, so nothing\nhad been shown and nothing was closed. Both stay at their defaults for a named-hash run."
+      },
+      "SessionCopies": {
+        "properties": {
+          "vault_enabled": {
+            "type": "boolean",
+            "title": "Vault Enabled"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 0
+          },
+          "newest_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newest At"
+          },
+          "can_restore": {
+            "type": "boolean",
+            "title": "Can Restore",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "vault_enabled"
+        ],
+        "title": "SessionCopies",
+        "description": "How many copies of the account's own session exist and whether a restore is offered."
       },
       "SessionGuardStatus": {
         "properties": {

@@ -252,6 +252,13 @@ def scripted_states(seq: Sequence[str]) -> Callable[[object], Any]:
     return _state
 
 
+def _accepted_recorder(calls: dict[str, Any]) -> Any:
+    async def _record_accepted(account_id: str, new_hash: str) -> None:
+        calls.setdefault("accepted_recorded", []).append((account_id, new_hash))
+
+    return _record_accepted
+
+
 def wire(  # noqa: PLR0913
     monkeypatch: pytest.MonkeyPatch,
     calls: dict[str, Any],
@@ -324,6 +331,7 @@ def wire(  # noqa: PLR0913
     monkeypatch.setattr(_web_drive, "page_state", scripted_states(states))
     monkeypatch.setattr(_web_drive, "latest_login_token", _latest)
     monkeypatch.setattr(_web_drive, "accept_web_login_token", _accept)
+    monkeypatch.setattr(_web_drive, "_record_accepted", _accepted_recorder(calls))
     monkeypatch.setattr(_web_drive, "release_capture", _release)
     monkeypatch.setattr(_web_drive_password, "type_2fa_password", _type)
     monkeypatch.setattr(_web_drive_password, "_authorising_password", _twofa)

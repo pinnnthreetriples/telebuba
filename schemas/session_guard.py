@@ -34,6 +34,10 @@ class SessionBackupStatus(BaseModel):
     last_db_backup_at: str | None = None
     # Enabled, and the newest backup is older than two intervals or there is none.
     db_backup_overdue: bool = False
+    # Encrypted database copies in the mirror's ``db/`` folder (needs the vault key and a mirror).
+    db_mirror_enabled: bool = False
+    # ISO time of the newest ``.db.enc`` there, from its file name.
+    db_mirror_last_at: str | None = None
     passkey_vault: PasskeyVaultHealth = "off"
 
 

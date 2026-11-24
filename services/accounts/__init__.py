@@ -112,6 +112,7 @@ from services.accounts.mobile_emulator import (
     open_account_mobile,
     open_mobile_progress,
 )
+from services.accounts.mobile_pods import retry_pending_pod_removals, stop_pods_off_proxy
 from services.accounts.own_authorizations import mark_session_ours
 from services.accounts.passkey import (
     check_account_passkey,
@@ -177,6 +178,7 @@ from services.accounts.web_windows import (
     close_all_web_windows,
     close_orphaned_web_windows,
     count_open_web_windows,
+    remove_orphaned_web_profiles,
 )
 
 __all__ = [
@@ -267,11 +269,13 @@ __all__ = [
     "remove_account_profile_photo",
     "remove_account_story",
     "remove_account_twofa",
+    "remove_orphaned_web_profiles",
     "request_login_code",
     "require_account",
     "resend_account_twofa_email",
     "reset_account_session",
     "resync_account_avatar",
+    "retry_pending_pod_removals",
     "send_chat_message",
     "set_account_channel_photo",
     "set_account_main_profile_photo",
@@ -286,6 +290,7 @@ __all__ = [
     "start_lead_queue_on_startup",
     "start_phone_login",
     "start_qr_login",
+    "stop_pods_off_proxy",
     "submit_login_code",
     "submit_qr_password",
     "twofa_password_candidates",

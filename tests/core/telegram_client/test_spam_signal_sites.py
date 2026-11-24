@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from telethon import errors
+from telethon.tl.functions.updates import GetStateRequest
 
 from core.config import settings
 from core.db import create_account
@@ -319,6 +320,8 @@ class _SessionClient:
         return self.me
 
     async def __call__(self, request: object) -> object:
+        if isinstance(request, GetStateRequest):
+            return True  # the session check's "is it signed in" probe, as before the signals
         self.calls.append(type(request).__name__)
         if isinstance(self.config, Exception):
             raise self.config

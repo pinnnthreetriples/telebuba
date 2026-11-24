@@ -307,3 +307,65 @@ async def test_the_audit_saves_the_seller_key_flag() -> None:
         False,
         False,
     ]  # still older than both
+
+
+async def _capture_logs(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, Any]]:
+    logged: list[tuple[str, str, Any]] = []
+
+    async def _log(level: str, event: str, **kw: Any) -> None:
+        logged.append((level, event, kw.get("extra")))
+
+    monkeypatch.setattr(svc, "log_event", _log)
+    return logged
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("wire")
+async def test_the_accepted_hash_is_written_durably_at_acceptance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logged = await _capture_logs(monkeypatch)
+
+    assert await svc.record_accepted_web_login("acc-1", "123456789") is True
+    assert await svc.record_accepted_web_login("acc-1", "123456789") is True  # idempotent
+
+    assert await fetch_own_authorizations("acc-1") == {"123456789": "web"}
+    event = next(e for e in logged if e[1] == "own_web_authorizations_recorded")
+    assert event[2] == {"at": "acceptance", "hash_tail": "6789"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("wire")
+async def test_a_failed_acceptance_write_is_logged_and_never_raised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logged = await _capture_logs(monkeypatch)
+
+    async def _boom(*_a: object, **_k: object) -> None:
+        raise OSError
+
+    monkeypatch.setattr(svc, "save_own_authorizations", _boom)
+
+    assert await svc.record_accepted_web_login("acc-1", "5") is False
+    assert [e[1] for e in logged] == ["own_web_authorizations_unrecorded"]
+
+
+@pytest.mark.asyncio
+async def test_the_background_recorder_after_an_acceptance_record_refreshes_the_snapshot(
+    wire: _Wire, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    window: Any = _Window()
+    await audit_svc.audit_account_sessions("acc-1")
+    before = await fetch_session_audit("acc-1")
+    assert before is not None
+    assert before.foreign_count == 2
+    await svc.record_accepted_web_login("acc-1", "2")
+    logged = await _capture_logs(monkeypatch)
+
+    assert await _record(window, accepted_hash="2") == 1
+
+    after = await fetch_session_audit("acc-1")
+    assert after is not None
+    assert after.foreign_count == 1
+    assert "own_web_login_not_recorded" not in [e[1] for e in logged]
+    assert wire.sessions

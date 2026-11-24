@@ -26,6 +26,7 @@ import {
   twofaFormSchema,
   type TwofaFormValue,
 } from './twofaFormValue';
+import { ResumeNotice } from './ResumeNotice';
 import { useBulkTwofa } from './useBulkTwofa';
 
 // Only what the operator filled in travels: a bare `{}` is the documented
@@ -216,6 +217,19 @@ export function TwoFactorBulkStep({
   return (
     <>
       {savedList}
+      {bulk.interrupted ? (
+        <ResumeNotice
+          run={bulk.interrupted}
+          busy={!accounts.data}
+          // The password is never kept: continuing selects what was left, and the form asks
+          // for it again.
+          onContinue={() => {
+            const left = bulk.resume(accounts.data?.items.map((item) => item.account_id) ?? []);
+            setSelected(left.filter((id) => toSet.includes(id)));
+          }}
+          onReset={bulk.reset}
+        />
+      ) : null}
       <div className="mb-4 type-body text-content-subtle">{t('accounts.addWizard.twofaIntro')}</div>
       <BulkAccountChecklist
         accountIds={toSet}

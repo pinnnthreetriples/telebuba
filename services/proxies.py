@@ -32,6 +32,7 @@ from schemas.proxy import (
     ProxySettings,
 )
 from services.accounts.mobile_emulator import stop_account_pod
+from services.accounts.web_windows import close_account_web_window
 from services.device_farm._standalone import standalone_ids_on_proxy, stop_standalone_pods
 
 __all__ = [
@@ -92,6 +93,7 @@ async def assign_proxy(proxy_id: str, account_id: str) -> ProxyRead:
     # and stop the mobile pod still tunnelling through the old one.
     await evict_client(account_id)
     await stop_account_pod(account_id)
+    await close_account_web_window(account_id)
     await log_event("INFO", "proxy_assigned", account_id=account_id, extra={"proxy_id": proxy_id})
     return proxy
 
@@ -100,6 +102,7 @@ async def assign_proxy_by_endpoint(data: ProxyCreateAssignment) -> ProxyRead:
     proxy = await create_and_assign_proxy(data)
     await evict_client(data.account_id)
     await stop_account_pod(data.account_id)
+    await close_account_web_window(data.account_id)
     await log_event(
         "INFO",
         "proxy_assigned",
@@ -115,6 +118,7 @@ async def unassign_proxy(account_id: str) -> None:
     # cannot run without one.
     await evict_client(account_id)
     await stop_account_pod(account_id)
+    await close_account_web_window(account_id)
     await log_event("INFO", "proxy_unassigned", account_id=account_id)
 
 
@@ -128,6 +132,7 @@ async def remove_proxy(proxy_id: str) -> None:
     for account_id in account_ids:
         await evict_client(account_id)
         await stop_account_pod(account_id)
+        await close_account_web_window(account_id)
     await stop_standalone_pods(emulator_ids)
     await log_event("INFO", "proxy_removed", extra={"proxy_id": proxy_id})
 

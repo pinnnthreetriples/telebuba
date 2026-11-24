@@ -10,6 +10,7 @@ import asyncio
 from datetime import UTC, datetime
 
 from core.config import settings
+from core.db_mirror import db_mirror_enabled, newest_mirror_at
 from core.db_snapshot import newest_backup_at
 from core.passkey_vault import vault_health
 from core.repositories.accounts import list_accounts
@@ -42,15 +43,23 @@ def _newest_db_backup() -> datetime | None:
         return None
 
 
+def _newest_db_mirror() -> datetime | None:
+    try:
+        return newest_mirror_at()
+    except OSError:
+        return None
+
+
 async def read_backup_status() -> SessionBackupStatus:
     """Whether copies of the keys and of the database exist, and how fresh they are."""
     accounts = (await list_accounts()).accounts
     # The file a client opens: the stored session name, else the account id.
     stems = [account.session_name or account.account_id for account in accounts]
     enabled = vault_enabled()
-    overview, newest_db = await asyncio.gather(
+    overview, newest_db, newest_mirror = await asyncio.gather(
         asyncio.to_thread(_overview, stems),
         asyncio.to_thread(_newest_db_backup),
+        asyncio.to_thread(_newest_db_mirror),
     )
     db_enabled = settings.db.backup_enabled
     age_limit = _OVERDUE_INTERVALS * settings.db.backup_interval_hours * _SECONDS_PER_HOUR
@@ -67,5 +76,7 @@ async def read_backup_status() -> SessionBackupStatus:
         db_backup_enabled=db_enabled,
         last_db_backup_at=_iso(newest_db),
         db_backup_overdue=overdue,
+        db_mirror_enabled=db_mirror_enabled(),
+        db_mirror_last_at=_iso(newest_mirror),
         passkey_vault=last_vault_state() or await vault_health(),
     )

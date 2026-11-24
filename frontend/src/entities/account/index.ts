@@ -36,6 +36,7 @@ export {
   accountRekeyQueryOptions,
   accountSessionAuditQueryKey,
   sessionGuardStatusQueryOptions,
+  accountSessionCopiesQueryOptions,
   spamAppealQueryKey,
   spamAppealQueryOptions,
   spamBudgetStatusQueryOptions,
@@ -128,6 +129,7 @@ export {
   rescheduleScheduledPostMutation,
   resendAccountTwofaEmailMutation,
   resetAccountSessionMutation,
+  restoreAccountSessionMutation,
   scheduleAccountPhotoMutation,
   scheduleAccountStoryMutation,
   setAccountChannelPhotoMutation,
@@ -160,6 +162,8 @@ export { DEVICE_TYPES, otherDevice, type DeviceChoice, type DeviceType } from '.
 export { AccountAvatar } from './ui/AccountAvatar';
 export { BulkAccountPicker } from './ui/BulkAccountPicker';
 export { StatusBadge } from './ui/StatusBadge';
+export { ProtectionBadge } from './ui/ProtectionBadge';
+export { isFullyProtected, protectionTone, type ProtectionTone } from './model/protection';
 export {
   accountHealth,
   accountAvatarTint,

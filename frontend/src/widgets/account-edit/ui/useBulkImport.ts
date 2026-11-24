@@ -9,6 +9,8 @@ import {
 } from '@/entities/account';
 import { errorCode, errorMessage } from '@/shared/lib';
 
+import { importPacing, sleep, spreadByProxy } from './importPacing';
+
 // Why a file failed, in the operator's terms rather than the envelope's.
 export type ImportFailure =
   | 'duplicate'
@@ -85,12 +87,25 @@ const MAX_IN_FLIGHT = 2;
 // useMutation observer is a single callback slot.
 // `sessionDevice` is the device an uploaded .session belongs to (a tdata archive is
 // always a desktop client's); the wizard locks it once the first file is sent.
+//
+// Consecutive imports are spaced by `pause()` ms (drawn afresh for each; 1.5-4 s by
+// default), so accounts behind one proxy do not all connect back to back. When `proxyOf`
+// knows a file's proxy before its request, the pending queue is reordered so two files in a
+// row do not share one when another order exists. The wizard assigns proxies AFTER the
+// import, so it passes none and the order stays as picked.
+export type ImportPacing = {
+  pause?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+  proxyOf?: (file: File) => string | null | undefined;
+};
+
 export function useBulkImport(
   method: Method,
   onSettledOne: () => void,
   sessionDevice: DeviceType = 'desktop',
   // Optional registration date (YYYY-MM-DD) sent with every file of the batch (4.8).
   registeredAt = '',
+  pacing: ImportPacing = {},
 ) {
   const [files, setFiles] = useState<BulkFile[]>([]);
   const raw = useRef<(File | undefined)[]>([]);
@@ -98,6 +113,12 @@ export function useBulkImport(
   const rawJson = useRef<(File | undefined)[]>([]);
   const queue = useRef<number[]>([]);
   const inFlight = useRef(0);
+  // Every import waits its turn behind the previous one's pause; the first of a hook's life
+  // does not wait.
+  const turn = useRef<Promise<void>>(Promise.resolve());
+  const launched = useRef(false);
+  // The proxy of the import that went last, for the reorder.
+  const lastProxy = useRef<string | null>(null);
   // Bumped by reset(): a file settling afterwards must not touch the new list.
   const generation = useRef(0);
   const importSession = useMutation({
@@ -126,7 +147,18 @@ export function useBulkImport(
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...next } : f)));
   };
 
+  const takeTurn = (): Promise<void> => {
+    const wait = launched.current ? (pacing.pause ?? importPacing.pauseMs)() : 0;
+    launched.current = true;
+    const mine = turn.current.then(() => (wait > 0 ? (pacing.sleep ?? sleep)(wait) : undefined));
+    turn.current = mine;
+    return mine;
+  };
+
   const runOne = async (id: number, file: File, gen: number) => {
+    await takeTurn();
+    // Reset or unmount while it waited: nothing is sent and nothing is owed.
+    if (gen !== generation.current) return;
     try {
       const json = rawJson.current[id];
       const body = {
@@ -162,10 +194,19 @@ export function useBulkImport(
 
   const pump = () => {
     while (inFlight.current < MAX_IN_FLIGHT) {
+      if (pacing.proxyOf) {
+        const { proxyOf } = pacing;
+        const proxyOfId = (queued: number) => {
+          const queuedFile = raw.current[queued];
+          return queuedFile ? proxyOf(queuedFile) : undefined;
+        };
+        queue.current = spreadByProxy(queue.current, proxyOfId, lastProxy.current);
+      }
       const id = queue.current.shift();
       if (id === undefined) return;
       const file = raw.current[id];
       if (!file) continue;
+      lastProxy.current = pacing.proxyOf?.(file) ?? null;
       inFlight.current += 1;
       void runOne(id, file, generation.current);
     }
@@ -261,6 +302,9 @@ export function useBulkImport(
     rawJson.current = [];
     queue.current = [];
     inFlight.current = 0;
+    launched.current = false;
+    lastProxy.current = null;
+    turn.current = Promise.resolve();
     setFiles([]);
   };
 

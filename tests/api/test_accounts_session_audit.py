@@ -281,5 +281,7 @@ async def test_the_session_guard_status_carries_the_backup_state(
         "db_backup_enabled",
         "last_db_backup_at",
         "db_backup_overdue",
+        "db_mirror_enabled",
+        "db_mirror_last_at",
         "passkey_vault",
     }

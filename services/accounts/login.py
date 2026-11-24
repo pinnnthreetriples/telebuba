@@ -38,6 +38,7 @@ from core.telegram_client import (
 from schemas.accounts import AccountCreate
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeRequest, PhoneCodeRequestResult, PhoneCodeSubmit
+from services.accounts._expected_codes import expect_login_code
 from services.accounts._import_locks import import_lock
 from services.accounts._login_state import forget_code, peek_code, remember_code
 from services.accounts._result import AccountActionError
@@ -81,10 +82,13 @@ _SUBMIT_CODES = {
 # which may use the new API (``TelegramClientRequest.new_key``). Any other status may hide a
 # live key, which must keep the API it was made with. ``session_file_missing`` counts: the file
 # that held the key is gone, so a sign-in writes a new one (the operator may have no copy).
-KEY_GONE_STATUSES = frozenset({"unauthorized", "session_file_missing", "session_error"})
+# ``session_error`` does not: it only means "cannot be probed" (API not configured).
+KEY_GONE_STATUSES = frozenset({"unauthorized", "session_file_missing"})
 
 # A logout or reset that Telegram did not confirm: nothing was ended or deleted.
 _LOGOUT_UNCONFIRMED = "logout_unconfirmed"
+# How long a code asked for by the phone login counts as ours (the login window itself).
+_CODE_EXPECTED_SECONDS = 600.0
 
 # Strong references: the loop keeps only weak ones to a fire-and-forget task.
 _INBOX_STARTS: set[asyncio.Task[None]] = set()
@@ -212,6 +216,7 @@ async def request_login_code(account_id: str) -> PhoneCodeRequestResult:
         raise PhoneLoginError(msg)
     assert_device_configured(account.session_device)
     new_key = account.status in KEY_GONE_STATUSES
+    expect_login_code(account_id, _CODE_EXPECTED_SECONDS)
     challenge = await request_phone_code(
         PhoneCodeRequest(
             account_id=account_id,

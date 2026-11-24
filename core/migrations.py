@@ -84,8 +84,10 @@ from core.migration_steps_humanlike import (
     _add_warming_state_visit,
 )
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
+from core.migration_steps_key_intents import _add_account_key_intents
 from core.migration_steps_lead_queue import _add_lead_queue
 from core.migration_steps_lifecycle import _add_account_lifecycle_events
+from core.migration_steps_link_status import _add_account_link_status
 from core.migration_steps_llm_keys import (
     _add_warming_settings_deepseek_key,
     _add_warming_settings_text_llm_provider,
@@ -111,6 +113,7 @@ from core.migration_steps_outreach import _add_outreach_presets, _add_outreach_t
 from core.migration_steps_outreach_protection import _add_outreach_protection
 from core.migration_steps_own_authorizations import _add_account_own_authorizations
 from core.migration_steps_passkeys import _add_account_passkeys
+from core.migration_steps_pending_cleanups import _add_pending_cleanups
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
     _add_proxy_geo_consensus,
@@ -125,6 +128,7 @@ from core.migration_steps_scheduled_posts import (
     _add_scheduled_posts_downgraded,
     _add_scheduled_posts_tables,
 )
+from core.migration_steps_security_snapshots import _add_account_security_snapshots
 from core.migration_steps_session_audits import _add_account_session_audits
 from core.migration_steps_spam_appeals import _add_spam_appeals
 from core.migration_steps_spam_evidence import _add_spam_evidence
@@ -314,6 +318,10 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (119, "add_spam_projection_observed", _add_spam_projection_observed),
     (120, "repair_spam_status_mirror", _add_spam_mirror_repair),
     (121, "add_account_twofa_refused", _add_account_twofa_refused),
+    (122, "add_account_key_intents", _add_account_key_intents),
+    (123, "add_pending_cleanups", _add_pending_cleanups),
+    (124, "add_account_link_status", _add_account_link_status),
+    (125, "add_account_security_snapshots", _add_account_security_snapshots),
 )
 
 
@@ -332,6 +340,39 @@ def _applied_versions(connection: Connection) -> set[int]:
     return {int(row[0]) for row in rows}
 
 
+class SchemaNewerThanCodeError(RuntimeError):
+    """The database was migrated by a newer build than this one: refuse before touching it."""
+
+    def __init__(self, database_version: int, code_version: int) -> None:
+        super().__init__(
+            f"The database is at schema version {database_version}, but this build only knows "
+            f"versions up to {code_version}: it was last opened by a NEWER Telebuba. Running an "
+            "older build on it could corrupt it. Either update the code to the newer version, "
+            "or restore a database copy made before the upgrade from the backups folder "
+            "(telebuba-<time>.db), then start again."
+        )
+        self.database_version = database_version
+        self.code_version = code_version
+
+
+def ensure_schema_not_newer(engine: Engine) -> None:
+    """Raise :class:`SchemaNewerThanCodeError` when the stamps run past this build's newest.
+
+    Read-only. Only the HIGHEST stamp counts: an unknown version between known ones (a gap)
+    is not "newer".
+    """
+    code_version = max(version for version, _name, _body in MIGRATIONS)
+    with engine.connect() as connection:
+        has_table = connection.exec_driver_sql(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_version'"
+        ).first()
+        if has_table is None:
+            return
+        applied = _applied_versions(connection)
+    if applied and max(applied) > code_version:
+        raise SchemaNewerThanCodeError(max(applied), code_version)
+
+
 def apply_migrations(engine: Engine) -> None:
     """Run every migration that has not yet been stamped on this database.
 
@@ -340,6 +381,7 @@ def apply_migrations(engine: Engine) -> None:
     make the bodies no-ops). Re-running the same registry on the same DB does
     nothing.
     """
+    ensure_schema_not_newer(engine)
     with engine.begin() as connection:
         _ensure_schema_version_table(connection)
         applied = _applied_versions(connection)

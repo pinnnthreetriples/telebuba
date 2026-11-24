@@ -31,6 +31,7 @@ from schemas.accounts import (
     AccountStatus,
     health_for_status,
 )
+from services.accounts._protection import protection_for
 from services.spam_intel import card_signals, decision_statuses
 from services.trust import account_trust_score_from
 
@@ -78,6 +79,7 @@ async def list_accounts_page(  # noqa: PLR0913 - one keyword per filter of the p
     phone_code: int | None = None,
     proxy_country: str | None = None,
     min_trust: int | None = None,
+    unprotected: bool = False,
     cursor: str | None = None,
     limit: int = 50,
 ) -> AccountPage:
@@ -87,6 +89,8 @@ async def list_accounts_page(  # noqa: PLR0913 - one keyword per filter of the p
     ``problem``) or one raw status. Folder, status and proxy country filter in SQL and
     page there; the phone calling code and Trust exist only in Python (``phonenumbers``,
     the Trust Score), so either one reads every SQL match and pages the survivors.
+    ``unprotected`` keeps only accounts missing a protection (``services.accounts._protection``),
+    which is likewise computed in Python, so it takes that path too.
     """
     offset = _decode_cursor(cursor)
     filters = AccountListFilters(
@@ -95,7 +99,7 @@ async def list_accounts_page(  # noqa: PLR0913 - one keyword per filter of the p
         folder=folder,
         proxy_country=None if proxy_country is None else _proxy_country(proxy_country),
     )
-    if phone_code is None and min_trust is None:
+    if phone_code is None and min_trust is None and not unprotected:
         result = await list_filtered_accounts(filters, limit=limit, offset=offset)
         items = result.accounts
         total = await count_filtered_accounts(filters)
@@ -107,9 +111,14 @@ async def list_accounts_page(  # noqa: PLR0913 - one keyword per filter of the p
         await _attach_signals(matches)
         if min_trust is not None:
             matches = [a for a in matches if (a.trust_score or 0) >= min_trust]
+        if unprotected:
+            await _attach_protection(matches)
+            matches = [a for a in matches if a.protection and a.protection.missing]
         total = len(matches)
         items = matches[offset : offset + limit]
     await _attach_folders(items)
+    if not unprotected:
+        await _attach_protection(items)
     next_cursor = str(offset + limit) if offset + limit < total else None
     return AccountPage(items=items, next_cursor=next_cursor, total=total)
 
@@ -130,6 +139,12 @@ async def _attach_folders(accounts: list[AccountRead]) -> None:
     folders = await folder_ids_by_account()
     for account in accounts:
         account.folder_ids = folders.get(account.account_id, [])
+
+
+async def _attach_protection(accounts: list[AccountRead]) -> None:
+    summaries = await protection_for(accounts)
+    for account in accounts:
+        account.protection = summaries.get(account.account_id)
 
 
 async def _attach_signals(accounts: list[AccountRead]) -> None:

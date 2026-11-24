@@ -18,7 +18,8 @@ from typing import TYPE_CHECKING
 from sqlalchemy import text
 
 from core.config import settings
-from core.migrations import MIGRATIONS, apply_migrations
+from core.db_mirror import mirror_snapshot
+from core.migrations import MIGRATIONS, apply_migrations, ensure_schema_not_newer
 from core.secure_paths import make_private_dir, make_private_file
 
 if TYPE_CHECKING:
@@ -95,6 +96,7 @@ def write_snapshot(
     vacuum(connection, partial)
     partial.replace(target)  # atomic publish: only a complete file gets the real name.
     make_private_file(target)
+    mirror_snapshot(target)  # encrypted copy off the disk; never raises (see core.db_mirror)
     return target
 
 
@@ -180,6 +182,7 @@ def prepare_schema(engine: Engine, create_tables: Callable[[Engine], None]) -> N
     half-migrated engine behind and the next ``_get_engine()`` retries from scratch.
     """
     try:
+        ensure_schema_not_newer(engine)
         snapshot_before_migrations(engine)
         create_tables(engine)
         apply_migrations(engine)

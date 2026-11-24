@@ -73,6 +73,16 @@ function BackupsBlock({ backups, language }: { backups: SessionBackupStatus; lan
     if (backups.db_backup_overdue) {
       rows.push({ key: 'dbOverdue', tone: 'warning', text: t(`${K}.dbOverdue`) });
     }
+    const mirrored = when(backups.db_mirror_last_at);
+    rows.push({
+      key: 'dbMirror',
+      tone: 'quiet',
+      text: !backups.db_mirror_enabled
+        ? t(`${K}.dbMirrorOff`)
+        : mirrored
+          ? t(`${K}.dbMirrorLast`, { date: mirrored })
+          : t(`${K}.dbMirrorNone`),
+    });
   } else {
     rows.push({ key: 'db', tone: 'quiet', text: t(`${K}.dbOff`) });
   }

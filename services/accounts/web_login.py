@@ -30,6 +30,7 @@ from core.db import fetch_account_proxy_settings
 from core.web_login import (
     LocalProxyRelay,
     account_profile_dir,
+    clear_removal_mark,
     focus_window,
     launch_account_web,
 )
@@ -102,6 +103,9 @@ _open_locks_guard = asyncio.Lock()
 # instead. An Event, not a module bool: reassigning a module global inside a function
 # is banned by the lint config.
 _closing = asyncio.Event()
+# Accounts whose proxy changed while an open held their lock (``web_windows``): that open
+# ends its own window once it is up.
+_proxy_changed: set[str] = set()
 
 
 async def _account_open_lock(account_id: str) -> asyncio.Lock:
@@ -129,11 +133,14 @@ async def open_account_web(account_id: str, *, target: WebTarget | None = None) 
     fingerprint, same refusal without a proxy as ever.
     """
     start_url = target_url(target)
-    proxy = await fetch_account_proxy_settings(account_id)
-    if proxy is None:
-        raise NoProxyForWebLoginError(_NO_PROXY_REFUSAL)
     profile = account_profile_dir(account_id)
     async with await _account_open_lock(account_id):
+        # Read under the lock, and the mark of an earlier change dropped with it: this open
+        # starts from the proxy the account has NOW.
+        _proxy_changed.discard(account_id)
+        proxy = await fetch_account_proxy_settings(account_id)
+        if proxy is None:
+            raise NoProxyForWebLoginError(_NO_PROXY_REFUSAL)
         # BEFORE the reuse check, or it is unreachable whenever a window is up: an
         # account reassigned to another proxy would keep exiting through the OLD one
         # for the life of the process, reported as a success, and 502 every page load
@@ -149,7 +156,14 @@ async def open_account_web(account_id: str, *, target: WebTarget | None = None) 
             raise WebLoginLaunchError(_SHUTDOWN_REFUSAL)
         country = await probe_exit_country(account_id, proxy)
         relay_port = await _relay_port_for(account_id, proxy)
-        return await _launch(account_id, relay_port, profile, proxy, country, start_url)
+        result = await _launch(account_id, relay_port, profile, proxy, country, start_url)
+        if account_id in _proxy_changed:
+            # The proxy changed while this window was being launched (the change found no
+            # window to close yet): it must not stay up on the old one.
+            _proxy_changed.discard(account_id)
+            await _kill_registered_window(account_id)
+            raise WebLoginLaunchError(_LAUNCH_REFUSAL)
+        return result
 
 
 async def _reuse_raised_window(
@@ -312,6 +326,9 @@ async def _spawn(  # noqa: PLR0913 - the open's own context, passed once.
         # Inside the try: resolving the identity reads the INSTALLED browser (its build
         # and its brand), so "no browser" surfaces here as the same fixed refusal the
         # launch itself raises rather than as a bare 500.
+        # A delete's tombstone left in a reused directory would take this profile at the
+        # next startup: the account exists, so it goes first (or the launch is refused).
+        await asyncio.to_thread(clear_removal_mark, profile)
         window = await launch_dressed(
             account_id,
             country,

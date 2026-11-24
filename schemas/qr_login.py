@@ -30,6 +30,8 @@ QrLoginErrorCode = Literal[
     # An imported account whose own session is not known to be dead: a QR sign-in on its
     # file would replace (and, for a duplicate, log out) a key that may still work.
     "session_not_dead",
+    # The QR was scanned by another Telegram user than the account's own: refused, key stays dead.
+    "qr_user_mismatch",
 ]
 
 

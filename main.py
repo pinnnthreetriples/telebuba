@@ -42,6 +42,7 @@ from core.telegram_client import shutdown_qr_logins, shutdown_telegram_pool
 from services.accounts import (
     close_orphaned_web_windows,
     reconcile_bulk_messages_on_startup,
+    remove_orphaned_web_profiles,
     shutdown_bulk_messages_on_shutdown,
     shutdown_lead_queue_on_shutdown,
     shutdown_web_login,
@@ -49,6 +50,7 @@ from services.accounts import (
 )
 from services.accounts.mobile_pods import (
     prefetch_phone_files,
+    retry_pending_pod_removals,
     shutdown_mobile_pods,
     stop_orphaned_pods,
 )
@@ -226,8 +228,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await cleanup_stale_uploads()
     # Before any window of this run can open: whatever answers now is a leftover.
     await close_orphaned_web_windows()
+    # Profiles an account delete marked but could not remove (never any other).
+    await remove_orphaned_web_profiles()
     # Same for the phone pods: no task of this run owns one yet.
     await stop_orphaned_pods()
+    # Pods an account delete could not remove: by tombstone, never by an account's absence.
+    await retry_pending_pod_removals()
     prefetch_phone_files()
     await _log_app_started()
     await seed_admin_if_empty()

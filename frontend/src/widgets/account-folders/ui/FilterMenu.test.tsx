@@ -124,3 +124,18 @@ test('«Показать», Escape and a click outside close the card', async ()
   fireEvent.pointerDown(document.body);
   expect(screen.queryByRole('region', { name: 'Фильтры' })).not.toBeInTheDocument();
 });
+
+test('the protection pill filters to accounts that are not fully protected and shows a chip', async () => {
+  const onChange = vi.fn();
+  render(<Harness onChange={onChange} />);
+  const card = await openMenu();
+
+  const group = within(card).getByRole('radiogroup', { name: 'Защита' });
+  await userEvent.click(within(group).getByRole('radio', { name: 'Не полностью защищены' }));
+  expect(onChange).toHaveBeenLastCalledWith({ ...NO_FILTERS, unprotected: true });
+
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Убрать фильтр «Не полностью защищены»' }),
+  );
+  expect(onChange).toHaveBeenLastCalledWith({ ...NO_FILTERS, unprotected: null });
+});

@@ -4,9 +4,14 @@ Started in the lifespan next to the survival probes and stopped before the clien
 every step borrows a pooled client. One pass this often (``SESSION_AUDIT__GUARD_INTERVAL_SECONDS``),
 each step guarded on its own so one failing never ends the loop or starves the other:
 
+* interrupted key flows repaired from the intent journal
+  (``services.accounts._key_repair.repair_key_intents``);
 * old authorizations of re-keyed accounts whose time has come
   (``services.accounts.close_due_old_keys``);
 * the watch: one account's sessions re-read, if one is due (``_watch``);
+* one proxy bound to an account, checked (``_proxy_watch``);
+* phone pods whose gateway is not on the account's current proxy, stopped;
+* one account whose last check could not reach Telegram, asked again (``_recheck``);
 * the key vault's own health, once (``_vault_health``);
 * the first pass only: the sessions folder against the accounts (``_file_check``).
 
@@ -35,10 +40,15 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.logging import log_event
 from schemas.session_guard import SessionGuardStatus
-from services.accounts import close_due_old_keys
+from services.accounts import close_due_old_keys, stop_pods_off_proxy
+from services.accounts._key_repair import repair_key_intents
 from services.session_backups import run_backup_pass
 from services.session_guard._file_check import reset_for_tests as reset_file_check
 from services.session_guard._file_check import run_file_reconciliation
+from services.session_guard._proxy_watch import reset_for_tests as reset_proxy_watch
+from services.session_guard._proxy_watch import run_proxy_watch_pass
+from services.session_guard._recheck import reset_for_tests as reset_recheck
+from services.session_guard._recheck import run_recheck_pass
 from services.session_guard._vault_health import reset_for_tests as reset_vault_health
 from services.session_guard._vault_health import run_vault_health_check
 from services.session_guard._watch import run_watch_pass
@@ -138,8 +148,13 @@ async def _guarded(step: str, run: Callable[[], Awaitable[int | str | None]]) ->
 
 async def run_guard_pass() -> int:
     """One pass over every step; how many old keys it ended plus accounts it watched."""
+    # First: a re-key that was cut short must be settled before its old key is timed.
+    await _guarded("key_intents", repair_key_intents)
     ended = await _guarded("old_keys", close_due_old_keys)
     watched = await _guarded("watch", run_watch_pass)
+    await _guarded("recheck", run_recheck_pass)
+    await _guarded("proxy_watch", run_proxy_watch_pass)
+    await _guarded("pods_off_proxy", stop_pods_off_proxy)
     # Local file work only (encrypted session copies, the quarantine purge): not counted.
     await _guarded("backups", run_backup_pass)
     await _guarded("passkey_vault", run_vault_health_check)
@@ -192,4 +207,6 @@ def reset_for_tests() -> None:
     global _state  # noqa: PLW0603 - one module-level runtime, reset between tests
     _state = _State()
     reset_vault_health()
+    reset_recheck()
+    reset_proxy_watch()
     reset_file_check()

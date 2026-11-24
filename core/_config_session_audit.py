@@ -71,3 +71,13 @@ class SessionAuditSettings(BaseSettings):
     watch_proxy_spacing_seconds: float = Field(default=1800.0, ge=0.0)
     # An account whose read was refused is tried again after this long.
     watch_retry_hours: float = Field(default=1.0, gt=0.0)
+    # An account whose last check could not reach Telegram (link_status set) is checked again:
+    # first after this many minutes, the wait doubling per failed attempt up to the cap.
+    recheck_first_minutes: float = Field(default=15.0, gt=0.0)
+    recheck_max_hours: float = Field(default=6.0, gt=0.0)
+    # An account another feature holds (warming, campaigns) is still read by the watch once its
+    # last audit is older than this (an account lent to another machine never is).
+    watch_busy_hours: float = Field(default=24.0, gt=0.0)
+    # Each proxy bound to an account is checked in the background this often (0 = never); one
+    # proxy per guard pass, with a little jitter.
+    proxy_watch_hours: float = Field(default=6.0, ge=0.0)

@@ -258,3 +258,62 @@ test('a close refused because a sign-in is running reads as a retry-later messag
   expect(await screen.findByText(/Вход в этот аккаунт ещё идёт/)).toBeVisible();
   expect(screen.getByText(/Повторите через минуту/)).toBeVisible();
 });
+
+const RUN_KEY = 'telebuba.bulkRun.session-audit';
+
+function seedRun(done: string[]): void {
+  window.localStorage.setItem(
+    RUN_KEY,
+    JSON.stringify({
+      runId: 'r',
+      startedAt: Date.now(),
+      ids: ['a', 'b'],
+      done,
+      failed: [],
+    }),
+  );
+}
+
+test('a finished run leaves no progress behind', async () => {
+  window.localStorage.removeItem(RUN_KEY);
+  route();
+  renderStep();
+
+  await waitFor(() => {
+    expect(next()).toBeEnabled();
+  });
+  expect(window.localStorage.getItem(RUN_KEY)).toBeNull();
+});
+
+test('an interrupted run waits for an answer, and continuing audits only what was left', async () => {
+  seedRun(['a']);
+  const seen = route();
+  renderStep();
+
+  expect(await screen.findByText('Прошлый запуск прерван: обработано 1 из 2')).toBeVisible();
+  // Nothing was sent while it waited for the answer.
+  expect(seen).toEqual([]);
+  await userEvent.click(screen.getByRole('button', { name: 'Продолжить' }));
+
+  await waitFor(() => {
+    expect(next()).toBeEnabled();
+  });
+  expect(seen.filter((line) => line === 'POST /api/v1/accounts/check')).toHaveLength(1);
+  expect(seen).toContain('GET /api/v1/accounts/b/sessions');
+  expect(seen).not.toContain('GET /api/v1/accounts/a/sessions');
+  expect(window.localStorage.getItem(RUN_KEY)).toBeNull();
+});
+
+test('resetting an interrupted run forgets it and audits the whole batch', async () => {
+  seedRun(['a']);
+  const seen = route();
+  renderStep();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Сбросить' }));
+
+  await waitFor(() => {
+    expect(next()).toBeEnabled();
+  });
+  expect(seen.filter((line) => line === 'POST /api/v1/accounts/check')).toHaveLength(2);
+  expect(screen.queryByText(/Прошлый запуск прерван/)).toBeNull();
+});

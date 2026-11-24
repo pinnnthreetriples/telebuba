@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 from python_socks import ProxyConnectionError
 from telethon import errors
+from telethon.tl.functions.updates import GetStateRequest
 
 from core.db import (
     configure_database,
@@ -663,5 +664,8 @@ class FakeSessionClient:
     async def download_profile_photo(self, *_args: object, **_kwargs: object) -> None:
         return None
 
-    async def __call__(self, _request: object) -> _FakeAppConfig:
+    async def __call__(self, request: object) -> _FakeAppConfig:
+        # The session check's own probe (``probe_authorized``): a 401 means "not signed in".
+        if isinstance(request, GetStateRequest) and not self.authorized:
+            raise errors.AuthKeyUnregisteredError(request=None)
         return _FakeAppConfig(self.app_config)

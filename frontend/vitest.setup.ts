@@ -2,6 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, vi } from 'vitest';
 
 import { client } from '@/shared/api/client.gen';
+import { importPacing } from '@/widgets/account-edit/ui/importPacing';
+
+// A bulk import pauses 1.5-4 s between files in production; a test batch does not wait.
+importPacing.pauseMs = () => 0;
 
 // Node's fetch (undici) rejects relative URLs that a browser would resolve, and
 // the generated client captures globalThis.fetch at import. So for tests give

@@ -120,6 +120,7 @@ export {
   getAccountSessionAuditOptions as accountSessionAuditQueryOptions,
   getAccountSessionAuditQueryKey as accountSessionAuditQueryKey,
   getSessionGuardStatusOptions as sessionGuardStatusQueryOptions,
+  getAccountSessionCopiesOptions as accountSessionCopiesQueryOptions,
   getSpamAppealOptions as spamAppealQueryOptions,
   getSpamAppealQueryKey as spamAppealQueryKey,
   spamBudgetStatusOptions as spamBudgetStatusQueryOptions,

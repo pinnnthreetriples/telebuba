@@ -78,6 +78,8 @@ def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
         avatar_etag=_optional_str(mapping.get("avatar_etag")),
         bio=_optional_str(mapping.get("bio")),
         last_checked_at=_optional_str(mapping.get("last_checked_at")),
+        link_status=_optional_str(mapping.get("link_status")),
+        link_checked_at=_optional_str(mapping.get("link_checked_at")),
         created_at=str(mapping["created_at"]),
         updated_at=str(mapping["updated_at"]),
         telegram_registered_at=_optional_str(mapping.get("telegram_registered_at")),
@@ -118,6 +120,8 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _accounts.c.avatar_etag,
         _accounts.c.bio,
         _accounts.c.last_checked_at,
+        _accounts.c.link_status,
+        _accounts.c.link_checked_at,
         _accounts.c.created_at,
         _accounts.c.updated_at,
         _accounts.c.telegram_registered_at,
@@ -383,13 +387,17 @@ async def update_account_profile_snapshot(data: AccountProfileUpdateRequest) -> 
     return await asyncio.to_thread(_update_account_profile_snapshot, data)
 
 
+_TRANSPORT_STATUSES = frozenset({"flood_wait", "network_error", "proxy_error", "unknown_error"})
+
+
 def _update_account_status(account_id: str, status: AccountStatus) -> None:
     now = _now_iso()
+    values: dict[str, object] = {"status": status, "last_checked_at": now, "updated_at": now}
+    if status not in _TRANSPORT_STATUSES:
+        values["link_status"] = None  # a real key state: the link note is stale.
     with _get_engine().begin() as connection:
         connection.execute(
-            update(_accounts)
-            .where(_accounts.c.account_id == account_id)
-            .values(status=status, last_checked_at=now, updated_at=now),
+            update(_accounts).where(_accounts.c.account_id == account_id).values(**values),
         )
 
 

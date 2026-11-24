@@ -55,3 +55,27 @@ _account_rekeys = Table(
     Column("problem", String, nullable=True),
     Index("ix_account_rekeys_due", "close_after"),
 )
+
+# One row per flow that creates a NEW Telegram auth key (re-key, second device, a sign-in with
+# the new API): written before the key exists, closed once everything it needs is recorded. An
+# open row after a crash is what ``services.accounts._key_repair`` finishes or undoes. Only
+# hashes, a one-way mark of a key and the device fingerprint: never a key or a credential.
+_account_key_intents = Table(
+    "account_key_intents",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("account_id", String, nullable=False),
+    Column("kind", String, nullable=False),
+    Column("device_type", String, nullable=False),
+    Column("session_name", String, nullable=False),
+    Column("stage", String, nullable=False),
+    Column("api_id", Integer, nullable=True),
+    Column("new_hash", String, nullable=True),
+    Column("old_hash", String, nullable=True),
+    Column("old_key_mark", String, nullable=True),
+    Column("device_json", String, nullable=True),
+    Column("started_at", String, nullable=False),
+    Column("closed_at", String, nullable=True),
+    Column("outcome", String, nullable=True),
+    Index("ix_account_key_intents_account", "account_id"),
+)

@@ -26,3 +26,7 @@ class PasskeyVaultSettings(BaseSettings):
     # Every key Telebuba creates is named ``<prefix><account_id>``.
     key_prefix: str = Field(default="tb-", pattern=r"^[A-Za-z0-9_-]+$")
     timeout_seconds: float = Field(default=10.0, gt=0)
+    # Optional, off when empty: a token whose policy allows only ``read`` on
+    # ``sys/storage/raft/snapshot``. With it set, a daily raft snapshot of the vault is
+    # kept beside the database backups (see ``core.passkey_vault_snapshot``).
+    snapshot_token: str = Field(default="", repr=False)

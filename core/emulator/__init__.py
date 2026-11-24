@@ -19,6 +19,7 @@ from core.emulator._gosuslugi import ensure_gosuslugi
 from core.emulator._input import HumanInputEngine, KeystrokeEvent, SwipeTrajectory, TapEvent
 from core.emulator._profile import ContainerSpec, container_spec
 from core.emulator._seeder import seed_device_if_needed
+from core.emulator._selectors import app_error
 from core.emulator._text import escape_input_text
 from core.emulator.adb import (
     BatteryTelemetryState,
@@ -84,6 +85,7 @@ __all__ = [
     "TapEvent",
     "TelegramMobilePlaybook",
     "adb_serial",
+    "app_error",
     "app_package",
     "apply_battery_telemetry",
     "apply_stealth_profile",

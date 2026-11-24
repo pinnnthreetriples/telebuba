@@ -492,6 +492,34 @@ export type AccountProfileView = {
 };
 
 /**
+ * AccountProtection
+ *
+ * How many of the protections an account has, and which are missing.
+ */
+export type AccountProtection = {
+  /**
+   * Score
+   */
+  score: number;
+  /**
+   * Total
+   */
+  total: number;
+  /**
+   * Missing
+   */
+  missing?: Array<
+    | 'proxy'
+    | 'session_copy'
+    | 'own_key'
+    | 'old_key_closed'
+    | 'twofa_stored'
+    | 'passkey'
+    | 'audit_clean'
+  >;
+};
+
+/**
  * AccountRead
  */
 export type AccountRead = {
@@ -566,6 +594,14 @@ export type AccountRead = {
    * Last Checked At
    */
   last_checked_at?: string | null;
+  /**
+   * Link Status
+   */
+  link_status?: string | null;
+  /**
+   * Link Checked At
+   */
+  link_checked_at?: string | null;
   /**
    * Created At
    */
@@ -726,6 +762,7 @@ export type AccountRead = {
    * Has Passkey
    */
   has_passkey?: boolean | null;
+  protection?: AccountProtection | null;
   /**
    * Folder Ids
    */
@@ -801,7 +838,7 @@ export type AccountSession = {
   /**
    * Kind
    */
-  kind?: 'web' | 'manual' | null;
+  kind?: 'web' | 'phone' | 'manual' | null;
   /**
    * Key Predates Import
    */
@@ -6431,6 +6468,7 @@ export type PhoneList = {
     | 'emulator_field_missing'
     | 'emulator_phone_invalid'
     | 'emulator_code_timeout'
+    | 'emulator_code_refused'
     | 'emulator_twofa_missing'
     | 'emulator_password_rejected'
     | 'emulator_not_running'
@@ -6451,6 +6489,7 @@ export type PhoneList = {
     | 'emulator_app_offline'
     | 'emulator_app_unresponsive'
     | 'emulator_screen_unknown'
+    | 'emulator_signed_out'
     | null;
   /**
    * Phones
@@ -7093,6 +7132,7 @@ export type QrLoginView = {
     | 'flood_wait'
     | 'connection_failed'
     | 'session_not_dead'
+    | 'qr_user_mismatch'
     | null;
   /**
    * Flood Wait Seconds
@@ -7484,6 +7524,14 @@ export type SessionBackupStatus = {
    */
   db_backup_overdue?: boolean;
   /**
+   * Db Mirror Enabled
+   */
+  db_mirror_enabled?: boolean;
+  /**
+   * Db Mirror Last At
+   */
+  db_mirror_last_at?: string | null;
+  /**
    * Passkey Vault
    */
   passkey_vault?: 'off' | 'ok' | 'sealed' | 'unreachable' | 'rejected';
@@ -7561,6 +7609,30 @@ export type SessionCloseResult = {
    * No Prior Audit
    */
   no_prior_audit?: boolean;
+};
+
+/**
+ * SessionCopies
+ *
+ * How many copies of the account's own session exist and whether a restore is offered.
+ */
+export type SessionCopies = {
+  /**
+   * Vault Enabled
+   */
+  vault_enabled: boolean;
+  /**
+   * Count
+   */
+  count?: number;
+  /**
+   * Newest At
+   */
+  newest_at?: string | null;
+  /**
+   * Can Restore
+   */
+  can_restore?: boolean;
 };
 
 /**
@@ -10417,6 +10489,10 @@ export type ListAccountsData = {
      * Min Trust
      */
     min_trust?: number | null;
+    /**
+     * Unprotected
+     */
+    unprotected?: boolean;
     /**
      * Cursor
      */
@@ -15686,6 +15762,110 @@ export type AddAccountDeviceResponses = {
 };
 
 export type AddAccountDeviceResponse = AddAccountDeviceResponses[keyof AddAccountDeviceResponses];
+
+export type GetAccountSessionCopiesData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/session/copies';
+};
+
+export type GetAccountSessionCopiesErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetAccountSessionCopiesError =
+  GetAccountSessionCopiesErrors[keyof GetAccountSessionCopiesErrors];
+
+export type GetAccountSessionCopiesResponses = {
+  /**
+   * Successful Response
+   */
+  200: SessionCopies;
+};
+
+export type GetAccountSessionCopiesResponse =
+  GetAccountSessionCopiesResponses[keyof GetAccountSessionCopiesResponses];
+
+export type RestoreAccountSessionData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/session/restore';
+};
+
+export type RestoreAccountSessionErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type RestoreAccountSessionError =
+  RestoreAccountSessionErrors[keyof RestoreAccountSessionErrors];
+
+export type RestoreAccountSessionResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type RestoreAccountSessionResponse =
+  RestoreAccountSessionResponses[keyof RestoreAccountSessionResponses];
 
 export type EmulatorStatusData = {
   body?: never;

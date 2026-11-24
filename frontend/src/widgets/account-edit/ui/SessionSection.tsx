@@ -18,6 +18,7 @@ import { Button, FeedbackMark, Icon, Input, SegmentedControl, Spinner } from '@/
 import { Section } from './_shared';
 import { LABEL, type CheckState } from './_styles';
 import { EndSessionConfirm } from './EndSessionConfirm';
+import { SessionRestore } from './SessionRestore';
 
 // Session-state dot tone keyed on the backend health (ok/warn/fail), so the card
 // shows the real session state — not a hardcoded green "active". Tokens, so the
@@ -180,6 +181,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
           </Button>
         </span>
       </div>
+      <SessionRestore account={account} />
       {confirmLogout ? (
         <EndSessionConfirm
           account={account}
