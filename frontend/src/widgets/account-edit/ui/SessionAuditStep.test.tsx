@@ -21,6 +21,10 @@ type Setup = {
   checkStatus?: Record<string, string>;
   // what close-foreign leaves standing, per account
   leftAfterClose?: Record<string, number>;
+  // extra fields on an account's close answer (unseen_count, no_prior_audit)
+  closeExtra?: Record<string, Record<string, unknown>>;
+  // accounts whose close is refused outright with this error code
+  closeRefusal?: Record<string, string>;
 };
 
 // Every request the step makes, in order, as "METHOD path".
@@ -43,7 +47,15 @@ function route(setup: Setup = {}): string[] {
     if (closing?.[1]) {
       const id = closing[1];
       const left = setup.leftAfterClose?.[id] ?? 0;
+      const refusal = setup.closeRefusal?.[id];
+      if (refusal) {
+        return new Response(JSON.stringify({ error: { code: 'conflict', message: refusal } }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       return json({
+        ...setup.closeExtra?.[id],
         account_id: id,
         outcomes: [
           left === 0
@@ -209,4 +221,40 @@ test('an account without a proxy is never contacted', async () => {
   await userEvent.click(next());
   // They go on as before: the later steps refuse them on their own.
   expect(onDone).toHaveBeenCalledWith(['a', 'b']);
+});
+
+test('a first-time list is saved, not closed, and the account stays held with a retry hint', async () => {
+  route({
+    foreign: { b: 2 },
+    leftAfterClose: { b: 2 },
+    closeExtra: { b: { no_prior_audit: true, closed_count: 0, outcomes: [] } },
+  });
+  const { onDone } = renderStep({ autoClose: true });
+
+  expect(
+    await screen.findByText(/Список сессий сохранён впервые — проверьте его и закройте ещё раз/),
+  ).toBeVisible();
+  await userEvent.click(next());
+  expect(onDone).toHaveBeenCalledWith(['a']);
+});
+
+test('sessions that appeared since the saved list are reported with their count', async () => {
+  route({
+    foreign: { b: 2 },
+    leftAfterClose: { b: 2 },
+    closeExtra: { b: { unseen_count: 3, closed_count: 0, outcomes: [] } },
+  });
+  renderStep({ autoClose: true });
+
+  expect(
+    await screen.findByText(/Появились новые сессии \(3\) — проверьте и закройте ещё раз/),
+  ).toBeVisible();
+});
+
+test('a close refused because a sign-in is running reads as a retry-later message', async () => {
+  route({ foreign: { b: 1 }, closeRefusal: { b: 'sign_in_in_progress' } });
+  renderStep({ autoClose: true });
+
+  expect(await screen.findByText(/Вход в этот аккаунт ещё идёт/)).toBeVisible();
+  expect(screen.getByText(/Повторите через минуту/)).toBeVisible();
 });

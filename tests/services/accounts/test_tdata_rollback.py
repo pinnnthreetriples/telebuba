@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
     from schemas.accounts import AccountCreate, AccountRead
 
+# The rollback moves the file to the quarantine; this is the call a "file in use" failure hits.
+_QUARANTINE_SEAM = "core.telegram_client._auth.quarantine_file"
+
 
 @pytest.mark.asyncio
 async def test_import_account_tdata_rolls_back_on_mid_batch_failure(
@@ -163,7 +166,7 @@ async def test_tdata_rollback_logs_an_unlink_it_could_not_perform(
         raise OSError(msg)
 
     monkeypatch.setattr("services.accounts._tdata.log_event", fake_log)
-    monkeypatch.setattr("pathlib.Path.unlink", refuse_unlink)
+    monkeypatch.setattr(_QUARANTINE_SEAM, refuse_unlink)
 
     with pytest.raises(RuntimeError, match=r"boom"):
         await import_account_tdata(TdataConvertRequest(filename="tdata.zip", content=b"x"))

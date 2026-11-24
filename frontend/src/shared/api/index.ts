@@ -1570,6 +1570,7 @@ export type {
   SendTestNotificationErrors,
   SendTestNotificationResponse,
   SendTestNotificationResponses,
+  SessionBackupStatus,
   SessionCloseOutcome,
   SessionCloseRequest,
   SessionCloseResult,

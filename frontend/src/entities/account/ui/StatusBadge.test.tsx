@@ -37,3 +37,9 @@ test('renders frozen with the localized label and banned colour', () => {
   render(<StatusBadge status="frozen" />);
   expect(screen.getByText('Заморожен').className).toContain('text-danger');
 });
+
+test('renders a missing session file as a red problem with its label', () => {
+  render(<StatusBadge status="session_file_missing" />);
+  const classes = screen.getByText('Файл сессии пропал').className;
+  expect(classes).toContain('text-danger');
+});

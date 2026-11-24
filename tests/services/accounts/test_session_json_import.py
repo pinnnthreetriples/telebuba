@@ -15,6 +15,7 @@ from services.accounts import (
     import_account_session,
     parse_session_json,
 )
+from tests.session_files import session_file_bytes
 
 if TYPE_CHECKING:
     from schemas.device_fingerprint import DeviceType
@@ -46,7 +47,7 @@ def _import(
 ) -> AccountSessionFileImport:
     return AccountSessionFileImport(
         filename=f"{PHONE}.session",
-        content=b"session bytes",
+        content=session_file_bytes(),
         session_device=device,
         meta=meta,
     )

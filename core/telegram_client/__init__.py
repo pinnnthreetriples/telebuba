@@ -89,6 +89,7 @@ from core.telegram_client._pool import (
     removing_client,
     shutdown_telegram_pool,
 )
+from core.telegram_client._pool_errors import SessionFileMissingError
 from core.telegram_client._pool_live import has_live_client
 from core.telegram_client._qr_login import (
     QrLoginGatewayError,
@@ -128,6 +129,7 @@ __all__ = [
     "QrLoginGatewayError",
     "RekeyGatewayError",
     "SessionAuditGatewayError",
+    "SessionFileMissingError",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",

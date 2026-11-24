@@ -526,6 +526,7 @@ export type AccountRead = {
     | 'new'
     | 'alive'
     | 'unauthorized'
+    | 'session_file_missing'
     | 'session_error'
     | 'account_error'
     | 'frozen'
@@ -1089,10 +1090,14 @@ export type AccountTwoFactorUpdateRequest = {
  *
  * One account's live 2FA state, or why it could not be read.
  *
- * ``has_stored_password`` is about THIS dashboard, not about Telegram: it says
- * whether the password we set is still in the DB, which is what decides
- * whether a change or a removal can be authorised at all. It is a boolean by
- * design — see the module docstring.
+ * The three flags are about THIS dashboard, not about Telegram, and are booleans by
+ * design (see the module docstring). ``has_stored_password``: a password Telegram
+ * ACCEPTED is stored (a verify, a sign-in or a confirmed set put it there). It is what
+ * a re-login can rely on. ``has_unverified_candidate``: a different, unproven password
+ * is staged (a write whose answer was lost, or the seller's JSON password kept at
+ * import with no Telegram call). ``candidate_refused``: Telegram refused that candidate
+ * the last time it was asked, so it is probably wrong; the operator should record the
+ * real password or forget it.
  */
 export type AccountTwoFactorView = {
   status?: TwoFactorStatusResult | null;
@@ -1100,6 +1105,14 @@ export type AccountTwoFactorView = {
    * Has Stored Password
    */
   has_stored_password?: boolean;
+  /**
+   * Has Unverified Candidate
+   */
+  has_unverified_candidate?: boolean;
+  /**
+   * Candidate Refused
+   */
+  candidate_refused?: boolean;
   /**
    * Error
    */
@@ -7431,6 +7444,52 @@ export type SecondsRange = {
 };
 
 /**
+ * SessionBackupStatus
+ *
+ * Whether the safety nets exist and are fresh: key copies, database backups, key vault.
+ *
+ * Every field has a default so a client that predates the object keeps working.
+ */
+export type SessionBackupStatus = {
+  /**
+   * Session Vault Enabled
+   */
+  session_vault_enabled?: boolean;
+  /**
+   * Mirror Configured
+   */
+  mirror_configured?: boolean;
+  /**
+   * Accounts Total
+   */
+  accounts_total?: number;
+  /**
+   * Accounts Without Copy
+   */
+  accounts_without_copy?: number;
+  /**
+   * Last Session Copy At
+   */
+  last_session_copy_at?: string | null;
+  /**
+   * Db Backup Enabled
+   */
+  db_backup_enabled?: boolean;
+  /**
+   * Last Db Backup At
+   */
+  last_db_backup_at?: string | null;
+  /**
+   * Db Backup Overdue
+   */
+  db_backup_overdue?: boolean;
+  /**
+   * Passkey Vault
+   */
+  passkey_vault?: 'off' | 'ok' | 'sealed' | 'unreachable' | 'rejected';
+};
+
+/**
  * SessionCloseOutcome
  *
  * One requested session's result.
@@ -7473,6 +7532,12 @@ export type SessionCloseRequest = {
  *
  * ``audit`` is ``None`` only when the re-read itself failed: the closes already happened,
  * so they are reported all the same.
+ *
+ * "Close everything foreign" ends only sessions the operator has been shown, that is, the
+ * foreign ones of the saved audit that Telegram still lists. ``unseen_count`` is the
+ * foreign sessions that first appeared in this run's read: not closed, saved to the audit so
+ * the card shows them. ``no_prior_audit`` says there was no saved audit at all, so nothing
+ * had been shown and nothing was closed. Both stay at their defaults for a named-hash run.
  */
 export type SessionCloseResult = {
   /**
@@ -7488,6 +7553,14 @@ export type SessionCloseResult = {
    */
   closed_count: number;
   audit?: AccountSessionAudit | null;
+  /**
+   * Unseen Count
+   */
+  unseen_count?: number;
+  /**
+   * No Prior Audit
+   */
+  no_prior_audit?: boolean;
 };
 
 /**
@@ -7512,6 +7585,7 @@ export type SessionGuardStatus = {
    * Reason
    */
   reason?: 'stopped' | 'silent' | null;
+  backups?: SessionBackupStatus;
 };
 
 /**

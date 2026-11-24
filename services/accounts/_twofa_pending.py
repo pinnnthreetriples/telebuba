@@ -23,6 +23,10 @@ from core.db import (
     twofa_password_candidates,
 )
 from core.logging import log_event
+from core.repositories._accounts_twofa import (
+    fetch_account_twofa_state,
+    mark_account_twofa_pending_refused,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -38,6 +42,7 @@ __all__ = [
     "resolve_current",
     "stage_pending",
     "twofa_password_candidates",
+    "unsettled_code",
 ]
 
 
@@ -101,6 +106,33 @@ def _recently_unsettled(account_id: str, digest: bytes) -> bool:
     return seen is not None and seen[0] == digest and time.monotonic() - seen[1] < interval
 
 
+async def _mark_refused(account_id: str, pending: str) -> None:
+    """Persist "Telegram refused ``pending``"; a failed write only loses the better message."""
+    try:
+        await mark_account_twofa_pending_refused(account_id, pending)
+    except Exception:  # noqa: BLE001 - advisory; the value must not travel in a log
+        await log_event(
+            "ERROR",
+            "account_twofa_pending_failed",
+            account_id=account_id,
+            extra={"clearing": False},
+        )
+
+
+async def unsettled_code(account_id: str) -> str:
+    """The refusal code for a write stopped by an unsettled candidate.
+
+    ``twofa_candidate_refused`` only when there is NO current password and Telegram
+    refused the stored candidate the last time it was asked: nothing then can settle it
+    by waiting. Merely unproven (network, throttle) or beside a current password it stays
+    ``twofa_pending_unsettled``.
+    """
+    state = await fetch_account_twofa_state(account_id)
+    if state.current is None and state.pending is not None and state.pending_refused:
+        return "twofa_candidate_refused"
+    return "twofa_pending_unsettled"
+
+
 async def _settle_against_live_password(
     account_id: str,
     current: str | None,
@@ -117,8 +149,13 @@ async def _settle_against_live_password(
             if accepted:
                 await stage_pending(account_id, None)
             return
-    if await verify(pending):
+    accepted = await verify(pending)
+    if accepted:
         await promote_pending(account_id, pending)
+    elif accepted is False:
+        # A definitive refusal is remembered (never an unknown verdict), so the card and the
+        # refusal code can say "Telegram refused it" however long the recheck throttle holds.
+        await _mark_refused(account_id, pending)
     # A refusal is never a reason to drop ``pending``: with no ``current`` it is the only
     # copy of whatever Telegram holds, and a verdict can be wrong (a stale challenge).
 

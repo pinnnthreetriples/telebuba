@@ -249,6 +249,8 @@ test('an open old session shows the checklist and closes only after the operator
   const checklist = screen.getByRole('list', { name: 'Готовность к закрытию старой сессии' });
   expect(checklist).toHaveTextContent('✗ SpamBot: чисто');
   expect(checklist).toHaveTextContent('✓ Новой сессии не меньше недели');
+  expect(checklist).toHaveTextContent('✓ Пароль 2FA сохранён и подтверждён Telegram');
+  expect(checklist).toHaveTextContent('✓ Ключ доступа создан, сейф отвечает');
 
   await userEvent.click(screen.getByRole('button', { name: 'Закрыть старую сессию' }));
   expect(await screen.findByText('Закрыть старую сессию?')).toBeVisible();

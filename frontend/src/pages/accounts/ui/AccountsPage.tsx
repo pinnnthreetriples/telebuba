@@ -70,6 +70,7 @@ import {
   AccountsTable,
   DeleteAccountModal,
   type DeleteReason,
+  SessionCopiesWarning,
   SpamBudgetWarning,
 } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
@@ -499,6 +500,7 @@ export function AccountsPage() {
 
       <StatGrid stats={stats} className="mb-4" />
 
+      <SessionCopiesWarning />
       <SpamBudgetWarning />
 
       <div

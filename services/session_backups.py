@@ -14,8 +14,11 @@ When a copy is made:
   The same pass purges quarantined files past ``SESSION_VAULT__QUARANTINE_DAYS``.
 
 Never raises: a backup that fails is logged (``session_backup_failed``, the error type
-only) and the flow that triggered it goes on. With no key set nothing is copied, and the
-first pass logs ``session_vault_off`` once per process so the operator knows.
+only) and the flow that triggered it goes on. An account counts as copied only when every
+one of its files was handled without an exception; after a failure it is tried again after
+``SESSION_VAULT__RETRY_MINUTES`` (not on every guard pass, not after a whole interval), also
+when the failed copy came from an import or a re-key. With no key set nothing is copied, and
+the first pass logs ``session_vault_off`` once per process so the operator knows.
 """
 
 from __future__ import annotations
@@ -58,14 +61,17 @@ _KEY_WRITTEN = frozenset(
     }
 )
 _SECONDS_PER_HOUR = 3600
+_SECONDS_PER_MINUTE = 60
 
 
 @dataclass
 class _State:
     task: asyncio.Task[None] | None = None
     pending: set[asyncio.Task[None]] = field(default_factory=set)
-    # When each account was last copied by this process (``time.monotonic``).
+    # When each account was last copied completely by this process (``time.monotonic``).
     copied: dict[str, float] = field(default_factory=dict)
+    # When each account's last copy attempt failed; it is retried after the retry delay.
+    failed: dict[str, float] = field(default_factory=dict)
     warned_off: bool = False
 
 
@@ -73,8 +79,12 @@ _state = _State()
 
 
 async def back_up_account(account: AccountRead) -> int:
-    """Copy every session file of ``account``; how many new versions were written."""
+    """Copy every session file of ``account``; how many new versions were written.
+
+    The account counts as copied only when no file raised; otherwise it is marked failed.
+    """
     written = 0
+    complete = True
     # The primary file (its stored name, or the account id), then a second device's, if any.
     names = [account.session_name]
     if account.second_session_name is not None:
@@ -83,14 +93,31 @@ async def back_up_account(account: AccountRead) -> int:
         try:
             written += int(await back_up_account_session(account.account_id, name))
         except Exception as exc:  # noqa: BLE001 - a backup must never break its caller.
+            complete = False
             await log_event(
                 "WARNING",
                 "session_backup_failed",
                 account_id=account.account_id,
                 extra={"error_type": type(exc).__name__},
             )
-    _state.copied[account.account_id] = time.monotonic()
+    if complete:
+        _state.copied[account.account_id] = time.monotonic()
+        _state.failed.pop(account.account_id, None)
+    else:
+        _state.copied.pop(account.account_id, None)
+        _state.failed[account.account_id] = time.monotonic()
     return written
+
+
+def _due(account_id: str, now: float) -> bool:
+    """Whether the pass copies ``account_id`` now: its interval ran out, or its retry delay did."""
+    last = _state.copied.get(account_id)
+    if last is not None:
+        return now - last >= settings.session_vault.backup_interval_hours * _SECONDS_PER_HOUR
+    failed_at = _state.failed.get(account_id)
+    if failed_at is None:
+        return True
+    return now - failed_at >= settings.session_vault.retry_minutes * _SECONDS_PER_MINUTE
 
 
 async def run_backup_pass() -> int:
@@ -102,20 +129,28 @@ async def run_backup_pass() -> int:
             _state.warned_off = True
             await log_event("WARNING", "session_vault_off")
         return 0
-    every = settings.session_vault.backup_interval_hours * _SECONDS_PER_HOUR
     now = time.monotonic()
     written = 0
     for account in (await list_accounts()).accounts:
-        last = _state.copied.get(account.account_id)
-        if last is None or now - last >= every:
+        if _due(account.account_id, now):
             written += await back_up_account(account)
     return written
 
 
 async def _after_write(account_id: str) -> None:
-    account = await fetch_account(account_id)
-    if account is not None:
-        await back_up_account(account)
+    try:
+        account = await fetch_account(account_id)
+        if account is not None:
+            await back_up_account(account)
+    except Exception as exc:  # noqa: BLE001 - a failed copy must not leave an unretrieved task error.
+        _state.copied.pop(account_id, None)
+        _state.failed[account_id] = time.monotonic()
+        await log_event(
+            "WARNING",
+            "session_backup_failed",
+            account_id=account_id,
+            extra={"error_type": type(exc).__name__},
+        )
 
 
 def _schedule(entry: LogEntry) -> None:
@@ -130,7 +165,13 @@ async def _run(ready: asyncio.Event) -> None:
     async with subscribe() as queue:
         ready.set()
         while True:
-            _schedule(await queue.get())
+            entry = await queue.get()
+            try:
+                _schedule(entry)
+            except Exception as exc:  # noqa: BLE001 - the subscriber must outlive any one event.
+                await log_event(
+                    "WARNING", "session_backup_failed", extra={"error_type": type(exc).__name__}
+                )
 
 
 async def start_session_backups() -> None:

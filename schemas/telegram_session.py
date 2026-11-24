@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 SessionCheckStatus = Literal[
     "alive",
     "unauthorized",
+    # The account's ``.session`` file is gone (or holds no key): the key may still be alive.
+    "session_file_missing",
     "session_error",
     "account_error",
     "frozen",

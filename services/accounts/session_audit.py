@@ -29,7 +29,7 @@ from core.repositories.account_own_authorizations import (
 )
 from core.repositories.account_rekeys import fetch_rekey, save_rekey
 from core.repositories.session_audits import fetch_session_audit, save_session_audit
-from core.telegram_client import SessionAuditGatewayError, read_account_sessions
+from core.telegram_client import SessionAuditGatewayError, account_auth_lock, read_account_sessions
 from schemas.session_audit import AccountSessionAudit
 from services.accounts._result import AccountActionError, AccountNotFoundError
 from services.accounts._session_classify import flag_seller_keys, with_own
@@ -47,6 +47,7 @@ __all__ = [
     "audit_after_first_check",
     "read_account_session_audit",
     "refresh_account_audit",
+    "refuse_while_signing_in",
     "require_proxied_account",
 ]
 
@@ -57,6 +58,20 @@ _AUDIT_LOCKS: dict[str, asyncio.Lock] = {}
 
 def account_audit_lock(account_id: str) -> asyncio.Lock:
     return _AUDIT_LOCKS.setdefault(account_id, asyncio.Lock())
+
+
+def refuse_while_signing_in(account_id: str) -> None:
+    """Refuse (``sign_in_in_progress``) while a sign-in or sign-out of the account is in flight.
+
+    Every such flow (second device, QR, phone code, passkey, re-key, logout, removal) holds the
+    account's auth lock for its whole life, and the session it creates is listed as foreign
+    until it is recorded. Reading then would raise a false "new foreign session" and closing
+    could end our own sign-in. The lock is only looked at, never awaited: a QR sign-in holds
+    it for minutes, and the caller retries.
+    """
+    if account_auth_lock(account_id).locked():
+        code = "sign_in_in_progress"
+        raise AccountActionError(code)
 
 
 def _foreign_hashes(audit: AccountSessionAudit | None) -> set[str]:
@@ -116,12 +131,15 @@ async def refresh_account_audit(
 ) -> AccountSessionAudit:
     """Read the account's sessions, save them and journal a new foreign one.
 
-    The caller holds :func:`account_audit_lock`. The journal row is written only for a
+    The caller holds :func:`account_audit_lock`. Refused while a sign-in of the account is in
+    flight (:func:`refuse_while_signing_in`): the read is skipped, not the alert, so a session
+    that really is foreign is still news on the next read. The journal row is written only for a
     foreign session the previous audit did not list, so re-checking an account that
     already has one does not repeat the news. ``killed_count`` is how many sessions a close
     ended just before this read, kept in the audit history.
     """
     account_id = account.account_id
+    refuse_while_signing_in(account_id)
     try:
         listing = await read_account_sessions(
             account_id, account.devices, await fetch_own_authorizations(account_id)
@@ -134,6 +152,14 @@ async def refresh_account_audit(
             extra={"code": exc.code, "error_type": exc.error_type},
         )
         raise AccountActionError(exc.code, retry_after_seconds=exc.retry_after_seconds) from exc
+    for device in listing.dead_devices:
+        # Its key is gone, so its session is not in the list; the read went on without it.
+        await log_event(
+            "WARNING",
+            "session_audit_device_dead",
+            account_id=account_id,
+            extra={"device_type": device},
+        )
     if listing.sessions:
         # A recorded row whose authorization is gone (ended, or expired) must not linger: a
         # hash is never reused, but the table would only ever grow.

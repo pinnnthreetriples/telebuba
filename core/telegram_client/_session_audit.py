@@ -11,7 +11,10 @@ heuristic would hide.
 
 If any one of the account's clients cannot answer, the whole read fails. A partial answer
 would list the unreachable device's own session as foreign, and a later "close foreign
-sessions" would then log our own second device out.
+sessions" would then log our own second device out. The one exception is a non-primary device
+whose key Telegram has provably ended (:data:`_PROVEN_DEAD_KEY`, nothing weaker: an unreachable
+or unauthorized-looking client proves nothing): it has no authorization left to list, so the
+read goes on without it and names it in ``dead_devices``. A dead primary stays ``session_dead``.
 
 Both calls borrow the pooled clients (the pool owns every ``.session``), so this sits
 beside ``_passkey`` rather than in the typed-action unions: the result needs two
@@ -50,6 +53,20 @@ SessionAuditGatewayCode = Literal[
     "unavailable",
     "session_audit_failed",
 ]
+
+# The errors that PROVE Telegram ended a key. Deliberately narrower than the session check's
+# set: that one also holds the base ``AuthKeyError`` (every 406, e.g. a "fresh session"
+# refusal, and whatever Telethon makes of an unknown 406) and Telethon's own
+# ``AuthKeyNotFound`` (a transport 404 that may be temporary). Skipping a LIVE second device
+# on one of those would list its own session as foreign, and a close could then end it.
+_PROVEN_DEAD_KEY: tuple[type[Exception], ...] = (
+    errors.AuthKeyDuplicatedError,
+    errors.AuthKeyInvalidError,
+    errors.AuthKeyPermEmptyError,
+    errors.AuthKeyUnregisteredError,
+    errors.SessionExpiredError,
+    errors.SessionRevokedError,
+)
 
 _FAILED: SessionAuditGatewayCode = "session_audit_failed"
 _FROZEN: SessionAuditGatewayCode = "account_frozen"
@@ -156,8 +173,18 @@ async def _read(
         _require_current(authorizations)
         seen = _others(authorizations)
         ours: set[int] = set()
+        dead: list[DeviceType] = []
         for device in others:
-            other, _ttl = await _listing(await get_client(account_id, device))
+            try:
+                other, _ttl = await _listing(await get_client(account_id, device))
+            except _PROVEN_DEAD_KEY:
+                dead.append(device)
+                continue
+            except TelegramClientPoolError as exc:
+                if not isinstance(exc.cause, _PROVEN_DEAD_KEY):
+                    raise
+                dead.append(device)
+                continue
             _require_current(other)
             # What this device is to the primary: the one entry the primary lists that this
             # device does not list besides itself. Anything else cannot be told apart.
@@ -169,6 +196,7 @@ async def _read(
     return AuthorizationList(
         sessions=[_session(a, ours=frozen_ours, own=own) for a in authorizations],
         ttl_days=ttl,
+        dead_devices=dead,
     )
 
 

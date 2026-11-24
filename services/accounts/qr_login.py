@@ -34,6 +34,8 @@ from core.telegram_client import (
     forget_qr_login,
     log_out_session,
     read_qr_login,
+    remove_account_session,
+    removing_client,
 )
 from core.telegram_client import (
     cancel_qr_login as _gateway_cancel,
@@ -78,7 +80,7 @@ _SESSION_NOT_DEAD: QrLoginErrorCode = "session_not_dead"
 _PLACEHOLDER_PREFIX = "qr-"
 # The statuses that say the account's own key no longer works: only then may a QR sign-in
 # write over its session file.
-_DEAD_STATUSES = frozenset({"unauthorized", "session_error"})
+_DEAD_STATUSES = frozenset({"unauthorized", "session_error", "session_file_missing"})
 _ACCOUNT_EXISTS: QrLoginErrorCode = "account_exists"
 _NO_QR_LOGIN: QrLoginErrorCode = "no_qr_login"
 
@@ -232,24 +234,62 @@ async def _drop_duplicate(account_id: str, existing_id: str, session_path: str) 
     The scanned account is already in Telebuba under another id, so this second
     authorization is surplus: logging it out removes it from the account's device
     list in Telegram, and the placeholder row goes with its ``.session`` file.
+
+    ``log_out_session`` does not raise when it could not confirm the logout: it RETURNS a
+    ``network_error`` and keeps the file. The authorization may then still be alive on the
+    existing account, so the file is set aside in the quarantine (never unlinked, it is the
+    only copy of that key) before the row goes, and the operator is told to close the surplus
+    session from the existing account's Sessions card.
     """
     account = await fetch_account(account_id)
+    session_name = account.session_name if account else None
+    error_type: str | None = None
     try:
-        await log_out_session(
+        result = await log_out_session(
             TelegramClientRequest(
                 account_id=account_id,
-                session_name=account.session_name if account else None,
+                session_name=session_name,
                 receive_updates=False,
             ),
             wipe_session=True,
         )
     except Exception as exc:  # noqa: BLE001 - the placeholder must go even if the revoke failed.
+        error_type = type(exc).__name__
         await log_event(
             "WARNING",
             "qr_login_duplicate_logout_failed",
             account_id=account_id,
-            extra={"error_type": type(exc).__name__},
+            extra={"error_type": error_type},
         )
+    else:
+        if result.status != "unauthorized":
+            error_type = result.error_type or result.status
+    if error_type is not None:
+        await log_event(
+            "WARNING",
+            "qr_login_surplus_session_left",
+            account_id=existing_id,
+            extra={"existing_account_id": existing_id, "error_type": error_type},
+        )
+        # Before the row goes, so a failed move leaves the row owning the file.
+        try:
+            async with removing_client(account_id):
+                await remove_account_session(account_id, session_name)
+        except OSError as exc:
+            # The file could not be set aside (disk full, a live handle). It may hold a live
+            # key, so nothing more is removed: the placeholder row keeps owning the file and
+            # the operator deletes it from the list once the cause is gone.
+            await log_event(
+                "ERROR",
+                "account_session_import_rollback_failed",
+                extra={
+                    "session_name": account_id,
+                    "reason": "file_kept",
+                    "error_type": type(exc).__name__,
+                },
+            )
+            forget_qr_login(account_id)
+            return
     await discard_imported_session(account_id, Path(f"{session_path}.session"))
     forget_qr_login(account_id)
     await log_event(

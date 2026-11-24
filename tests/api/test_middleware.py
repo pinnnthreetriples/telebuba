@@ -32,6 +32,7 @@ from core import auth as core_auth
 from core.config import settings
 from core.repositories.users import create_user
 from schemas.auth import UserRecord
+from tests.session_files import session_file_bytes
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -55,8 +56,9 @@ _SECURITY_HEADER_NAMES = (
 class _StreamedUpload:
     """A chunked multipart body that records how much of itself was consumed."""
 
-    def __init__(self, chunks: int) -> None:
+    def __init__(self, chunks: int, payload: bytes = _CHUNK) -> None:
         self._chunks = chunks
+        self._payload = payload
         self.sent = 0
         self.finished = False
 
@@ -69,8 +71,8 @@ class _StreamedUpload:
         self.sent += len(head)
         yield head
         for _ in range(self._chunks):
-            self.sent += len(_CHUNK)
-            yield _CHUNK
+            self.sent += len(self._payload)
+            yield self._payload
         tail = f"\r\n--{_BOUNDARY}--\r\n".encode()
         self.sent += len(tail)
         yield tail
@@ -269,7 +271,7 @@ async def test_a_lookalike_cookie_name_does_not_buy_the_budget() -> None:
 @pytest.mark.asyncio
 async def test_the_cookie_is_found_among_others(app: FastAPI) -> None:
     """A browser sends the session cookie alongside whatever else is set for the host."""
-    body = _StreamedUpload(chunks=1)
+    body = _StreamedUpload(chunks=1, payload=session_file_bytes())
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/accounts/import-session",
@@ -317,7 +319,8 @@ async def test_declared_oversize_body_is_refused_too(capped: FastAPI) -> None:
 @pytest.mark.asyncio
 async def test_a_streamed_body_under_the_cap_still_reaches_the_route(app: FastAPI) -> None:
     """Regression guard: the wrapper must not break normal streamed uploads."""
-    body = _StreamedUpload(chunks=1)  # 65_536 bytes, far under the real default
+    payload = session_file_bytes()  # a real session: the import validates what it is sent
+    body = _StreamedUpload(chunks=1, payload=payload)  # far under the real default
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/accounts/import-session",
@@ -327,7 +330,7 @@ async def test_a_streamed_body_under_the_cap_still_reaches_the_route(app: FastAP
     assert resp.status_code == 200
     assert resp.json()["account_id"] == "a"
     assert body.finished
-    assert (settings.telegram.session_dir / "a.session").read_bytes() == _CHUNK
+    assert (settings.telegram.session_dir / "a.session").read_bytes() == payload
 
 
 @pytest.mark.parametrize(("body_bytes", "status"), [(_CAP, 401), (_CAP + 1, 413)])

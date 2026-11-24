@@ -29,6 +29,7 @@ step, which needs a migration story this feature does not have yet.
 from __future__ import annotations
 
 import asyncio
+from typing import NamedTuple
 
 from sqlalchemy import select, update
 
@@ -68,6 +69,7 @@ def _set_account_twofa_password(account_id: str, password: str | None) -> bool:
                 # candidate staged for an earlier write.
                 twofa_password_pending=None,
                 twofa_pending_at=None,
+                twofa_pending_refused_at=None,
                 updated_at=_now_iso(),
             ),
         )
@@ -128,6 +130,8 @@ def _set_twofa_pending(account_id: str, password: str | None) -> bool:
             .values(
                 twofa_password_pending=password,
                 twofa_pending_at=_now_iso() if password else None,
+                # A different (or no) candidate has not been refused by anyone yet.
+                twofa_pending_refused_at=None,
                 updated_at=_now_iso(),
             ),
         )
@@ -141,6 +145,60 @@ async def set_account_twofa_pending(account_id: str, password: str | None) -> bo
     (an unknown account counts, like a failed write).
     """
     return await asyncio.to_thread(_set_twofa_pending, account_id, password)
+
+
+class TwofaState(NamedTuple):
+    """The stored cloud-password columns in one read; booleans/values never logged."""
+
+    current: str | None
+    pending: str | None
+    # Telegram refused ``pending`` the last time it was asked (cleared with the candidate).
+    pending_refused: bool
+
+
+def _fetch_twofa_state(account_id: str) -> TwofaState:
+    with _get_engine().connect() as connection:
+        row = connection.execute(
+            select(
+                _accounts.c.twofa_password,
+                _accounts.c.twofa_password_pending,
+                _accounts.c.twofa_pending_refused_at,
+            ).where(_accounts.c.account_id == account_id),
+        ).first()
+    if row is None:
+        return TwofaState(None, None, pending_refused=False)
+    pending = str(row[1]) if row[1] else None
+    return TwofaState(
+        str(row[0]) if row[0] else None, pending, pending is not None and bool(row[2])
+    )
+
+
+async def fetch_account_twofa_state(account_id: str) -> TwofaState:
+    """``(current, pending, pending_refused)`` in ONE read; an unknown account is all empty."""
+    return await asyncio.to_thread(_fetch_twofa_state, account_id)
+
+
+def _mark_twofa_pending_refused(account_id: str, password: str) -> bool:
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_accounts)
+            .where(
+                _accounts.c.account_id == account_id,
+                _accounts.c.twofa_password_pending == password,
+            )
+            .values(twofa_pending_refused_at=_now_iso()),
+        )
+    return result.rowcount > 0
+
+
+async def mark_account_twofa_pending_refused(account_id: str, password: str) -> bool:
+    """Remember that Telegram definitively refused ``password``, IF it is still the pending one.
+
+    Compare-and-swap on the value, like the promotion: a verdict about a candidate that
+    has since been replaced must not mark its successor. Only a definitive refusal may be
+    recorded (never an unknown verdict); the pending value itself is never touched.
+    """
+    return await asyncio.to_thread(_mark_twofa_pending_refused, account_id, password)
 
 
 def _promote_twofa_pending(account_id: str, password: str) -> bool:
@@ -157,6 +215,7 @@ def _promote_twofa_pending(account_id: str, password: str) -> bool:
                 twofa_password=password,
                 twofa_password_pending=None,
                 twofa_pending_at=None,
+                twofa_pending_refused_at=None,
                 updated_at=_now_iso(),
             ),
         )

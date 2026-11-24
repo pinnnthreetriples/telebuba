@@ -26692,6 +26692,7 @@
               "new",
               "alive",
               "unauthorized",
+              "session_file_missing",
               "session_error",
               "account_error",
               "frozen",
@@ -27789,6 +27790,16 @@
             "title": "Has Stored Password",
             "default": false
           },
+          "has_unverified_candidate": {
+            "type": "boolean",
+            "title": "Has Unverified Candidate",
+            "default": false
+          },
+          "candidate_refused": {
+            "type": "boolean",
+            "title": "Candidate Refused",
+            "default": false
+          },
           "error": {
             "anyOf": [
               {
@@ -27803,7 +27814,7 @@
         },
         "type": "object",
         "title": "AccountTwoFactorView",
-        "description": "One account's live 2FA state, or why it could not be read.\n\n``has_stored_password`` is about THIS dashboard, not about Telegram: it says\nwhether the password we set is still in the DB, which is what decides\nwhether a change or a removal can be authorised at all. It is a boolean by\ndesign \u2014 see the module docstring."
+        "description": "One account's live 2FA state, or why it could not be read.\n\nThe three flags are about THIS dashboard, not about Telegram, and are booleans by\ndesign (see the module docstring). ``has_stored_password``: a password Telegram\nACCEPTED is stored (a verify, a sign-in or a confirmed set put it there). It is what\na re-login can rely on. ``has_unverified_candidate``: a different, unproven password\nis staged (a write whose answer was lost, or the seller's JSON password kept at\nimport with no Telegram call). ``candidate_refused``: Telegram refused that candidate\nthe last time it was asked, so it is probably wrong; the operator should record the\nreal password or forget it."
       },
       "ActionResult": {
         "properties": {
@@ -38654,6 +38665,77 @@
         ],
         "title": "SecondsRange"
       },
+      "SessionBackupStatus": {
+        "properties": {
+          "session_vault_enabled": {
+            "type": "boolean",
+            "title": "Session Vault Enabled",
+            "default": false
+          },
+          "mirror_configured": {
+            "type": "boolean",
+            "title": "Mirror Configured",
+            "default": false
+          },
+          "accounts_total": {
+            "type": "integer",
+            "title": "Accounts Total",
+            "default": 0
+          },
+          "accounts_without_copy": {
+            "type": "integer",
+            "title": "Accounts Without Copy",
+            "default": 0
+          },
+          "last_session_copy_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Session Copy At"
+          },
+          "db_backup_enabled": {
+            "type": "boolean",
+            "title": "Db Backup Enabled",
+            "default": false
+          },
+          "last_db_backup_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Db Backup At"
+          },
+          "db_backup_overdue": {
+            "type": "boolean",
+            "title": "Db Backup Overdue",
+            "default": false
+          },
+          "passkey_vault": {
+            "type": "string",
+            "enum": [
+              "off",
+              "ok",
+              "sealed",
+              "unreachable",
+              "rejected"
+            ],
+            "title": "Passkey Vault",
+            "default": "off"
+          }
+        },
+        "type": "object",
+        "title": "SessionBackupStatus",
+        "description": "Whether the safety nets exist and are fresh: key copies, database backups, key vault.\n\nEvery field has a default so a client that predates the object keeps working."
+      },
       "SessionCloseOutcome": {
         "properties": {
           "hash": {
@@ -38751,6 +38833,17 @@
                 "type": "null"
               }
             ]
+          },
+          "unseen_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unseen Count",
+            "default": 0
+          },
+          "no_prior_audit": {
+            "type": "boolean",
+            "title": "No Prior Audit",
+            "default": false
           }
         },
         "type": "object",
@@ -38760,7 +38853,7 @@
           "closed_count"
         ],
         "title": "SessionCloseResult",
-        "description": "A run's outcomes, and the account's sessions read again afterwards.\n\n``audit`` is ``None`` only when the re-read itself failed: the closes already happened,\nso they are reported all the same."
+        "description": "A run's outcomes, and the account's sessions read again afterwards.\n\n``audit`` is ``None`` only when the re-read itself failed: the closes already happened,\nso they are reported all the same.\n\n\"Close everything foreign\" ends only sessions the operator has been shown, that is, the\nforeign ones of the saved audit that Telegram still lists. ``unseen_count`` is the\nforeign sessions that first appeared in this run's read: not closed, saved to the audit so\nthe card shows them. ``no_prior_audit`` says there was no saved audit at all, so nothing\nhad been shown and nothing was closed. Both stay at their defaults for a named-hash run."
       },
       "SessionGuardStatus": {
         "properties": {
@@ -38798,6 +38891,9 @@
               }
             ],
             "title": "Reason"
+          },
+          "backups": {
+            "$ref": "#/components/schemas/SessionBackupStatus"
           }
         },
         "type": "object",

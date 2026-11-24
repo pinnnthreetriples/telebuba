@@ -14,11 +14,11 @@ post-commit path.
 from __future__ import annotations
 
 import asyncio
-import pathlib
 from typing import TYPE_CHECKING
 
 import pytest
 
+from core import session_vault
 from core.config import settings
 from core.db import fetch_account
 from core.device_fingerprint import get_or_create_device_fingerprint
@@ -32,12 +32,15 @@ from services.accounts import (
     import_account_tdata,
     start_phone_login,
 )
+from tests.session_files import session_file_bytes
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-_CREDENTIAL = b"THE-ONLY-AUTH-KEY"
+_CREDENTIAL = session_file_bytes()  # a real Telethon-schema file: uploads are validated
 _FINGERPRINT_SEAM = "services.accounts.lifecycle.get_or_create_device_fingerprint"
+# The rollback moves the file to the quarantine; this is the call a "file in use" failure hits.
+_QUARANTINE_SEAM = "core.telegram_client._auth.quarantine_file"
 
 
 def _break_after_commit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -199,12 +202,12 @@ async def test_a_leftover_file_says_so_instead_of_naming_a_missing_account(
     no remedy. The residual is the file, so the message names the file.
     """
     _break_after_commit(monkeypatch)
-    original_unlink = pathlib.Path.unlink
+    original_unlink = session_vault.quarantine_file
 
     def _unlink(_self: Path, *, missing_ok: bool = False) -> None:  # noqa: ARG001 - mirrors Path.unlink
         raise PermissionError(32, "file in use")
 
-    monkeypatch.setattr("pathlib.Path.unlink", _unlink)
+    monkeypatch.setattr(_QUARANTINE_SEAM, _unlink)
     data = AccountSessionFileImport(filename="live.session", content=_CREDENTIAL)
     with pytest.raises(RuntimeError, match="database is locked"):
         await import_account_session(data)
@@ -221,7 +224,7 @@ async def test_a_leftover_file_says_so_instead_of_naming_a_missing_account(
     # The isolation check itself lives in the autouse ``_isolate_runtime`` fixture, so
     # it covers every test in this package and removes the leak instead of only
     # reporting it after the credential has landed.
-    monkeypatch.setattr("pathlib.Path.unlink", original_unlink)
+    monkeypatch.setattr(_QUARANTINE_SEAM, original_unlink)
 
     with pytest.raises(SessionAlreadyExistsError) as caught:
         await import_account_session(data)
@@ -346,7 +349,7 @@ async def test_a_failed_tdata_unlink_still_reports_the_error_class(
     monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
     monkeypatch.setattr("services.accounts._tdata.log_event", _capture)
     _break_after_commit(monkeypatch)
-    monkeypatch.setattr("pathlib.Path.unlink", _unlink)
+    monkeypatch.setattr(_QUARANTINE_SEAM, _unlink)
 
     with pytest.raises(RuntimeError, match="database is locked"):
         await import_account_tdata(TdataConvertRequest(filename="tdata.zip", content=b"x"))
@@ -388,7 +391,7 @@ async def test_the_rollback_failure_event_carries_only_rendered_fields(
 
     _break_after_commit(monkeypatch)
     monkeypatch.setattr("services.accounts.sessions.log_event", fake_log)
-    monkeypatch.setattr("pathlib.Path.unlink", _unlink)
+    monkeypatch.setattr(_QUARANTINE_SEAM, _unlink)
 
     with pytest.raises(RuntimeError, match="database is locked"):
         await import_account_session(

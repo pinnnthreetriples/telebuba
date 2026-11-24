@@ -43,7 +43,18 @@ _EVENT_KINDS: dict[str, NotificationKind] = {
     # The session guard failed a step or stopped making passes.
     "session_guard_failed": "session_guard",
     "session_guard_stalled": "session_guard",
+    # The safety nets themselves: the copies of the keys, of the database, the key vault.
+    "session_vault_off": "session_vault_off",
+    "session_backup_failed": "session_backup_failed",
+    "passkey_vault_unhealthy": "passkey_vault",
+    "db_maintenance_failed": "db_maintenance",
+    "account_twofa_store_failed": "twofa_store_failed",
+    # A session check or the start-up look found the account's .session file gone.
+    "account_session_file_missing": "session_file_missing",
 }
+# Kinds that tell one fleet-wide thing however many accounts raise it (a full disk fails every
+# account's copy at once): the throttle slot is shared, not one per account.
+FLEET_KINDS: frozenset[NotificationKind] = frozenset({"session_backup_failed", "passkey_vault"})
 
 _PREFIX = "Telebuba · "
 _TEMPLATES: dict[NotificationKind, str] = {
@@ -84,6 +95,31 @@ _TEMPLATES: dict[NotificationKind, str] = {
     "session_guard": (
         "Сторож сессий дал сбой или перестал делать проходы — "
         "проверка сессий и закрытие старых ключей могут не работать."
+    ),
+    "session_vault_off": (
+        "Копии ключей аккаунтов не делаются: не задан SESSION_VAULT__KEY. "
+        "Потеряете файл сессии — аккаунт не вернуть. Инструкция: docs/session-vault.md."
+    ),
+    "session_backup_failed": (
+        "Не удалось сохранить копию ключа аккаунта (сессии) в хранилище или зеркало. "
+        "Проверьте место на диске и доступность зеркала; попытка повторится сама."
+    ),
+    "passkey_vault": (
+        "Сейф ключей доступа неисправен или недоступен: вход по ключу доступа (passkey) "
+        "может не работать. Подробности в журнале событий (passkey_vault_unhealthy)."
+    ),
+    "db_maintenance": (
+        "Не удалось сделать копию или обслужить базу данных (в ней пароли 2FA и привязки прокси). "
+        "Проверьте место на диске; попытка повторится сама."
+    ),
+    "twofa_store_failed": (
+        "{label}: облачный пароль (2FA) не сохранён в базе. "
+        "Откройте карточку аккаунта и задайте пароль заново, иначе повторный вход не сработает."
+    ),
+    "session_file_missing": (
+        "{label}: файл сессии пропал из папки sessions (антивирус, перенос), "
+        "аккаунт не работает. Ключ в Telegram может быть ещё жив — верните файл из копии "
+        "(docs/session-vault.md) или войдите по коду."
     ),
 }
 TEST_MESSAGE = f"{_PREFIX}тестовое уведомление: бот настроен и пишет в этот чат."

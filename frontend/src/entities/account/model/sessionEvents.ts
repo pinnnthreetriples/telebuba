@@ -16,6 +16,7 @@ import {
 const SESSION_EVENTS: ReadonlySet<string> = new Set([
   'session_audit_completed',
   'session_audit_foreign_found',
+  'session_audit_device_dead',
   'session_close_completed',
   'session_rekeyed',
   'session_old_key_closed',

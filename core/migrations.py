@@ -140,6 +140,7 @@ from core.migration_steps_standalone_emulators import (
 )
 from core.migration_steps_tuning import _add_warming_settings_tuning
 from core.migration_steps_twofa_pending import _add_account_twofa_pending
+from core.migration_steps_twofa_refused import _add_account_twofa_refused
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from core.migration_steps_user_parser import _add_user_parser_tables
 from core.migration_steps_warmed_days import _add_warming_warmed_days
@@ -312,6 +313,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (118, "add_spam_sample_flags", _add_spam_sample_flags),
     (119, "add_spam_projection_observed", _add_spam_projection_observed),
     (120, "repair_spam_status_mirror", _add_spam_mirror_repair),
+    (121, "add_account_twofa_refused", _add_account_twofa_refused),
 )
 
 

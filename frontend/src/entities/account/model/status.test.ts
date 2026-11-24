@@ -14,6 +14,10 @@ describe('accountHealth', () => {
     expect(accountHealth('frozen')).toBe('fail');
   });
 
+  it('treats a missing session file as a permanent problem', () => {
+    expect(accountHealth('session_file_missing')).toBe('fail');
+  });
+
   it('maps everything else to warn', () => {
     expect(accountHealth('new')).toBe('warn');
     expect(accountHealth('flood_wait')).toBe('warn');
@@ -38,6 +42,7 @@ describe('accountDesignStatus', () => {
     expect(accountDesignStatus('session_error')).toBe('banned');
     expect(accountDesignStatus('account_error')).toBe('banned');
     expect(accountDesignStatus('frozen')).toBe('banned');
+    expect(accountDesignStatus('session_file_missing')).toBe('banned');
     expect(accountDesignStatus('network_error')).toBe('banned');
     expect(accountDesignStatus('proxy_error')).toBe('banned');
     expect(accountDesignStatus('unknown_error')).toBe('banned');

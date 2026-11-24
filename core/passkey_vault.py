@@ -28,11 +28,14 @@ PasskeyVaultCode = Literal[
     "passkey_vault_key_missing",
     "passkey_vault_rejected",
 ]
+# The process-level answer of :func:`vault_health`; ``off`` when no token is configured.
+VaultHealth = Literal["off", "ok", "sealed", "unreachable", "rejected"]
 _KEY_TYPE = "ecdsa-p256"
 # Telegram holds version 1's public key and nothing else: a rotation would make the
 # vault sign with a key Telegram never saw. Sign with it explicitly, and refuse a key
 # that has been rotated (the app's policy denies rotation; root does not).
 _KEY_VERSION = 1
+_STATUS_OK = 200
 _STATUS_SEALED = 503
 _STATUS_FORBIDDEN = (401, 403)
 _STATUS_NOT_FOUND = 404
@@ -205,3 +208,24 @@ async def signing_key_exists(name: str) -> bool:
         raise
     _first_public_key(_json(response))  # a rotated key can never sign for Telegram
     return True
+
+
+async def vault_health() -> VaultHealth:
+    """The vault's own health, read from its unauthenticated ``/v1/sys/health``; never raises.
+
+    200 is ``ok`` and 503 ``sealed``; any other answer is ``rejected``, a transport failure
+    ``unreachable``, and no configured token ``off``. Asks nothing about any account's key:
+    that is ``signing_key_exists``'s question. Only the status code is read.
+    """
+    config = settings.passkey_vault
+    if not config.token:
+        return "off"
+    url = f"{config.addr.rstrip('/')}/v1/sys/health"
+    try:
+        async with httpx.AsyncClient(timeout=config.timeout_seconds) as client:
+            response = await client.get(url)
+    except Exception:  # noqa: BLE001 - a health probe answers; it never raises (bad URL, TLS, ...).
+        return "unreachable"
+    if response.status_code == _STATUS_OK:
+        return "ok"
+    return "sealed" if response.status_code == _STATUS_SEALED else "rejected"

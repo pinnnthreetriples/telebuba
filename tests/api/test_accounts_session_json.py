@@ -11,6 +11,7 @@ from core.config import settings
 from schemas.twofa import AccountTwoFactorView
 from services.accounts import AccountActionError
 from tests.api.accounts_helpers import client as _client
+from tests.session_files import session_file_bytes
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -52,7 +53,7 @@ async def test_import_with_json_makes_no_telegram_call(
         resp = await client.post(
             _IMPORT_URL,
             files={
-                "file": (f"{PHONE}.session", b"session-bytes", "application/octet-stream"),
+                "file": (f"{PHONE}.session", session_file_bytes(), "application/octet-stream"),
                 "json_file": (f"{PHONE}.json", _json_bytes(), "application/json"),
             },
         )
@@ -71,7 +72,7 @@ async def test_a_json_phone_that_differs_from_the_file_is_a_coded_400(app: FastA
         resp = await client.post(
             _IMPORT_URL,
             files={
-                "file": (f"{PHONE}.session", b"session-bytes", "application/octet-stream"),
+                "file": (f"{PHONE}.session", session_file_bytes(), "application/octet-stream"),
                 "json_file": ("x.json", _json_bytes(phone="79990009999"), "application/json"),
             },
         )
@@ -86,7 +87,7 @@ async def test_a_broken_json_is_a_coded_400(app: FastAPI) -> None:
         resp = await client.post(
             _IMPORT_URL,
             files={
-                "file": (f"{PHONE}.session", b"session-bytes", "application/octet-stream"),
+                "file": (f"{PHONE}.session", session_file_bytes(), "application/octet-stream"),
                 "json_file": ("x.json", b"not json", "application/json"),
             },
         )
@@ -189,7 +190,7 @@ async def test_record_json_route_refusals_are_stable_codes(
     async with _client(app) as client:
         await client.post(
             _IMPORT_URL,
-            files={"file": ("acc-1.session", b"session-bytes", "application/octet-stream")},
+            files={"file": ("acc-1.session", session_file_bytes(), "application/octet-stream")},
         )
         resp = await client.post(_RECORD_JSON_URL, files=_json_part(content))
 
@@ -202,7 +203,7 @@ async def test_record_json_route_without_a_proxy_is_twofa_proxy_missing(app: Fas
     async with _client(app) as client:
         await client.post(
             _IMPORT_URL,
-            files={"file": ("acc-1.session", b"session-bytes", "application/octet-stream")},
+            files={"file": ("acc-1.session", session_file_bytes(), "application/octet-stream")},
         )
         resp = await client.post(_RECORD_JSON_URL, files=_json_part(_json_bytes()))
 

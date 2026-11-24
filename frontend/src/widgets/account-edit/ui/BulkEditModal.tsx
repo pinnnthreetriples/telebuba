@@ -56,7 +56,7 @@ import { BulkPrivacyTab } from './BulkPrivacyTab';
 import { BulkProgress } from './BulkProgress';
 import { BulkSessionsTab } from './BulkSessionsTab';
 import { BulkTextTab } from './BulkTextTab';
-import { isRefused, sessionOutcomeText } from './_sessionOutcome';
+import { closeResultNote, isRefused, sessionOutcomeText } from './_sessionOutcome';
 import { CHANNEL_USERNAME_RE, errorChannelId, postTextMax } from './_channelsShared';
 import {
   PRIVACY_KEYS,
@@ -278,6 +278,9 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       // A refusal is the row's reason: Telegram would not end a session, so the account is not done.
       const refused = closed.outcomes.find(isRefused);
       if (refused) throw new Error(sessionOutcomeText(t, refused));
+      // Sessions not shown to the operator before this run were saved, not closed.
+      const note = closeResultNote(t, closed);
+      if (note) throw new Error(note);
       return;
     }
     if (channelMode === 'create') {

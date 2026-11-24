@@ -78,8 +78,36 @@ async def test_get_account_twofa_surfaces_a_refused_read_as_the_error_envelope(
     assert resp.json() == {
         "status": None,
         "has_stored_password": True,
+        "has_unverified_candidate": False,
+        "candidate_refused": False,
         "error": "FloodWait(30s)",
     }
+
+
+@pytest.mark.asyncio
+async def test_get_account_twofa_tells_an_unproven_candidate_from_a_stored_password(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str) -> AccountTwoFactorView:  # noqa: ARG001
+        return AccountTwoFactorView(
+            status=TwoFactorStatusResult(has_password=True),
+            has_unverified_candidate=True,
+            candidate_refused=True,
+        )
+
+    monkeypatch.setattr("services.accounts.read_account_twofa", _fake)
+    async with _client(app) as client:
+        resp = await client.get(_TWOFA_URL)
+
+    body = resp.json()
+    assert resp.status_code == 200
+    assert (
+        body["has_stored_password"],
+        body["has_unverified_candidate"],
+        body["candidate_refused"],
+    ) == (False, True, True)
+    assert "password" not in body
 
 
 @pytest.mark.asyncio
@@ -131,6 +159,18 @@ async def test_set_account_twofa_returns_the_password_once(
             ("DELETE", _TWOFA_URL, None),
             "twofa_password_not_stored",
             id="remove",
+        ),
+        pytest.param(
+            "set_account_twofa",
+            ("POST", _TWOFA_URL, {}),
+            "twofa_candidate_refused",
+            id="set-candidate-refused",
+        ),
+        pytest.param(
+            "remove_account_twofa",
+            ("DELETE", _TWOFA_URL, None),
+            "twofa_candidate_refused",
+            id="remove-candidate-refused",
         ),
         pytest.param(
             "set_account_twofa_email",

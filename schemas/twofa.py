@@ -6,7 +6,7 @@ a live read Telegram refused comes back as a populated ``error`` with no
 
 Secret handling is the whole point of the split between these three models. The
 live state carries booleans and the PUBLIC hint only; ``has_stored_password``
-answers "can this dashboard still authorise a change" without revealing what it
+answers "does this dashboard hold a password Telegram accepted" without revealing what it
 stored (the shape ``ProxyRead.has_password`` already uses). The plaintext exists
 in exactly one of them, ``AccountTwoFactorCreated``, and only in the POST
 response that just generated it. The recovery email and its mailed confirmation
@@ -80,6 +80,11 @@ TwoFactorRefusalCode = Literal[
     # were refused): staging a new one over it could leave Telegram holding a password
     # that is in neither column, so nothing was sent. Retry later, or forget the stored one.
     "twofa_pending_unsettled",
+    # With NO current password the stored candidate (typically the seller's JSON password,
+    # staged unverified at import) was refused by Telegram the last time it was asked and a
+    # cloud password is set: nothing was sent, and retrying cannot help. Record the real
+    # password, or forget the stored one.
+    "twofa_candidate_refused",
     # Telegram accepted a password the operator asked to record, but the row write
     # failed: the response must not say "saved".
     "twofa_store_failed",
@@ -110,14 +115,20 @@ TwoFactorRefusalCode = Literal[
 class AccountTwoFactorView(BaseModel):
     """One account's live 2FA state, or why it could not be read.
 
-    ``has_stored_password`` is about THIS dashboard, not about Telegram: it says
-    whether the password we set is still in the DB, which is what decides
-    whether a change or a removal can be authorised at all. It is a boolean by
-    design — see the module docstring.
+    The three flags are about THIS dashboard, not about Telegram, and are booleans by
+    design (see the module docstring). ``has_stored_password``: a password Telegram
+    ACCEPTED is stored (a verify, a sign-in or a confirmed set put it there). It is what
+    a re-login can rely on. ``has_unverified_candidate``: a different, unproven password
+    is staged (a write whose answer was lost, or the seller's JSON password kept at
+    import with no Telegram call). ``candidate_refused``: Telegram refused that candidate
+    the last time it was asked, so it is probably wrong; the operator should record the
+    real password or forget it.
     """
 
     status: TwoFactorStatusResult | None = None
     has_stored_password: bool = False
+    has_unverified_candidate: bool = False
+    candidate_refused: bool = False
     error: str | None = None
 
 

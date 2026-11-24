@@ -46,7 +46,7 @@ from core._schema_warming_daily_stats import (  # noqa: F401 - registers the tab
     _warming_daily_stats,
 )
 from core.config import settings
-from core.migrations import apply_migrations
+from core.db_snapshot import prepare_schema
 from core.secure_paths import make_private_dir, make_private_file
 from schemas.device_fingerprint import DeviceFingerprint
 
@@ -98,8 +98,8 @@ atexit.register(dispose_engine)
 # against the same file at once ("database is locked"), and the loser is dropped WITHOUT
 # ``dispose()`` — its pooled sqlite3 connection then trips "ResourceWarning: unclosed
 # database" at some later GC, which ``filterwarnings = error`` charges to whichever test
-# was running. Reentrant: the body publishes the engine before migrating, so a migration
-# step that reaches back through ``_get_engine`` resolves instead of deadlocking.
+# was running. Reentrant for safety only: the engine is published after migrating, so a
+# migration step must not reach back through ``_get_engine`` (none does).
 _ENGINE_LOCK = threading.RLock()
 
 
@@ -142,9 +142,9 @@ def _build_engine() -> Engine:
         cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
 
+    # Published only after create_all + migrations succeed; a failure disposes it and re-raises.
+    prepare_schema(engine, _metadata.create_all)
     _state.engine = engine
-    _metadata.create_all(engine)
-    apply_migrations(engine)
     # After create_all, so the file exists to be restricted.
     make_private_file(database_path)
     return engine

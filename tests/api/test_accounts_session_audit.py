@@ -261,3 +261,25 @@ async def test_the_session_guard_heartbeat_is_served(
 
     assert resp.status_code == 200
     assert resp.json()["reason"] == "silent"
+
+
+@pytest.mark.asyncio
+async def test_the_session_guard_status_carries_the_backup_state(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("core.config.settings.passkey_vault.token", "")  # never ask a real vault
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/session-guard")
+
+    assert resp.status_code == 200
+    assert set(resp.json()["backups"]) == {
+        "session_vault_enabled",
+        "mirror_configured",
+        "accounts_total",
+        "accounts_without_copy",
+        "last_session_copy_at",
+        "db_backup_enabled",
+        "last_db_backup_at",
+        "db_backup_overdue",
+        "passkey_vault",
+    }

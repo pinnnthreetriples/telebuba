@@ -34,6 +34,12 @@ class Recorder:
         self.cancelled: list[str] = []
         self.forgotten: list[str] = []
         self.logged_out: list[tuple[str, bool]] = []
+        # What ``log_out_session`` answers; the real one returns a result, never ``None``.
+        self.logout_status: str = "unauthorized"
+        self.logout_error: str | None = None
+        # ``(account_id, session_name, placeholder row still there)`` per quarantine.
+        self.quarantined: list[tuple[str, str | None, bool]] = []
+        self.logged: list[tuple[str, str, str | None, dict[str, object]]] = []
         self.inboxes: list[str] = []
         self.persisted: list[str] = []
         self.events: list[str] = []
@@ -73,9 +79,21 @@ def fake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Recorder:
     async def _cancel(account_id: str) -> None:
         rec.cancelled.append(account_id)
 
-    async def _log_out(request: TelegramClientRequest, *, wipe_session: bool) -> object:
+    async def _log_out(
+        request: TelegramClientRequest, *, wipe_session: bool
+    ) -> TelegramSessionCheckResult:
         rec.logged_out.append((request.account_id, wipe_session))
-        return None
+        return TelegramSessionCheckResult(
+            account_id=request.account_id,
+            session_path=rec.session_path,
+            status=rec.logout_status,  # ty: ignore[invalid-argument-type]
+            is_temporary=rec.logout_status == "network_error",
+            error_type=rec.logout_error,
+        )
+
+    async def _quarantine(account_id: str, session_name: str | None = None) -> None:
+        row = await fetch_account(account_id) is not None
+        rec.quarantined.append((account_id, session_name, row))
 
     async def _inbox(account_id: str) -> None:
         rec.inboxes.append(account_id)
@@ -84,8 +102,15 @@ def fake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Recorder:
         rec.persisted.append(result.account_id)
         return await update_account_from_session_check(result)
 
-    async def _event(level: str, event: str, **_: object) -> None:
+    async def _event(
+        level: str,
+        event: str,
+        account_id: str | None = None,
+        extra: dict[str, object] | None = None,
+        **_: object,
+    ) -> None:
         rec.events.append(f"{level}:{event}")
+        rec.logged.append((level, event, account_id, extra or {}))
 
     monkeypatch.setattr(qr_service, "_gateway_start", _start)
     monkeypatch.setattr(qr_service, "_gateway_submit", _submit)
@@ -93,6 +118,7 @@ def fake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Recorder:
     monkeypatch.setattr(qr_service, "read_qr_login", lambda _: rec.state)
     monkeypatch.setattr(qr_service, "forget_qr_login", rec.forgotten.append)
     monkeypatch.setattr(qr_service, "log_out_session", _log_out)
+    monkeypatch.setattr(qr_service, "remove_account_session", _quarantine)
     monkeypatch.setattr(qr_service, "start_account_inbox", _inbox)
     monkeypatch.setattr(qr_service, "update_account_from_session_check", _persist)
     monkeypatch.setattr(qr_service, "log_event", _event)
@@ -361,6 +387,71 @@ async def test_a_failed_revoke_still_drops_the_placeholder(
 
     assert await fetch_account("qr-1") is None
     assert "WARNING:qr_login_duplicate_logout_failed" in fake.events
+
+
+@pytest.mark.asyncio
+async def test_an_ended_authorization_leaves_nothing_to_quarantine(fake: Recorder) -> None:
+    await _existing_user("known", 777)
+    await _placeholder()
+    fake.state = _alive("qr-1", fake, user_id=777)
+
+    with pytest.raises(qr_service.QrLoginError):
+        await qr_service.get_qr_login("qr-1")
+
+    assert fake.quarantined == []
+    assert not any(event.endswith("qr_login_surplus_session_left") for event in fake.events)
+
+
+@pytest.mark.asyncio
+async def test_a_logout_telegram_did_not_confirm_quarantines_the_file_before_the_row_goes(
+    fake: Recorder,
+) -> None:
+    # ``log_out_session`` returns (does not raise) a ``network_error`` and keeps the file:
+    # the authorization may still be alive at Telegram, so the key must not be unlinked.
+    fake.logout_status = "network_error"
+    fake.logout_error = "TimeoutError"
+    await _existing_user("known", 777)
+    await _placeholder()
+    fake.state = _alive("qr-1", fake, user_id=777)
+
+    with pytest.raises(qr_service.QrLoginError) as excinfo:
+        await qr_service.get_qr_login("qr-1")
+
+    assert excinfo.value.code == "account_exists"
+    # Set aside under its own name while the placeholder row still exists, then the row goes.
+    assert fake.quarantined == [("qr-1", "qr-1", True)]
+    assert await fetch_account("qr-1") is None
+    assert fake.forgotten == ["qr-1"]
+    assert (
+        "WARNING",
+        "qr_login_surplus_session_left",
+        "known",
+        {"existing_account_id": "known", "error_type": "TimeoutError"},
+    ) in fake.logged
+
+
+@pytest.mark.asyncio
+async def test_a_failed_revoke_also_quarantines_the_file(
+    fake: Recorder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _boom(request: TelegramClientRequest, *, wipe_session: bool) -> object:
+        raise ConnectionError(request.account_id, wipe_session)
+
+    monkeypatch.setattr(qr_service, "log_out_session", _boom)
+    await _existing_user("known", 777)
+    await _placeholder()
+    fake.state = _alive("qr-1", fake, user_id=777)
+
+    with pytest.raises(qr_service.QrLoginError):
+        await qr_service.get_qr_login("qr-1")
+
+    assert fake.quarantined == [("qr-1", "qr-1", True)]
+    assert (
+        "WARNING",
+        "qr_login_surplus_session_left",
+        "known",
+        {"existing_account_id": "known", "error_type": "ConnectionError"},
+    ) in fake.logged
 
 
 @pytest.mark.asyncio

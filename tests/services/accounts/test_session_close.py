@@ -6,7 +6,7 @@ import pytest
 
 from core.repositories.lifecycle import list_lifecycle_events
 from core.repositories.session_audits import fetch_last_session_audit_event, fetch_session_audit
-from core.telegram_client import SessionAuditGatewayError
+from core.telegram_client import SessionAuditGatewayError, account_auth_lock
 from schemas.accounts import AccountRead
 from schemas.session_audit import AccountSession, AuthorizationList
 from schemas.session_close import SessionCloseOutcome
@@ -178,14 +178,23 @@ async def test_a_refusal_is_an_outcome_not_an_error_and_is_not_journalled_as_clo
     assert await _closed_rows() == []
 
 
+async def _show_operator(wire: _Wire, *foreign: str) -> None:
+    """Save the audit the operator looked at: what the card showed before the close."""
+    wire.listings.insert(wire.reads, _listing(*foreign))
+    await audit_svc.audit_account_sessions("acc-1")
+
+
 @pytest.mark.asyncio
 async def test_closing_everything_foreign_reads_first_and_names_only_foreign_hashes(
     wire: _Wire,
 ) -> None:
+    await _show_operator(wire, "2", "3")
+
     result = await svc.close_account_foreign_sessions("acc-1")
 
     assert wire.closes == [(["2", "3"], 1)]
     assert result.closed_count == 2
+    assert (result.unseen_count, result.no_prior_audit) == (0, False)
 
 
 @pytest.mark.asyncio
@@ -218,15 +227,73 @@ async def test_a_failed_reread_still_reports_what_was_closed(
 ) -> None:
     async def _read(_a: str, _d: list[str], _own: object = None) -> AuthorizationList:
         wire.reads += 1
-        if wire.reads > 1:
+        if wire.reads > 2:
             code = "unavailable"
             raise SessionAuditGatewayError(code)
         return _listing("2")
 
     monkeypatch.setattr(audit_svc, "read_account_sessions", _read)
+    await audit_svc.audit_account_sessions("acc-1")
 
     result = await svc.close_account_foreign_sessions("acc-1")
 
     assert result.closed_count == 1
     assert result.audit is None
     assert await _closed_rows() == [{"requested": 1, "closed": 1}]
+
+
+@pytest.mark.asyncio
+async def test_a_sign_in_in_flight_refuses_every_close_before_telegram(wire: _Wire) -> None:
+    # A second-device, QR or phone-code sign-in holds the auth lock for its whole life; its
+    # new session is listed as foreign until it is recorded, so nothing may be closed now.
+    async with account_auth_lock("acc-1"):
+        with pytest.raises(AccountActionError) as named:
+            await svc.close_account_sessions("acc-1", ["2"])
+        with pytest.raises(AccountActionError) as everything:
+            await svc.close_account_foreign_sessions("acc-1")
+
+    assert (named.value.code, everything.value.code) == ("sign_in_in_progress",) * 2
+    assert (wire.reads, wire.closes) == (0, [])
+    assert await fetch_session_audit("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_close_all_never_closes_a_foreign_session_the_operator_was_not_shown(
+    wire: _Wire,
+) -> None:
+    await _show_operator(wire, "2")
+    # A session of ours that Telegram lists as foreign before it is recorded shows up now.
+    wire.listings[wire.reads :] = [_listing("2", "3"), _listing("3")]
+
+    result = await svc.close_account_foreign_sessions("acc-1")
+
+    assert wire.closes == [(["2"], 0)]
+    assert [(o.hash, o.status) for o in result.outcomes] == [("2", "closed")]
+    assert (result.closed_count, result.unseen_count, result.no_prior_audit) == (1, 1, False)
+    # The fresh audit is saved as usual, so the card shows the new one for the next decision.
+    assert result.audit is not None
+    assert [s.hash for s in result.audit.sessions if not s.is_ours] == ["3"]
+    assert await fetch_session_audit("acc-1") == result.audit
+
+
+@pytest.mark.asyncio
+async def test_close_all_without_a_saved_audit_saves_one_and_closes_nothing(wire: _Wire) -> None:
+    result = await svc.close_account_foreign_sessions("acc-1")
+
+    assert (wire.closes, result.outcomes, result.closed_count) == ([], [], 0)
+    assert (result.unseen_count, result.no_prior_audit) == (2, True)
+    saved = await fetch_session_audit("acc-1")
+    assert saved is not None
+    assert [s.hash for s in saved.sessions if not s.is_ours] == ["2", "3"]
+    assert result.audit == saved
+    assert await _closed_rows() == []
+
+
+@pytest.mark.asyncio
+async def test_named_hashes_keep_their_semantics_without_a_saved_audit(wire: _Wire) -> None:
+    wire.listings = [_listing()]
+
+    result = await svc.close_account_sessions("acc-1", ["2"])
+
+    assert wire.closes == [(["2"], 0)]
+    assert (result.unseen_count, result.no_prior_audit) == (0, False)

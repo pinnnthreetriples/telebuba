@@ -35,6 +35,7 @@ from services.accounts import (
 from services.accounts import devices as devices_module
 from services.accounts._import_rollback import discard_imported_session
 from tests.services.accounts._mobile_support import _fake_sign_in
+from tests.session_files import session_file_bytes
 
 if TYPE_CHECKING:
     from schemas.device_fingerprint import TelegramClientRequest
@@ -135,7 +136,7 @@ async def test_a_mobile_session_import_is_a_mobile_only_account() -> None:
     account = await import_account_session(
         AccountSessionFileImport(
             filename="phone.session",
-            content=b"android auth key",
+            content=session_file_bytes(),
             session_device="mobile",
         ),
     )
@@ -150,7 +151,7 @@ async def test_a_mobile_session_import_is_a_mobile_only_account() -> None:
 @pytest.mark.asyncio
 async def test_an_import_defaults_to_desktop() -> None:
     account = await import_account_session(
-        AccountSessionFileImport(filename="desk.session", content=b"desktop auth key"),
+        AccountSessionFileImport(filename="desk.session", content=session_file_bytes()),
     )
 
     assert account.devices == ["desktop"]
@@ -169,7 +170,7 @@ async def test_a_mobile_pick_without_the_android_credentials_creates_nothing(
         await import_account_session(
             AccountSessionFileImport(
                 filename="phone.session",
-                content=b"android auth key",
+                content=session_file_bytes(),
                 session_device="mobile",
             ),
         )
@@ -303,7 +304,9 @@ async def test_a_recreated_account_does_not_inherit_a_stale_primary_device() -> 
     _pool._PRIMARY["phone"] = "desktop"
 
     await import_account_session(
-        AccountSessionFileImport(filename="phone.session", content=b"key", session_device="mobile"),
+        AccountSessionFileImport(
+            filename="phone.session", content=session_file_bytes(), session_device="mobile"
+        ),
     )
 
     assert "phone" not in _pool._PRIMARY

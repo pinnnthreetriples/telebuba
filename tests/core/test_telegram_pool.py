@@ -112,7 +112,11 @@ def _install_fake_factory(
         built.append(client)
         return client
 
+    async def file_is_there(_profile):
+        """These tests are about the pool's mechanics; the file check has its own module."""
+
     monkeypatch.setattr("core.telegram_client._pool.prepare_telegram_client_profile", fake_prepare)
+    monkeypatch.setattr("core.telegram_client._pool.require_session_file", file_is_there)
     monkeypatch.setattr("core.telegram_client._pool.create_telegram_client", fake_create)
     return built
 

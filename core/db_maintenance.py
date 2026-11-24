@@ -10,23 +10,31 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import text
-
 from core.config import settings
 from core.db import _get_engine
-from core.secure_paths import make_private_dir, make_private_file
+from core.db_snapshot import (
+    default_clock as _default_backup_clock,
+)
+from core.db_snapshot import (
+    newest_backup_at,
+    prune_backups,
+    write_snapshot,
+)
+from core.db_snapshot import (
+    vacuum_into as _vacuum_into,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from sqlalchemy.engine import Connection
-
 logger = logging.getLogger(__name__)
+
+_SECONDS_PER_HOUR = 3600.0
+_SECONDS_PER_MINUTE = 60.0
 
 
 # --------------------------------------------------------------------------- #
@@ -34,25 +42,9 @@ logger = logging.getLogger(__name__)
 # WAL never truncates on its own under a long-lived pool, and telebuba.db is the
 # sole datastore (incl. users/auth), so nothing otherwise guards against loss.
 # The clock is injectable so the backup filename is deterministic under test.
+# The staging/publish/retention rules live in ``core.db_snapshot``, shared with the
+# snapshot taken before a schema migration.
 # --------------------------------------------------------------------------- #
-_BACKUP_STEM = "telebuba"
-_BACKUP_SUFFIX = ".db"
-# The vacuum writes here and is renamed onto its real name only on success, so a
-# failed run (disk full) cannot leave a half-written file that _prune_backups
-# would count as a backup — and, being the newest, keep in place of a good one.
-_BACKUP_PARTIAL_SUFFIX = ".part"
-_BACKUP_TIMESTAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
-
-
-def _default_backup_clock() -> datetime:
-    return datetime.now(UTC)
-
-
-def _vacuum_into(connection: Connection, path: Path) -> None:
-    """Copy a consistent snapshot to ``path``. The path is bound, never interpolated."""
-    connection.execute(text("VACUUM INTO :path"), {"path": str(path)})
-
-
 def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock) -> Path | None:
     """Checkpoint the WAL and, when enabled, write + prune a timestamped backup.
 
@@ -65,63 +57,52 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
         connection.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
         if not settings.db.backup_enabled:
             return None
-        backup_dir = settings.db.backup_dir
-        # A backup is a byte-for-byte copy of the credential store — plaintext proxy
-        # passwords and every password_hash — so it needs the same 0700/0600 as the
-        # database it copies. Restricting the dir also covers the ``.part`` staging
-        # file, which holds the same bytes before it is published.
-        make_private_dir(backup_dir)
-        stamp = clock().strftime(_BACKUP_TIMESTAMP_FORMAT)
-        target = backup_dir / f"{_BACKUP_STEM}-{stamp}{_BACKUP_SUFFIX}"
-        partial = target.with_name(target.name + _BACKUP_PARTIAL_SUFFIX)
-        # Sweep on ENTRY, not after a successful publish: a run that raises never
-        # gets that far, and every run stamps a fresh name, so partials would pile
-        # up one full-DB-sized file per interval on the volume holding the sole
-        # datastore. VACUUM INTO holds no long lock, so the copy is safe online.
-        # The glob covers this run's own output name too, so it needs no unlink of
-        # its own. Leftovers are best-effort hygiene, so a stuck one (a live handle,
-        # the path turned into a directory, EPERM/EBUSY) is suppressed — unguarded it
-        # raises before the vacuum and no backup is ever taken again while it
-        # persists. Suppressing our own path costs nothing: VACUUM INTO fails on a
-        # non-empty existing output, so the run still raises either way — from sqlite
-        # there, and from the publish rename on an empty one. Deleting a
-        # foreign in-flight .part is only safe because maintenance is single-process:
-        # one uvicorn worker (a non-negotiable) and one task, whose runs serialise
-        # on ``await asyncio.to_thread``.
-        for orphan in backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}{_BACKUP_PARTIAL_SUFFIX}"):
-            with suppress(OSError):
-                orphan.unlink(missing_ok=True)
-        _vacuum_into(connection, partial)
-    partial.replace(target)  # atomic publish: only a complete file gets the real name.
-    make_private_file(target)
-    _prune_backups(backup_dir)
+        # ``_vacuum_into`` is looked up here, at call time: it is the seam tests patch.
+        target = write_snapshot(
+            connection, settings.db.backup_dir, clock=clock, vacuum=_vacuum_into
+        )
+    prune_backups(settings.db.backup_dir, settings.db.backup_keep, written=target)
     return target
 
 
-def _prune_backups(backup_dir: Path) -> None:
-    # A partial is never ranked as a backup: the glob below cannot match the
-    # ``.part`` suffix. Sweeping them is the caller's job, on entry.
-    backups = sorted(backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}"))
-    # max(0, ...): a negative count is not "delete nothing" in a slice, it means
-    # "all but the last N" — under the limit that deleted the oldest backups.
-    excess = max(0, len(backups) - settings.db.backup_keep)
-    # Same best-effort rule as the entry sweep: retention must never cost a backup
-    # that already published, and one un-removable old file must not stop the rest
-    # going. ``excess`` is recomputed every run, so a transient handle self-heals.
-    for stale in backups[:excess]:
-        with suppress(OSError):
-            stale.unlink(missing_ok=True)
+def _seconds_until_first_run() -> float:
+    """How long the loop waits before its first run.
+
+    With backups on, a missing or stale newest backup (older than one interval) is due
+    now: a process that restarts more often than the interval must still back up. Otherwise
+    the next run is one interval after the newest backup (or after start, with backups off).
+    """
+    interval = settings.db.backup_interval_hours * _SECONDS_PER_HOUR
+    if not settings.db.backup_enabled:
+        return interval
+    newest = newest_backup_at(settings.db.backup_dir)
+    if newest is None:
+        return 0.0
+    age = (datetime.now(UTC) - newest).total_seconds()
+    return max(0.0, interval - age)
 
 
 async def run_db_maintenance_loop() -> None:
-    """Run :func:`run_db_maintenance` on the configured interval until cancelled."""
-    interval_seconds = settings.db.backup_interval_hours * 3600.0
+    """Run :func:`run_db_maintenance` until cancelled.
+
+    The first run is due at once when the newest backup is missing or older than the
+    interval; afterwards one interval after the last successful run, and after a failed run
+    ``DB__BACKUP_RETRY_MINUTES`` later, not a whole interval.
+    """
+    interval_seconds = settings.db.backup_interval_hours * _SECONDS_PER_HOUR
+    retry_seconds = settings.db.backup_retry_minutes * _SECONDS_PER_MINUTE
+    try:
+        delay = await asyncio.to_thread(_seconds_until_first_run)
+    except Exception:  # an unreadable backup dir must not end the task before its first run.
+        logger.exception("could not read the backup dir at start; backing up now")
+        delay = 0.0
     while True:
-        await asyncio.sleep(interval_seconds)
+        await asyncio.sleep(delay)
         try:
             await asyncio.to_thread(run_db_maintenance)
         except Exception as exc:  # one bad run must not end maintenance for the process.
-            logger.exception("db maintenance run failed; retrying next interval")
+            logger.exception("db maintenance run failed; retrying shortly")
+            delay = retry_seconds
             # The stdlib logger above is file-only by design (see core/logging.py), so
             # without this the loop retries forever with no Logs row and no Sentry
             # event. This writes INTO the database whose maintenance just failed, so on
@@ -138,3 +119,5 @@ async def run_db_maintenance_loop() -> None:
                 "db_maintenance_failed",
                 extra={"error": type(exc).__name__},
             )
+        else:
+            delay = interval_seconds

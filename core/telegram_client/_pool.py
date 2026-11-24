@@ -58,6 +58,7 @@ from core.telegram_client._client import (
     DeviceUnavailableError,
     create_telegram_client,
     prepare_telegram_client_profile,
+    require_session_file,
     resolve_device,
 )
 from core.telegram_client._pool_errors import (
@@ -246,6 +247,8 @@ async def _connect_with_retry(account_id: str, device: DeviceType) -> TelegramCl
         # Nothing was attempted against Telegram, so nothing to retry or to log as a
         # connect failure: the account has no such device to serve.
         raise TelegramDeviceUnavailableError(account_id, exc) from exc
+    except TelegramClientUnavailableError:
+        raise  # a refusal made before any connect (a missing session file): nothing to retry
     except Exception as exc:  # second-attempt classifier sits below
         if isinstance(exc, OSError):
             # Transport failure: Telethon's connect() already ran its own retry ladder.
@@ -358,6 +361,7 @@ async def _build_and_connect(account_id: str, device: DeviceType) -> TelegramCli
     profile = await prepare_telegram_client_profile(
         TelegramClientRequest(account_id=account_id, device_type=device),
     )
+    await require_session_file(profile)
     client = create_telegram_client(profile)
     try:
         await client.connect()

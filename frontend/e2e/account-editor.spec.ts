@@ -10,51 +10,53 @@ test('account editors keep their position and show a subtle tab hover', async ({
     const path = new URL(route.request().url()).pathname;
     const body = path.endsWith('/auth/me')
       ? fx.me
-      : path.endsWith('/health')
-        ? fx.health
-        : path.endsWith('/events')
-          ? { events: [] }
-          : path.endsWith('/accounts/stats')
-            ? fx.accountStats
-            : path.endsWith('/accounts/web-windows')
-              ? fx.accountWebWindows
-              : path.endsWith('/accounts/spam-budget')
-                ? fx.spamBudget
-                : path.endsWith('/accounts/emulator')
-                  ? fx.accountEmulator
-                  : path.endsWith('/accounts/filter-options')
-                    ? fx.accountFilterOptions
-                    : path.endsWith('/account-folders')
-                      ? fx.accountFolders
-                      : path.endsWith('/proxies')
-                        ? fx.proxies
-                        : path.endsWith('/accounts/bulk-messages/active') ||
-                            path.endsWith('/accounts/bulk-messages/latest')
-                          ? null
-                          : path.endsWith('/profile-snapshot')
-                            ? {
-                                first_name: 'Иван',
-                                photos: [],
-                                stories: [],
-                                music: [],
-                                music_supported: true,
-                              }
-                            : path.endsWith('/privacy')
+      : path.endsWith('/session-guard')
+        ? fx.sessionGuard
+        : path.endsWith('/health')
+          ? fx.health
+          : path.endsWith('/events')
+            ? { events: [] }
+            : path.endsWith('/accounts/stats')
+              ? fx.accountStats
+              : path.endsWith('/accounts/web-windows')
+                ? fx.accountWebWindows
+                : path.endsWith('/accounts/spam-budget')
+                  ? fx.spamBudget
+                  : path.endsWith('/accounts/emulator')
+                    ? fx.accountEmulator
+                    : path.endsWith('/accounts/filter-options')
+                      ? fx.accountFilterOptions
+                      : path.endsWith('/account-folders')
+                        ? fx.accountFolders
+                        : path.endsWith('/proxies')
+                          ? fx.proxies
+                          : path.endsWith('/accounts/bulk-messages/active') ||
+                              path.endsWith('/accounts/bulk-messages/latest')
+                            ? null
+                            : path.endsWith('/profile-snapshot')
                               ? {
-                                  settings: {
-                                    profile_photo: 'everybody',
-                                    bio: 'everybody',
-                                    last_seen: 'contacts',
-                                  },
-                                  error: null,
+                                  first_name: 'Иван',
+                                  photos: [],
+                                  stories: [],
+                                  music: [],
+                                  music_supported: true,
                                 }
-                              : path.endsWith('/channels')
-                                ? { items: [], next_cursor: null }
-                                : path.endsWith('/scheduled')
-                                  ? { items: [], server_now: new Date().toISOString() }
-                                  : path.endsWith('/accounts')
-                                    ? fx.accounts
-                                    : undefined;
+                              : path.endsWith('/privacy')
+                                ? {
+                                    settings: {
+                                      profile_photo: 'everybody',
+                                      bio: 'everybody',
+                                      last_seen: 'contacts',
+                                    },
+                                    error: null,
+                                  }
+                                : path.endsWith('/channels')
+                                  ? { items: [], next_cursor: null }
+                                  : path.endsWith('/scheduled')
+                                    ? { items: [], server_now: new Date().toISOString() }
+                                    : path.endsWith('/accounts')
+                                      ? fx.accounts
+                                      : undefined;
     if (body === undefined) unmatched.push(path);
     await route.fulfill({
       status: 200,

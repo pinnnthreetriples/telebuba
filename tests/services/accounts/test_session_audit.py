@@ -7,7 +7,7 @@ import pytest
 from core.repositories.account_rekeys import fetch_rekey, save_rekey
 from core.repositories.lifecycle import list_lifecycle_events
 from core.repositories.session_audits import fetch_last_session_audit_event, fetch_session_audit
-from core.telegram_client import SessionAuditGatewayError
+from core.telegram_client import SessionAuditGatewayError, account_auth_lock
 from schemas.accounts import AccountRead
 from schemas.session_audit import AccountSession, AuthorizationList
 from schemas.session_rekey import StoredRekey
@@ -270,3 +270,42 @@ async def test_an_interrupted_save_never_loses_the_new_foreign_session_alert(
 
     assert await _journal() == [{"total": 2, "foreign": 1, "new": 1}]
     assert await fetch_session_audit("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_a_sign_in_in_flight_defers_the_audit_instead_of_alerting_on_its_session(
+    wire: _Wire,
+) -> None:
+    # Our own second device is listed as foreign until it is recorded: the read waits.
+    wire.listing = AuthorizationList(sessions=[_session("1", ours=True), _session("2", ours=False)])
+
+    async with account_auth_lock("acc-1"):
+        with pytest.raises(AccountActionError) as refused:
+            await svc.audit_account_sessions("acc-1")
+
+    assert refused.value.code == "sign_in_in_progress"
+    assert wire.reads == []
+    assert await fetch_session_audit("acc-1") is None
+    assert await _journal() == []
+    # Once the sign-in is over the same session is read and told as news, nothing was lost.
+    await svc.audit_account_sessions("acc-1")
+    assert await _journal() == [{"total": 2, "foreign": 1, "new": 1}]
+
+
+@pytest.mark.asyncio
+async def test_a_device_telegram_ended_is_logged_by_type_only(
+    wire: _Wire, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    logged: list[tuple[str, dict[str, object]]] = []
+
+    async def _log(
+        _level: str, event: str, extra: dict[str, object] | None = None, **_: object
+    ) -> None:
+        logged.append((event, extra or {}))
+
+    monkeypatch.setattr(svc, "log_event", _log)
+    wire.listing = AuthorizationList(sessions=[_session("1", ours=True)], dead_devices=["mobile"])
+
+    await svc.audit_account_sessions("acc-1")
+
+    assert ("session_audit_device_dead", {"device_type": "mobile"}) in logged
