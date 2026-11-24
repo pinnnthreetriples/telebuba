@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, cast
 from core.config import settings
 from core.db import fetch_account_twofa_pair, set_account_twofa_password
 from core.logging import log_event
+from core.repositories._accounts_twofa import fetch_account_twofa_state
 from core.telegram_client import (
     UNCONFIRMED_ERROR_TYPE,
     TelegramAccountNotFoundError,
@@ -54,6 +55,7 @@ from services.accounts._twofa_pending import (
     resolve_current,
     stage_pending,
     twofa_password_candidates,
+    unsettled_code,
 )
 from services.accounts._twofa_support import (
     _TWOFA_LOCKS,
@@ -155,16 +157,25 @@ async def authorising_twofa_password(account_id: str) -> str | None:
 
 
 async def read_account_twofa(account_id: str) -> AccountTwoFactorView:
-    """The account's live 2FA state, plus whether this dashboard holds its password.
+    """The account's live 2FA state, plus what this dashboard holds of its password.
 
-    ``has_stored_password`` is answered even when the live read failed: it is a DB
-    fact, and it is what tells the operator whether a change or a removal can be
-    authorised at all.
+    The three flags are DB facts, answered even when the live read failed.
+    ``has_stored_password`` means a password Telegram ACCEPTED is stored (the current
+    column); ``has_unverified_candidate`` that a different, unproven one is staged (the
+    seller's JSON password included); ``candidate_refused`` that Telegram refused it the
+    last time it was asked.
     """
     await require_account(account_id)
-    stored = bool(await twofa_password_candidates(account_id))
+    state = await fetch_account_twofa_state(account_id)
+    candidate = state.pending is not None and state.pending != state.current
     status, error = await _live_status(account_id)
-    return AccountTwoFactorView(status=status, has_stored_password=stored, error=error)
+    return AccountTwoFactorView(
+        status=status,
+        has_stored_password=state.current is not None,
+        has_unverified_candidate=candidate,
+        candidate_refused=candidate and state.pending_refused,
+        error=error,
+    )
 
 
 async def set_account_twofa(
@@ -210,7 +221,7 @@ async def set_account_twofa(
             # A pending candidate Telegram has neither confirmed nor refused may be the
             # password in force: staging over it could leave Telegram holding a value in
             # neither column. Refuse; a later attempt settles it.
-            code = "twofa_pending_unsettled"
+            code = await unsettled_code(account_id)
             raise AccountActionError(code)
         # Settled, so this is the real stored current password, not a guess.
         current = settled.password
@@ -380,7 +391,7 @@ async def remove_account_twofa(
         else:
             settled = await _settled_current(account_id, status)
             if settled.unsettled:
-                code = "twofa_pending_unsettled"
+                code = await unsettled_code(account_id)
                 raise AccountActionError(code)
             current = settled.password
         if current is None:

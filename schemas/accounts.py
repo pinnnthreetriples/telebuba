@@ -60,6 +60,8 @@ AccountStatus = Literal[
     "new",
     "alive",
     "unauthorized",
+    # The ``.session`` file is gone (or holds no key); the key itself may still be alive.
+    "session_file_missing",
     "session_error",
     "account_error",
     "frozen",
@@ -298,7 +300,7 @@ class AccountStats(BaseModel):
 AccountHealth = Literal["ok", "warn", "fail"]
 
 _PERMANENT_STATUSES: frozenset[AccountStatus] = frozenset(
-    {"unauthorized", "session_error", "account_error", "frozen"},
+    {"unauthorized", "session_file_missing", "session_error", "account_error", "frozen"},
 )
 
 
@@ -306,7 +308,8 @@ def health_for_status(status: AccountStatus) -> AccountHealth:
     """Map an ``AccountStatus`` to a coarse traffic-light health value.
 
     - ``ok`` — alive (green).
-    - ``fail`` — permanent: unauthorized, session_error, account_error, frozen (red).
+    - ``fail`` — permanent: unauthorized, session_file_missing, session_error, account_error,
+      frozen (red).
     - ``warn`` — everything else: new + temporary issues (amber).
     """
     if status == "alive":

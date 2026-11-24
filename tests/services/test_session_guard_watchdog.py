@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core.config import settings
 from services import session_guard
 from services.session_guard import _loop, _watchdog
 
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def events(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, object]]]:
+    # A developer's .env may configure a real vault; the status read must not ask it.
+    monkeypatch.setattr(settings.passkey_vault, "token", "")
     _loop.reset_for_tests()
     _watchdog.reset_watchdog_for_tests()
     logged: list[tuple[str, object]] = []

@@ -30,9 +30,18 @@ from services.accounts import (
     list_accounts_page,
     remove_account,
 )
+from tests.session_files import session_file_bytes
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+_VALID = session_file_bytes()
+_FIRST = session_file_bytes(key=bytes([1]) * 256)
+_SECOND = session_file_bytes(key=bytes([2]) * 256)
+_ORIGINAL = session_file_bytes(key=bytes([3]) * 256)
+_ATTACKER = session_file_bytes(key=bytes([4]) * 256)
+# The rollback moves the file to the quarantine; this is the call a "file in use" failure hits.
+_QUARANTINE_SEAM = "core.telegram_client._auth.quarantine_file"
 
 
 @pytest.mark.asyncio
@@ -40,7 +49,7 @@ async def test_import_account_session_saves_file_and_creates_account() -> None:
     account = await import_account_session(
         AccountSessionFileImport(
             filename="real-account.session",
-            content=b"sqlite session bytes",
+            content=_VALID,
             label="Real account",
         ),
     )
@@ -48,9 +57,7 @@ async def test_import_account_session_saves_file_and_creates_account() -> None:
 
     assert account.account_id == "real-account"
     assert account.session_name == "real-account"
-    assert (
-        settings.telegram.session_dir / "real-account.session"
-    ).read_bytes() == b"sqlite session bytes"
+    assert (settings.telegram.session_dir / "real-account.session").read_bytes() == _VALID
     row = page.items[0]
     assert row.label == "Real account"
     assert row.session_name == "real-account"
@@ -68,10 +75,10 @@ async def test_concurrent_identical_session_imports_serialize() -> None:
     """
     results = await asyncio.gather(
         import_account_session(
-            AccountSessionFileImport(filename="race.session", content=b"first", label="A"),
+            AccountSessionFileImport(filename="race.session", content=_FIRST, label="A"),
         ),
         import_account_session(
-            AccountSessionFileImport(filename="race.session", content=b"second", label="B"),
+            AccountSessionFileImport(filename="race.session", content=_SECOND, label="B"),
         ),
         return_exceptions=True,
     )
@@ -87,7 +94,7 @@ async def test_concurrent_identical_session_imports_serialize() -> None:
     page = await list_accounts_page()
     assert len(page.items) == 1
     winner = successes[0]
-    expected = b"first" if winner.label == "A" else b"second"
+    expected = _FIRST if winner.label == "A" else _SECOND
     assert (settings.telegram.session_dir / "race.session").read_bytes() == expected
 
 
@@ -99,11 +106,11 @@ async def test_import_account_session_drops_the_phone_plus() -> None:
     bare ``validation_error``. The leading ``+`` carries nothing the digits don't.
     """
     account = await import_account_session(
-        AccountSessionFileImport(filename="+522491104289.session", content=b"bytes"),
+        AccountSessionFileImport(filename="+522491104289.session", content=_VALID),
     )
 
     assert account.account_id == "522491104289"
-    assert (settings.telegram.session_dir / "522491104289.session").read_bytes() == b"bytes"
+    assert (settings.telegram.session_dir / "522491104289.session").read_bytes() == _VALID
 
 
 @pytest.mark.asyncio
@@ -125,7 +132,7 @@ async def test_import_account_session_rejected_id_leaves_no_file() -> None:
     """
     with pytest.raises(ValueError, match="account_id"):
         await import_account_session(
-            AccountSessionFileImport(filename="..session", content=b"credential-bytes"),
+            AccountSessionFileImport(filename="..session", content=_VALID),
         )
 
     assert not (settings.telegram.session_dir / "..session").exists()
@@ -150,7 +157,7 @@ async def test_session_import_locks_down_the_directory_and_the_credential(
         lambda self, mode: modes.__setitem__(self.name, mode),
     )
     await import_account_session(
-        AccountSessionFileImport(filename="perm.session", content=b"credential-bytes"),
+        AccountSessionFileImport(filename="perm.session", content=_VALID),
     )
     assert modes[settings.telegram.session_dir.name] == 0o700
     assert modes["perm.session"] == 0o600
@@ -167,7 +174,7 @@ async def test_failed_import_cleans_up_so_the_retry_can_succeed() -> None:
     for the operator to delete — a retryable failure turned permanent.
     """
     await add_account(AccountCreate(account_id="other", label="Other", session_name="123"))
-    data = AccountSessionFileImport(filename="123.session", content=b"credential-bytes")
+    data = AccountSessionFileImport(filename="123.session", content=_VALID)
     orphan = settings.telegram.session_dir / "123.session"
 
     with pytest.raises(ValueError, match="already used by account"):
@@ -178,7 +185,7 @@ async def test_failed_import_cleans_up_so_the_retry_can_succeed() -> None:
     await remove_account("other")
     account = await import_account_session(data)
     assert account.account_id == "123"
-    assert orphan.read_bytes() == b"credential-bytes"
+    assert orphan.read_bytes() == _VALID
 
 
 @pytest.mark.asyncio
@@ -191,10 +198,10 @@ async def test_a_failed_cleanup_is_reported_and_leaves_the_original_error(
     def _unlink(_self: Path, *, missing_ok: bool = False) -> None:  # noqa: ARG001 - mirrors Path.unlink
         raise PermissionError(32, "file in use")
 
-    monkeypatch.setattr("pathlib.Path.unlink", _unlink)
+    monkeypatch.setattr(_QUARANTINE_SEAM, _unlink)
     with pytest.raises(ValueError, match="already used by account"):
         await import_account_session(
-            AccountSessionFileImport(filename="123.session", content=b"credential-bytes"),
+            AccountSessionFileImport(filename="123.session", content=_VALID),
         )
 
 
@@ -204,23 +211,23 @@ async def test_import_account_session_refuses_to_overwrite_existing() -> None:
     await import_account_session(
         AccountSessionFileImport(
             filename="dup.session",
-            content=b"original-session-bytes",
+            content=_ORIGINAL,
             label="Original",
         ),
     )
     session_path = settings.telegram.session_dir / "dup.session"
-    assert session_path.read_bytes() == b"original-session-bytes"
+    assert session_path.read_bytes() == _ORIGINAL
 
     with pytest.raises(SessionAlreadyExistsError):
         await import_account_session(
             AccountSessionFileImport(
                 filename="dup.session",
-                content=b"attacker-session-bytes",
+                content=_ATTACKER,
                 label="Replacement",
             ),
         )
     # File must be untouched.
-    assert session_path.read_bytes() == b"original-session-bytes"
+    assert session_path.read_bytes() == _ORIGINAL
 
 
 @pytest.mark.asyncio

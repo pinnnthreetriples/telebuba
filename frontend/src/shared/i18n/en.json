@@ -66,6 +66,7 @@
       "new": "New",
       "alive": "Alive",
       "unauthorized": "Unauthorized",
+      "session_file_missing": "Session file missing",
       "session_error": "Session error",
       "account_error": "Account error",
       "frozen": "Frozen",
@@ -362,6 +363,12 @@
       "twofaForgetUnknownTitle": "Delete the stored password?",
       "twofaForgetUnknownBody": "The 2FA state could not be read, so nothing is changed on Telegram: only the copy stored here is deleted. If Telegram does hold a cloud password it stays, and it can no longer be changed or removed from here.",
       "twofaForgetUnknownConfirm": "Delete",
+      "twofaCandidatePending": "The password from the seller's file is saved, but Telegram has not confirmed it yet.",
+      "twofaCandidateRefused": "Telegram did not accept the saved password.",
+      "twofaCandidateRefusedNote": "Type the real password: Telegram checks it and it replaces the saved one. Or delete the saved one.",
+      "twofaForgetCandidateTitle": "Delete the saved password?",
+      "twofaForgetCandidateBody": "Telegram did not accept this password. Deleting removes it from Telebuba only; nothing changes on Telegram.",
+      "twofaForgetCandidateConfirm": "Delete",
       "twofaEmailAddress": "Email address",
       "twofaEmailAttach": "Attach email",
       "twofaEmailWarn": "Whoever gets into that mailbox can reset the password and take the account.",
@@ -451,6 +458,8 @@
       "sessionsCreated": "signed in {{date}}",
       "sessionsTtl": "Telegram ends a session that stays idle for {{days}} days.",
       "sessionsClose": "Close foreign sessions",
+      "sessionsNoPriorAudit": "The session list was saved for the first time — check it and close again",
+      "sessionsUnseen": "New sessions appeared ({{count}}) — check them and close again",
       "sessionsCloseTitle": "Close the foreign sessions?",
       "sessionsCloseBody": "These sessions are signed out of Telegram, one at a time with pauses, so it can take a minute. Our own sessions are not touched. A session that belongs to this account's phone or container app would be signed out too.",
       "sessionsClosed": "Closed: {{count}}",
@@ -490,8 +499,8 @@
         "spam_clean": "SpamBot: clean, no limits in the last month",
         "session_age": "The new session is at least a week old",
         "fallback_session": "A second device of ours is signed in to receive a login code",
-        "twofa_stored": "The 2FA password is stored",
-        "passkey_stored": "A passkey is stored"
+        "twofa_stored": "The 2FA password is saved and confirmed by Telegram",
+        "passkey_stored": "The passkey is created and the vault answers"
       },
       "closeOldKey": "Close the old session",
       "closeOldKeyTitle": "Close the old session?",
@@ -546,6 +555,10 @@
       "closeAll": "Close all Telegram Web windows ({{count}} open)",
       "closed": "Telegram Web windows closed: {{count}}",
       "tooMany": "Telegram Web windows open: {{count}}. Each one is a separate Chrome — close the ones you no longer need."
+    },
+    "sessionCopiesOff": {
+      "text": "Account key copies are off: if a disk or a file is lost, the account cannot be restored.",
+      "link": "Open settings"
     },
     "spamBudget": {
       "title": "Many @SpamBot checks",
@@ -1625,6 +1638,7 @@
       "twofa_settings_invalid": "Telegram rejected the new password settings.",
       "twofa_not_changed": "The password was not changed: Telegram ran no request.",
       "twofa_password_not_stored": "The current password is not stored in the dashboard, so it cannot be changed or removed from here.",
+      "twofa_candidate_refused": "Telegram refused the stored password (for example the one from the seller's JSON), and no confirmed password is saved. Nothing was sent. Enter the real password to record it, or forget the stored one.",
       "twofa_pending_store_failed": "The new password could not be saved first, so nothing was sent to Telegram. Try again.",
       "twofa_pending_unsettled": "An earlier password change is still unconfirmed: Telegram has not said which password is in force. Nothing was sent. Try again in a few minutes, or forget the stored password.",
       "twofa_store_failed": "Telegram accepted the password, but the dashboard could not save it. Do not rely on it: save it elsewhere and try again.",
@@ -1641,6 +1655,7 @@
       "twofa_not_enabled": "The account has no cloud password on Telegram, so there is nothing to save or verify.",
       "session_json_invalid": "The seller JSON could not be read: the file is damaged or is not a JSON object.",
       "session_json_phone_mismatch": "The phone in the JSON does not match the .session file name. The files belong to different accounts.",
+      "session_file_invalid": "This is not a usable Telethon .session file: it is damaged, has no auth key, or comes from another library. Nothing was imported.",
       "twofa_proxy_missing": "Assign a proxy to the account first: the password cannot be checked without one.",
       "session_json_no_password": "The seller JSON has no 2FA password.",
       "web_login_no_proxy": "This account has no proxy assigned, and the browser must reach Telegram through the account's own exit. Assign a proxy and try again.",
@@ -1762,6 +1777,7 @@
       "passkey_login_failed": "Passkey sign-in failed",
       "session_audit_proxy_missing": "Assign a proxy to the account first: its sessions cannot be read without one.",
       "session_audit_failed": "Telegram's list of sessions could not be read",
+      "sign_in_in_progress": "A sign-in of this account is still in progress — its sessions cannot be read or closed until it finishes. Try again in a moment.",
       "rekey_proxy_missing": "Assign a proxy to the account first: a new login must not come from your own IP.",
       "rekey_account_busy": "Another feature is using this account right now — try again when it is free.",
       "rekey_pending": "The previous re-key still has its old session to close.",
@@ -1870,7 +1886,28 @@
       "running": "Running · last activity {{date}}",
       "notRunning": "Not running",
       "silent": "Silent since {{date}}: session checks may not be running. The bot has been told.",
-      "stopped": "Stopped and restarting. If this does not clear within a couple of minutes, restart Telebuba."
+      "stopped": "Stopped and restarting. If this does not clear within a couple of minutes, restart Telebuba.",
+      "backups": {
+        "title": "Copies and vault",
+        "copiesOn": "Account key copies are on",
+        "copiesOff": "Account key copies are off",
+        "withoutCopy": "{{n}} of {{total}} accounts without a copy",
+        "lastCopy": "Latest copy: {{date}}",
+        "noCopyYet": "No copies yet",
+        "mirrorOn": "A second place for copies is set up",
+        "mirrorOff": "No second place for copies",
+        "lastDb": "Database backup: {{date}}",
+        "noDbYet": "No database backups yet",
+        "dbOff": "Database backups are off",
+        "dbOverdue": "The database backup is overdue",
+        "vault": {
+          "off": "Passkey vault is off",
+          "ok": "Passkey vault answers",
+          "sealed": "Passkey vault is sealed",
+          "unreachable": "Passkey vault does not answer",
+          "rejected": "Passkey vault refused the request"
+        }
+      }
     }
   },
   "logTerminal": {
@@ -2100,6 +2137,7 @@
     "qr_login_failed": "QR sign-in failed",
     "qr_login_duplicate": "QR scanned from an account already added",
     "qr_login_duplicate_logout_failed": "Could not revoke the extra QR sign-in",
+    "qr_login_surplus_session_left": "An extra QR sign-in may still be active on this account — close it in the Sessions card",
     "account_logged_out": "Signed out",
     "account_session_reset": "Session reset",
     "account_twofa_set": "Cloud password set",
@@ -2332,6 +2370,7 @@
     "passkey_login_failed": "Passkey sign-in failed",
     "passkey_removed": "Passkey removed",
     "session_audit_completed": "Sessions checked",
+    "session_audit_device_dead": "A second sign-in of the account has ended on Telegram's side",
     "session_audit_failed": "Sessions could not be checked",
     "session_audit_foreign_found": "A session that is not ours is on the account",
     "own_authorizations_failed": "Telebuba's own web login could not be recorded",
@@ -2376,6 +2415,8 @@
     "session_guard_stalled": "The session guard stopped or went silent",
     "session_vault_off": "Session copies are off: SESSION_VAULT__KEY is not set",
     "session_backup_failed": "Could not store a session copy",
+    "account_session_file_missing": "The account's .session file is gone: restore it from a copy or sign in again",
+    "session_orphan_files_found": "Session files in the folder belong to no account",
     "instance_not_fleet_owner": "This computer is not the fleet owner: Telegram connections are refused",
     "own_session_marked": "The operator marked a session as ours (or took the mark back)"
   },

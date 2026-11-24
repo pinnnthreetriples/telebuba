@@ -12,7 +12,7 @@ import {
 import { mutationErrorText } from '@/shared/lib';
 import { Button, FeedbackMark, Icon, IconButton, Notice, Spinner } from '@/shared/ui';
 
-import { isRefused, sessionOutcomeText } from './_sessionOutcome';
+import { closeResultNote, isRefused, sessionOutcomeText } from './_sessionOutcome';
 import { useMountedRef } from './useMountedRef';
 
 type RowState =
@@ -80,7 +80,8 @@ export function SessionAuditStep({
     try {
       const result = await closeForeign.mutateAsync({ path: { account_id: accountId } });
       const refused = result.outcomes.find(isRefused);
-      const left = result.audit?.foreign_count ?? (refused ? 1 : 0);
+      const note = closeResultNote(t, result);
+      const left = result.audit?.foreign_count ?? (refused || note ? 1 : 0);
       setRow(
         accountId,
         left === 0
@@ -88,7 +89,7 @@ export function SessionAuditStep({
           : {
               state: 'foreign',
               foreign: left,
-              reason: refused ? sessionOutcomeText(t, refused) : undefined,
+              reason: note ?? (refused ? sessionOutcomeText(t, refused) : undefined),
             },
       );
     } catch (error) {

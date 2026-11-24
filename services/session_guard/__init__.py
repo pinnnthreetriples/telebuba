@@ -17,6 +17,7 @@ from core.logging import log_event
 from services.session_backups import shutdown_session_backups, start_session_backups
 from services.session_death_watch import shutdown_session_death_watch, start_session_death_watch
 from services.session_guard import _loop
+from services.session_guard._backup_status import read_backup_status
 from services.session_guard._loop import guard_status, run_guard_pass
 from services.session_guard._watchdog import start_watchdog, stop_watchdog
 
@@ -59,5 +60,5 @@ async def shutdown_session_guard() -> None:
 
 
 async def read_session_guard_status() -> SessionGuardStatus:
-    """Whether the guard runs, when it last did something, and whether it has stalled."""
-    return guard_status()
+    """Whether the guard runs, its last activity, whether it stalled, and the safety nets' state."""
+    return guard_status().model_copy(update={"backups": await read_backup_status()})

@@ -83,14 +83,28 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
   const status = twofa.data?.status ?? null;
   const readError = twofa.data?.error ?? null;
   const hasPassword = status?.has_password === true;
+  // `has_stored_password` now means a password Telegram ACCEPTED is stored. A seller's
+  // password kept at import is only a candidate until Telegram has confirmed it; the
+  // backend verifies a pending candidate first, so change and remove stay open for it,
+  // but a candidate Telegram REFUSED answers `twofa_candidate_refused` to both.
   const hasStored = twofa.data?.has_stored_password === true;
+  const candidateOnly = !hasStored && twofa.data?.has_unverified_candidate === true;
+  const candidateRefused = candidateOnly && twofa.data?.candidate_refused === true;
+  const candidatePending = candidateOnly && !candidateRefused;
+  const canManage = hasStored || candidatePending;
   const readFailed = readError != null || twofa.isError;
   // One modal and one DELETE serve three situations, and the copy has to say which.
   // The third is the read-failure one: `remove_account_twofa` only takes its "clear
   // the column, spend no RPC" branch when the live read SAYS 2FA is off, so with no
   // live status the DELETE does attempt a real removal on Telegram — the plain
   // "Telegram keeps its copy" wording of the stale case would be a lie here.
-  const removeKind = readFailed ? 'ForgetUnknown' : hasPassword ? 'Disable' : 'Forget';
+  const removeKind = readFailed
+    ? 'ForgetUnknown'
+    : candidateRefused && hasPassword
+      ? 'ForgetCandidate'
+      : hasPassword
+        ? 'Disable'
+        : 'Forget';
   // `previous_kept` is three-valued and only two of them mean "nothing was kept".
   // `true`: kept, and the live read says Telegram holds a password. `null`: kept, but
   // the live read answered nothing. Both are deliberate, so neither is a store
@@ -148,7 +162,10 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
         // branches keep the plain DELETE: with a live status the backend decides
         // between removing on Telegram and its own stale clear, and that decision
         // needs the RPC path left open.
-        ...(removeKind === 'ForgetUnknown' ? { query: { forget_only: true } } : {}),
+        // A refused candidate is the same exit: nothing to remove on Telegram, only our copy.
+        ...(removeKind === 'ForgetUnknown' || removeKind === 'ForgetCandidate'
+          ? { query: { forget_only: true } }
+          : {}),
       })
       .then(() => {
         setChanging(false);
@@ -366,13 +383,39 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 reachability: the row moved, it did not go. */}
             <div
               className={`border-b border-canvas py-3 text-body font-medium ${
-                hasStored ? 'text-content-muted' : 'text-danger'
+                hasStored || candidatePending ? 'text-content-muted' : 'text-danger'
               }`}
             >
-              {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}
+              {hasStored
+                ? t('accounts.edit.twofaStored')
+                : candidatePending
+                  ? t('accounts.edit.twofaCandidatePending')
+                  : candidateRefused
+                    ? t('accounts.edit.twofaCandidateRefused')
+                    : t('accounts.edit.twofaNotStored')}
             </div>
-            {hasStored ? (
+            {hasStored || candidatePending ? (
               <TwoFactorRecord accountId={accountId} onRecorded={invalidate} update />
+            ) : candidateRefused ? (
+              <>
+                {/* The real password is the primary exit; forgetting the saved one is the
+                    quiet link under it. */}
+                <div className="mt-3 type-small">
+                  {t('accounts.edit.twofaCandidateRefusedNote')}
+                </div>
+                <TwoFactorRecord accountId={accountId} onRecorded={invalidate} />
+                <div className="mt-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmRemove(true);
+                    }}
+                    className="bg-transparent p-0 text-body font-medium text-danger"
+                  >
+                    {t('accounts.edit.twofaForget')}
+                  </button>
+                </div>
+              </>
             ) : (
               <>
                 <div className="mt-3 type-small">{t('accounts.edit.twofaNotStoredNote')}</div>
@@ -401,39 +444,43 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               onCodeLength={setEmailCodeLength}
               onChanged={invalidate}
             />
-            <div className="mt-4">
-              {changing ? (
-                <TwoFactorForm
-                  accountId={accountId}
-                  submitLabel={t('accounts.edit.twofaChange')}
-                  initialHint={status?.hint ?? ''}
-                  onCreated={onCreated}
-                />
-              ) : (
-                <Button
-                  fullWidth
-                  className="font-medium"
-                  onClick={() => {
-                    setChanging(true);
-                  }}
-                  disabled={!hasStored}
-                >
-                  {t('accounts.edit.twofaChange')}
-                </Button>
-              )}
-            </div>
-            <div className="mt-3 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmRemove(true);
-                }}
-                disabled={!hasStored}
-                className="bg-transparent p-0 text-body font-medium text-danger disabled:opacity-50"
-              >
-                {t('accounts.edit.twofaDisable')}
-              </button>
-            </div>
+            {candidateRefused ? null : (
+              <>
+                <div className="mt-4">
+                  {changing ? (
+                    <TwoFactorForm
+                      accountId={accountId}
+                      submitLabel={t('accounts.edit.twofaChange')}
+                      initialHint={status?.hint ?? ''}
+                      onCreated={onCreated}
+                    />
+                  ) : (
+                    <Button
+                      fullWidth
+                      className="font-medium"
+                      onClick={() => {
+                        setChanging(true);
+                      }}
+                      disabled={!canManage}
+                    >
+                      {t('accounts.edit.twofaChange')}
+                    </Button>
+                  )}
+                </div>
+                <div className="mt-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmRemove(true);
+                    }}
+                    disabled={!canManage}
+                    className="bg-transparent p-0 text-body font-medium text-danger disabled:opacity-50"
+                  >
+                    {t('accounts.edit.twofaDisable')}
+                  </button>
+                </div>
+              </>
+            )}
           </>
         ) : (
           <>

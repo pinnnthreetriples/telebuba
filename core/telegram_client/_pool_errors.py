@@ -49,3 +49,21 @@ class TelegramDeviceUnavailableError(TelegramClientUnavailableError):
     def __init__(self, account_id: str, cause: DeviceUnavailableError) -> None:
         super().__init__(account_id, cause)
         self.code = cause.code
+
+
+class SessionFileMissingError(TelegramClientUnavailableError):
+    """The account's ``.session`` file is gone, or holds no key: refused before Telethon runs.
+
+    Telethon would create an empty database at the path and write a fresh, unregistered key
+    into it, which reads as a key Telegram revoked. ``state`` is ``core.session_file``'s
+    verdict (``missing`` / ``no_key`` / ``not_a_session``). Nothing was learned about Telegram
+    or the key, so every
+    ``except TelegramClientPoolError`` borrower still classifies it as an unavailable account;
+    only the session check tells it apart.
+    """
+
+    def __init__(self, account_id: str, state: str) -> None:
+        super().__init__(account_id, FileNotFoundError(state))
+        # Not "connect failed": nothing was tried.
+        self.args = (f"session file {state} for {account_id}",)
+        self.state = state

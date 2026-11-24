@@ -57,9 +57,17 @@ class SessionCloseResult(BaseModel):
 
     ``audit`` is ``None`` only when the re-read itself failed: the closes already happened,
     so they are reported all the same.
+
+    "Close everything foreign" ends only sessions the operator has been shown, that is, the
+    foreign ones of the saved audit that Telegram still lists. ``unseen_count`` is the
+    foreign sessions that first appeared in this run's read: not closed, saved to the audit so
+    the card shows them. ``no_prior_audit`` says there was no saved audit at all, so nothing
+    had been shown and nothing was closed. Both stay at their defaults for a named-hash run.
     """
 
     account_id: str
     outcomes: list[SessionCloseOutcome]
     closed_count: int = Field(ge=0)
     audit: AccountSessionAudit | None = None
+    unseen_count: int = Field(default=0, ge=0)
+    no_prior_audit: bool = False

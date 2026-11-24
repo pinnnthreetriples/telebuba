@@ -27,7 +27,12 @@ from core.logging import log_event
 from core.notify_bot import send_bot_message
 from core.repositories.notification_settings import load_notification_settings
 from schemas.notifications import BotMessage, NotificationKind
-from services._notification_messages import account_label, compose_message, notification_kind
+from services._notification_messages import (
+    FLEET_KINDS,
+    account_label,
+    compose_message,
+    notification_kind,
+)
 from services._notification_spam import is_passive_peer_flood, limited_notice
 
 if TYPE_CHECKING:
@@ -112,7 +117,7 @@ async def handle_log_entry(entry: LogEntry) -> None:
         return
     if kind == "spam_limited" and await _warming_covers(entry):
         return
-    if not _claim_slot((entry.account_id, kind)):
+    if not _claim_slot((None if kind in FLEET_KINDS else entry.account_id, kind)):
         return
     notice = limited_notice(entry) if kind == "spam_limited" else None
     text = compose_message(kind, await _label(entry.account_id), notice)

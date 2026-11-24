@@ -31,6 +31,12 @@ NotificationKind = Literal[
     "spam_budget",
     "session_dead",
     "session_guard",
+    "session_vault_off",
+    "session_backup_failed",
+    "passkey_vault",
+    "db_maintenance",
+    "twofa_store_failed",
+    "session_file_missing",
 ]
 BotSendStatus = Literal["sent", "rejected", "unreachable"]
 

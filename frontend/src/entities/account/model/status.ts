@@ -7,6 +7,7 @@ export type AccountHealth = 'ok' | 'warn' | 'fail';
 // locale-neutral status code maps to a traffic-light health on the frontend.
 const PERMANENT: ReadonlySet<AccountStatus> = new Set([
   'unauthorized',
+  'session_file_missing',
   'session_error',
   'account_error',
   'frozen',

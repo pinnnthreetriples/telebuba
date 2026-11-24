@@ -10,6 +10,7 @@ from core.config import settings
 from core.db import fetch_account, list_accounts
 from core.logging import log_event
 from core.telegram_client import (
+    SessionFileMissingError,
     ensure_incoming_message_connection,
     stop_incoming_messages,
     subscribe_incoming_messages,
@@ -21,7 +22,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_NON_AUTHORIZED_STATUSES = frozenset({"new", "unauthorized", "session_error", "account_error"})
+_NON_AUTHORIZED_STATUSES = frozenset(
+    {"new", "unauthorized", "session_file_missing", "session_error", "account_error"}
+)
 _HEALTH_INTERVAL_SECONDS = 30.0
 _RUNNING = False
 _ACTIVE: set[str] = set()
@@ -134,6 +137,9 @@ async def start_account_inbox(account_id: str) -> None:
         async with _START_SEMAPHORE:
             if await _start_account(account_id):
                 return
+    except SessionFileMissingError:
+        # Permanent until the operator restores the file: retrying only fills the log.
+        await log_event("WARNING", "account_session_file_missing", account_id=account_id)
     except Exception as exc:
         logger.exception("inbox listener start failed for %s", account_id)
         await log_event(

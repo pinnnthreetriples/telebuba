@@ -16,6 +16,8 @@ How the add-account wizard signs a new account in by QR code. The operator scans
 ## Duplicate scan
 If the scanned Telegram user is already in Telebuba under another id, the new authorization is logged out (`log_out_session`, wiping the file) and the placeholder row is dropped. The API answers `409 account_exists`. Telegram is also passed the fleet's user ids as `except_ids`.
 
+`log_out_session` does not raise when it cannot confirm the logout: it returns a `network_error` result and leaves the file. Only a result with status `unauthorized` means the authorization is ended. Otherwise (a returned `network_error`, or an exception) the surplus authorization may still be alive on the existing account, so the session file is moved to the quarantine (`remove_account_session`, never unlinked: it is the only copy of that key) before the placeholder row is removed, and a WARNING `qr_login_surplus_session_left` is logged on the existing account (its id and the error class only) so the operator can close it from that account's Sessions card. The placeholder is still dropped and the API still answers `409 account_exists`.
+
 ## Only on a placeholder or a dead session
 
 A QR sign-in writes the new key into the account's own session file. It is allowed only on a `qr-` placeholder (the "add by QR" flow) or on an account whose session check already said the key is gone (`unauthorized`, `session_error`). Any other account (an import never checked, one failing for another reason) is refused with `session_not_dead`: its file may hold a live key, and a duplicate would even be logged out.

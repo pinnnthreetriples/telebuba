@@ -62,6 +62,10 @@ __all__ = [
 ]
 
 _NON_DIGITS = re.compile(r"\D")
+# A stored status that expects no key in the file: a placeholder that never signed in, or a
+# session the operator wiped on purpose (``reset_account_session``). A missing file there is
+# the old verdict, ``unauthorized``, not "a file that was lost".
+_NO_KEY_EXPECTED = frozenset({"new", "unauthorized"})
 
 
 def parse_session_json(content: bytes) -> SellerSessionMeta:
@@ -161,7 +165,13 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
             await _discard_orphaned_session(session_path, session_name, exc)
             raise
     if meta is not None and meta.password:
-        await _keep_seller_password(account.account_id, meta.password)
+        # The account exists now: a failed write must not turn the import into an error (a
+        # retry would then be refused as "already exists"). The wizard's record-json step
+        # stores the password later.
+        try:
+            await _keep_seller_password(account.account_id, meta.password)
+        except Exception:  # noqa: BLE001 - never log what failed to write.
+            await log_event("ERROR", "account_twofa_store_failed", account_id=account.account_id)
     return account
 
 
@@ -239,7 +249,12 @@ async def check_account_session(data: AccountCheckRequest) -> AccountRead:
             session_name=account.session_name,
         ),
     )
+    if result.status == "session_file_missing" and account.status in _NO_KEY_EXPECTED:
+        result = result.model_copy(update={"status": "unauthorized"})
     saved = await update_account_from_session_check(result)
+    if result.status == "session_file_missing":
+        # Not a death (the key may be alive): told once per outage, with how to put it back.
+        await log_event("WARNING", "account_session_file_missing", account_id=account.account_id)
     # Journal the death once (``record_session_death`` knows when it is news).
     await record_session_death(account, result.status)
     if result.status == "alive":
@@ -247,7 +262,12 @@ async def check_account_session(data: AccountCheckRequest) -> AccountRead:
         await audit_after_first_check(saved)
     if result.status in {"alive", "frozen"}:
         await start_account_inbox(saved.account_id)
-    elif result.status in {"unauthorized", "session_error", "account_error"}:
+    elif result.status in {
+        "unauthorized",
+        "session_file_missing",
+        "session_error",
+        "account_error",
+    }:
         await stop_account_inbox(saved.account_id)
     return saved
 

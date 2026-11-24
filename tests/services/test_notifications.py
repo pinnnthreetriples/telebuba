@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+    from schemas.notifications import NotificationKind
+
 _TOKEN = "123456:AAH-secret_token_value_abcdefXYZ"
 _HOUR = 3600.0
 
@@ -132,6 +134,13 @@ def _entry(event: str, account_id: str | None = "acc-1", **extra: object) -> Log
         (_entry("account_session_dead", status="unauthorized"), "session_dead"),
         (_entry("session_guard_failed", account_id=None, step="watch"), "session_guard"),
         (_entry("session_guard_stalled", account_id=None, reason="silent"), "session_guard"),
+        (_entry("session_vault_off", account_id=None), "session_vault_off"),
+        (_entry("session_backup_failed", error_type="OSError"), "session_backup_failed"),
+        (_entry("passkey_vault_unhealthy", account_id=None, state="sealed"), "passkey_vault"),
+        (_entry("db_maintenance_failed", account_id=None, error="OSError"), "db_maintenance"),
+        (_entry("account_twofa_store_failed"), "twofa_store_failed"),
+        (_entry("account_session_file_missing"), "session_file_missing"),
+        (_entry("session_orphan_files_found", account_id=None, count=3), None),
         (_entry("session_audit_completed"), None),
         (_entry("warming_started"), None),
         (_entry("notifications_send_failed"), None),
@@ -175,8 +184,34 @@ def test_the_dead_session_message_names_the_account_and_how_to_get_it_back() -> 
     assert "passkey" in text
 
 
+def test_the_missing_file_message_is_not_a_death_and_says_how_to_get_it_back() -> None:
+    text = compose_message("session_file_missing", "Polina (@polina)")
+
+    assert "Polina (@polina)" in text
+    assert "файл сессии пропал" in text
+    assert "docs/session-vault.md" in text
+    assert "мёртв" not in text  # the key may still be alive
+
+
 def test_the_session_guard_message_says_what_may_not_be_working() -> None:
     assert "Сторож сессий" in compose_message("session_guard", "")
+
+
+@pytest.mark.parametrize(
+    ("kind", "needle"),
+    [
+        ("session_vault_off", "SESSION_VAULT__KEY"),
+        ("session_backup_failed", "копию ключа"),
+        ("passkey_vault", "Сейф ключей доступа"),
+        ("db_maintenance", "базу данных"),
+        ("twofa_store_failed", "Polina (@polina)"),
+    ],
+)
+def test_the_safety_net_messages_say_what_failed(kind: NotificationKind, needle: str) -> None:
+    text = compose_message(kind, "Polina (@polina)")
+
+    assert needle in text
+    assert text.startswith("Telebuba · ")
 
 
 def test_the_label_never_carries_a_phone_number() -> None:
@@ -240,6 +275,20 @@ async def test_one_message_per_account_and_kind_every_six_hours(bot: _Bot, clock
     clock.now += 1
     await notifications.handle_log_entry(flood)
     assert len(bot.sent) == 4
+
+
+@pytest.mark.asyncio
+async def test_a_fleet_wide_failure_is_told_once_however_many_accounts_raise_it(
+    bot: _Bot,
+) -> None:
+    """A full disk fails every account's copy: one message, not one per account."""
+    await _configure()
+    for account_id in ("acc-1", "acc-2", "acc-3"):
+        await notifications.handle_log_entry(
+            _entry("session_backup_failed", account_id=account_id, error_type="OSError")
+        )
+    assert len(bot.sent) == 1
+    assert "копию ключа" in bot.sent[0].text
 
 
 @pytest.mark.asyncio

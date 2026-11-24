@@ -22,7 +22,8 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 import time
-from contextlib import closing
+from contextlib import closing, suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
@@ -32,10 +33,13 @@ from core.config import settings
 from core.secure_paths import make_private_dir, make_private_file
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 __all__ = [
+    "CopyOverview",
     "SessionVaultError",
+    "copy_overview",
     "list_versions",
     "new_vault_key",
     "purge_quarantine",
@@ -109,30 +113,86 @@ def _prune(folder: Path) -> None:
         stale.unlink(missing_ok=True)
 
 
+def _sweep_partials(folder: Path) -> None:
+    """Remove ``.part`` leftovers of a write that died; best-effort, never a reason to fail."""
+    if not folder.is_dir():
+        return
+    for orphan in folder.glob(f"*{_SUFFIX}.part"):
+        with suppress(OSError):
+            orphan.unlink(missing_ok=True)
+
+
+def _reconcile_mirror(folder: Path, mirror_folder: Path) -> None:
+    """Copy every version the primary holds and the mirror lacks, then prune the mirror.
+
+    The encrypted bytes go over as they are. A mirror write that failed once (a disk that
+    was away) would otherwise leave that version out of the mirror for good, since the
+    primary dedupes against itself only.
+    """
+    _sweep_partials(mirror_folder)
+    for version in _versions(folder):
+        if not (mirror_folder / version.name).exists():
+            _write_version(mirror_folder, version.name, version.read_bytes())
+    _prune(mirror_folder)
+
+
 def snapshot_session(session_file: Path, *, now: datetime | None = None) -> Path | None:
     """Store an encrypted copy of ``session_file``; the new version, or ``None`` if unchanged.
 
-    ``None`` too when the vault is off or the file does not exist.
+    ``None`` too when the vault is off or the file does not exist. Every call also brings the
+    mirror level with the primary. The primary version is written first, so a mirror failure
+    raises (the caller retries) without costing the primary copy.
     """
     if not vault_enabled() or not session_file.is_file():
         return None
     data = _read_consistent(session_file)
     digest = hashlib.sha256(data).hexdigest()[:_DIGEST_CHARS]
     folder = settings.session_vault.dir / session_file.stem
+    _sweep_partials(folder)
     existing = _versions(folder)
-    if existing and existing[-1].name.endswith(f"-{digest}{_SUFFIX}"):
-        return None
-    payload = _fernet().encrypt(data)
-    stamp = (now or datetime.now(UTC)).strftime(_STAMP)
-    name = f"{stamp}-{digest}{_SUFFIX}"
-    written = _write_version(folder, name, payload)
-    _prune(folder)
+    written: Path | None = None
+    if not (existing and existing[-1].name.endswith(f"-{digest}{_SUFFIX}")):
+        payload = _fernet().encrypt(data)
+        stamp = (now or datetime.now(UTC)).strftime(_STAMP)
+        written = _write_version(folder, f"{stamp}-{digest}{_SUFFIX}", payload)
+        _prune(folder)
     mirror = settings.session_vault.mirror_dir
     if mirror is not None:
-        mirror_folder = mirror / session_file.stem
-        _write_version(mirror_folder, name, payload)
-        _prune(mirror_folder)
+        _reconcile_mirror(folder, mirror / session_file.stem)
     return written
+
+
+@dataclass(frozen=True)
+class CopyOverview:
+    """What the vault holds, for the status page: who has no copy, and when the newest was made."""
+
+    without_copy: int
+    newest_at: datetime | None
+
+
+def _version_at(version: Path) -> datetime | None:
+    """When a version was made, from its file name (``<stamp>-<sha12>.session.enc``)."""
+    try:
+        return datetime.strptime(version.name.partition("-")[0], _STAMP).replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def copy_overview(session_stems: Sequence[str]) -> CopyOverview:
+    """How many of ``session_stems`` have no version at all, and the newest version's time.
+
+    The newest is taken across the whole vault folder, not only ``session_stems``. File work:
+    call it from a worker thread. Reads names only, never a copy's content.
+    """
+    root = settings.session_vault.dir
+    without = sum(1 for stem in session_stems if not _versions(root / stem))
+    stamps: list[datetime] = []
+    for folder in sorted(root.iterdir()) if root.is_dir() else []:
+        versions = _versions(folder)
+        newest = _version_at(versions[-1]) if versions else None
+        if newest is not None:
+            stamps.append(newest)
+    return CopyOverview(without_copy=without, newest_at=max(stamps, default=None))
 
 
 def list_versions(session_stem: str) -> list[Path]:

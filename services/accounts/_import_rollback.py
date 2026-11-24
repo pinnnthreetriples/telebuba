@@ -24,8 +24,13 @@ leaves behind:
 
 * row first — if the delete fails we stop and KEEP the file, so the surviving row
   still owns a working credential;
-* file second — if the unlink fails, the file is an orphan that blocks a retry,
+* file second — if the move fails, the file is an orphan that blocks a retry,
   but nothing has been destroyed.
+
+The file is never deleted: it goes to the quarantine (``docs/session-vault.md``), through
+the same gateway an account's removal uses. A discarded import is a key somebody may still
+want (a rollback that misfired, a seller's only copy), and the quarantine keeps it for
+``SESSION_VAULT__QUARANTINE_DAYS``.
 
 Neither branch can destroy a working account. The reverse order has a branch that
 can, which is the bug this module exists to close.
@@ -33,12 +38,11 @@ can, which is the bug this module exists to close.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from core.db import delete_account, fetch_account
-from core.telegram_client import removing_client
+from core.telegram_client import remove_account_session, removing_client
 from services.inbox_runtime import stop_account_inbox
 
 if TYPE_CHECKING:
@@ -78,7 +82,7 @@ async def discard_imported_session(account_id: str, session_path: Path) -> Rollb
     import's rollback. If a fourth writer is ever added, it takes the lock too, or
     this inference stops being true.
 
-    The unlink verifies nothing about the file's identity: it removes whatever now
+    The move verifies nothing about the file's identity: it takes whatever now
     sits at ``session_path``. It does not need to. The path is
     ``session_dir/<session_name>.session`` and the row deleted alongside it is the
     account of that same name, so the pair leaves together whatever raced into that
@@ -96,7 +100,7 @@ async def discard_imported_session(account_id: str, session_path: Path) -> Rollb
     async with removing_client(account_id):
         # A second device the import signed in has its own ``.session`` beside the
         # imported one; both leave with the row.
-        paths = [session_path]
+        paths = [session_path]  # the gateway names a file by its stem, in the sessions folder
         try:
             account = await fetch_account(account_id)
             if account is not None:
@@ -107,7 +111,7 @@ async def discard_imported_session(account_id: str, session_path: Path) -> Rollb
             return RollbackResult("row_kept", type(exc).__name__)
         try:
             for path in paths:
-                await asyncio.to_thread(path.unlink, missing_ok=True)
-        except OSError as exc:
+                await remove_account_session(account_id, path.stem)
+        except (OSError, ValueError) as exc:
             return RollbackResult("file_kept", type(exc).__name__)
     return RollbackResult("clean")

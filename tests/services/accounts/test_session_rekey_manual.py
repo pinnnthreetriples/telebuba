@@ -260,16 +260,17 @@ def facts(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     async def _events_of(_account_id: str) -> object:
         return state["verdicts"]
 
-    async def _passwords(_account_id: str) -> object:
-        return state["passwords"]
+    async def _pair(_account_id: str) -> tuple[str | None, str | None]:
+        passwords = state["passwords"]
+        return (passwords[0] if passwords else None, None)  # ty: ignore[not-subscriptable]
 
-    async def _passkey(_account_id: str) -> object:
-        return state["passkey"]
+    async def _vault(_account_id: str) -> str | None:
+        return "ok" if state["passkey"] is not None else None
 
     monkeypatch.setattr(checklist, "get_spam_status", _spam)
     monkeypatch.setattr(checklist, "list_lifecycle_events", _events_of)
-    monkeypatch.setattr(checklist, "twofa_password_candidates", _passwords)
-    monkeypatch.setattr(checklist, "fetch_account_passkey", _passkey)
+    monkeypatch.setattr(checklist, "fetch_account_twofa_pair", _pair)
+    monkeypatch.setattr(checklist, "check_passkey_vault", _vault)
     return state
 
 

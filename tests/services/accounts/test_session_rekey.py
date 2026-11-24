@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+from telethon import errors
+from telethon.tl.functions.account import GetAuthorizationsRequest, ResetAuthorizationRequest
 
 from core.repositories.account_rekeys import fetch_rekey, save_rekey
-from core.telegram_client import RekeyGatewayError, SessionAuditGatewayError
+from core.telegram_client import RekeyGatewayError, SessionAuditGatewayError, _session_audit
+from core.telegram_client import _session_close as core_close
 from schemas.accounts import AccountRead
 from schemas.session_audit import AccountSession, AuthorizationList
 from schemas.session_close import SessionCloseOutcome
@@ -589,3 +593,48 @@ async def test_one_stuck_account_does_not_hold_the_others_and_is_tried_later(
     done = await fetch_rekey("acc-2")
     assert done is not None
     assert done.closed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_a_dead_second_device_does_not_keep_the_old_key_from_being_ended(
+    wire: _Wire, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The real gateway end to end: the desktop session answers, the mobile one's key is gone.
+    wire.account = _account(devices=["desktop", "mobile"])
+    await save_rekey(
+        StoredRekey(
+            account_id="acc-1",
+            old_hash="111",
+            rekeyed_at="2026-11-01T00:00:00+00:00",
+            close_after="2026-11-01T00:00:00+00:00",
+        )
+    )
+    resets: list[int] = []
+
+    class _Desktop:
+        async def __call__(self, request: object) -> object:
+            if isinstance(request, GetAuthorizationsRequest):
+                own = SimpleNamespace(hash=0, current=True)
+                old = SimpleNamespace(hash=111, current=False)
+                return SimpleNamespace(authorization_ttl_days=180, authorizations=[own, old])
+            assert isinstance(request, ResetAuthorizationRequest)
+            resets.append(request.hash)
+            return True
+
+    class _Mobile:
+        async def __call__(self, request: object) -> object:
+            raise errors.AuthKeyUnregisteredError(request=request)
+
+    async def _get_client(_account_id: str, device: str | None = None) -> object:
+        return _Desktop() if device == "desktop" else _Mobile()
+
+    monkeypatch.setattr(_session_audit, "get_client", _get_client)
+    monkeypatch.setattr(core_close, "get_client", _get_client)
+    monkeypatch.setattr(svc, "close_sessions", core_close.close_sessions)
+
+    assert await svc.close_due_old_keys() == 1
+
+    assert resets == [111]
+    stored = await fetch_rekey("acc-1")
+    assert stored is not None
+    assert stored.closed_at is not None

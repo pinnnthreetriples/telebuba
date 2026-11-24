@@ -32,8 +32,10 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _isolate_db(tmp_path: Path) -> None:
+def _isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_database(tmp_path / "telebuba.db")
+    # The loop looks at the backup dir on start: never at the repo's own ``backups/``.
+    monkeypatch.setattr(settings.db, "backup_dir", tmp_path / "backups")
 
 
 def _fixed_clock(index: int) -> datetime:
@@ -234,6 +236,7 @@ def test_unremovable_old_backup_does_not_block_the_run_or_retention(
 async def test_maintenance_loop_cancels_cleanly(monkeypatch: pytest.MonkeyPatch) -> None:
     # Sleep almost forever so cancellation, not a real interval, ends the task.
     monkeypatch.setattr(settings.db, "backup_interval_hours", 24.0)
+    monkeypatch.setattr(settings.db, "backup_enabled", False)  # no due-now run on start
     task = asyncio.create_task(run_db_maintenance_loop())
     await asyncio.sleep(0)  # let it reach the first await
     task.cancel()
@@ -250,6 +253,8 @@ async def test_maintenance_loop_survives_a_failed_run(monkeypatch: pytest.Monkey
     # to be this small, not merely small: 0.001h is 3.6s, and this test waits out
     # two intervals.
     monkeypatch.setattr(settings.db, "backup_interval_hours", 1e-9)
+    # A failed run now retries after the short retry delay, not a whole interval.
+    monkeypatch.setattr(settings.db, "backup_retry_minutes", 1e-9)
     calls = 0
     ran_again = asyncio.Event()
 
@@ -282,6 +287,7 @@ async def test_maintenance_loop_reports_failure_to_the_operator(
     Sentry and no UI signal, for the sole datastore holding users and auth.
     """
     monkeypatch.setattr(settings.db, "backup_interval_hours", 1e-9)  # legal (gt=0), instant
+    monkeypatch.setattr(settings.db, "backup_retry_minutes", 1e-9)
     events: list[tuple[str, str, dict[str, object] | None]] = []
     reported = asyncio.Event()
 

@@ -16,6 +16,7 @@ from core.telegram_client._pool import (
     TelegramClientUnavailableError,
     get_client,
 )
+from core.telegram_client._pool_errors import SessionFileMissingError
 from core.telegram_client._signals import signal_freeze_config, signal_frozen, signal_me
 from core.telegram_client._util import optional_bool, optional_str
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -59,7 +60,7 @@ async def _unprobeable(
     return profile
 
 
-async def check_telegram_session(
+async def check_telegram_session(  # noqa: C901 - one flat ladder of verdicts, one arm per error family
     request: TelegramSessionCheckRequest,
 ) -> TelegramSessionCheckResult:
     profile = await _unprobeable(request)
@@ -89,6 +90,11 @@ async def check_telegram_session(
                 ) or _alive_session_check_result(
                     profile, me, await _download_avatar_thumb(client, me)
                 )
+    except SessionFileMissingError as exc:
+        # The file is gone or holds no key, and nothing was asked of Telegram: not the verdict
+        # of a revoked key (``unauthorized``), and not a transport fault to retry. The pool
+        # refused before Telethon could create an empty replacement.
+        result = _error_session_check_result(profile, exc, status="session_file_missing")
     except _SESSION_ERRORS as exc:
         # The key itself is gone (revoked, unregistered, duplicated): the same verdict a
         # fresh client's ``is_user_authorized()`` gives, so the account is journalled dead

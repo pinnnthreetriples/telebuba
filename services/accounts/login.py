@@ -79,8 +79,9 @@ _SUBMIT_CODES = {
 
 # The statuses that say the account's key is gone: a sign-in then makes a new authorization,
 # which may use the new API (``TelegramClientRequest.new_key``). Any other status may hide a
-# live key, which must keep the API it was made with.
-KEY_GONE_STATUSES = frozenset({"unauthorized", "session_error"})
+# live key, which must keep the API it was made with. ``session_file_missing`` counts: the file
+# that held the key is gone, so a sign-in writes a new one (the operator may have no copy).
+KEY_GONE_STATUSES = frozenset({"unauthorized", "session_file_missing", "session_error"})
 
 # A logout or reset that Telegram did not confirm: nothing was ended or deleted.
 _LOGOUT_UNCONFIRMED = "logout_unconfirmed"

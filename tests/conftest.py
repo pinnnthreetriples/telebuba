@@ -104,6 +104,13 @@ def _isolate_session_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(settings.telegram, "allow_direct_connection", True)
     # A developer's .env may name another computer as the fleet owner; tests never connect.
     monkeypatch.setattr(settings.instance, "fleet_owner_host", "")
+    # Database snapshots (the periodic one and the one before a migration): relative
+    # ``backups/`` by default, i.e. the repo root. A test that migrates an older database
+    # must not write there.
+    monkeypatch.setattr(settings.db, "backup_dir", tmp_path / "backups")
+    # A developer's .env may hold a key-vault token; the session guard asks the vault's
+    # health once per pass, and no test may reach a real node. Tests that need it set one.
+    monkeypatch.setattr(settings.passkey_vault, "token", "")
 
 
 @pytest.fixture(autouse=True)

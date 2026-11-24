@@ -41,6 +41,7 @@ test('any other event refreshes nothing', () => {
 
   expect(invalidate).not.toHaveBeenCalled();
   expect(isSessionEvent({ event: 'session_rekeyed' })).toBe(true);
+  expect(isSessionEvent({ event: 'session_audit_device_dead' })).toBe(true);
   expect(isSessionEvent({ event: 'passkey_created' })).toBe(false);
 });
 

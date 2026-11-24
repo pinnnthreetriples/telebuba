@@ -206,3 +206,77 @@ async def test_a_recorded_own_authorization_is_ours_with_its_kind(
         ("22", True, "web"),
         ("33", False, None),
     ]
+
+
+@pytest.mark.parametrize(
+    "ended",
+    [
+        errors.AuthKeyUnregisteredError(request=None),
+        errors.SessionRevokedError(request=None),
+        errors.AuthKeyDuplicatedError(request=None),
+        TelegramClientPoolError("acc-1", errors.AuthKeyUnregisteredError(request=None)),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_second_device_whose_key_telegram_ended_is_left_out_and_named(
+    monkeypatch: pytest.MonkeyPatch, ended: Exception
+) -> None:
+    # No authorization of that device is left, so none of the listed ones can be it.
+    desktop = _Client(_reply(_auth(0, current=True), _auth(22)))
+    _borrow(monkeypatch, {"desktop": desktop, "mobile": _Client(ended)})
+
+    listing = await read_account_sessions("acc-1", ["desktop", "mobile"])
+
+    assert listing.dead_devices == ["mobile"]
+    assert [(s.hash, s.is_ours) for s in listing.sessions] == [("0", True), ("22", False)]
+
+
+@pytest.mark.asyncio
+async def test_a_dead_primary_still_fails_the_read_whatever_the_other_device_says(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    borrowed = _borrow(
+        monkeypatch,
+        {
+            "desktop": _Client(errors.SessionRevokedError(request=None)),
+            "mobile": _Client(_reply(_auth(0, current=True))),
+        },
+    )
+
+    with pytest.raises(SessionAuditGatewayError) as raised:
+        await read_account_sessions("acc-1", ["desktop", "mobile"])
+
+    assert raised.value.code == "session_dead"
+    assert borrowed == ["desktop"]
+
+
+@pytest.mark.parametrize(
+    ("failure", "code"),
+    [
+        (ConnectionError("boom"), "unavailable"),
+        (TimeoutError(), "unavailable"),
+        (errors.FloodWaitError(request=None, capture=9), "flood_wait"),
+        (errors.UserDeactivatedBanError(request=None), "account_deactivated"),
+        (errors.HashInvalidError(request=None), "session_audit_failed"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_second_device_that_is_not_proven_dead_still_fails_the_read(
+    monkeypatch: pytest.MonkeyPatch, failure: Exception, code: str
+) -> None:
+    desktop = _Client(_reply(_auth(0, current=True), _auth(22)))
+    _borrow(monkeypatch, {"desktop": desktop, "mobile": _Client(failure)})
+
+    with pytest.raises(SessionAuditGatewayError) as raised:
+        await read_account_sessions("acc-1", ["desktop", "mobile"])
+
+    assert raised.value.code == code
+
+
+@pytest.mark.asyncio
+async def test_a_live_second_device_reports_no_dead_device(monkeypatch: pytest.MonkeyPatch) -> None:
+    desktop = _Client(_reply(_auth(0, current=True), _auth(22), _auth(33)))
+    mobile = _Client(_reply(_auth(0, current=True), _auth(11), _auth(33)))
+    _borrow(monkeypatch, {"desktop": desktop, "mobile": mobile})
+
+    assert (await read_account_sessions("acc-1", ["desktop", "mobile"])).dead_devices == []

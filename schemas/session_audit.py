@@ -15,6 +15,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Pydantic resolves this annotation at class-build time, so it cannot sit in a
+# TYPE_CHECKING block.
+from schemas.device_fingerprint import DeviceType  # noqa: TC001
+
 # The refusals the audit raises by hand; the gateway's own (``session_dead``,
 # ``account_deactivated``, ``account_frozen``, the flood family, ``unavailable``) are
 # the shared action codes the SPA already translates.
@@ -24,6 +28,10 @@ SessionAuditRefusalCode = Literal[
     "session_audit_proxy_missing",
     # Telegram answered with something the audit cannot read as a session list.
     "session_audit_failed",
+    # A sign-in or sign-out of the account is in flight (it holds the account's auth lock):
+    # its new session is listed as foreign until it is recorded, so neither a close nor a
+    # read is done now. Retry when it has finished.
+    "sign_in_in_progress",
 ]
 
 
@@ -68,6 +76,9 @@ class AuthorizationList(BaseModel):
     sessions: list[AccountSession]
     # ``account.authorizations.authorization_ttl_days``: a session idle this long is ended.
     ttl_days: int | None = None
+    # Our own non-primary devices whose key Telegram has ended: nothing of theirs is left to
+    # list, so the read went on without them. Empty when every device answered.
+    dead_devices: list[DeviceType] = Field(default_factory=list)
 
 
 class AccountSessionAudit(BaseModel):

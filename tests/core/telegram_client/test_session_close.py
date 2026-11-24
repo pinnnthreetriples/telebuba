@@ -242,3 +242,26 @@ async def test_a_recorded_own_web_login_is_never_closed(
 
     assert _statuses(outcomes) == [("2", "not_foreign"), ("3", "closed")]
     assert client.reset_hashes == [3]
+
+
+@pytest.mark.asyncio
+async def test_a_second_device_whose_key_is_dead_does_not_block_closing_a_foreign_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Dead(_Client):
+        async def __call__(self, request: object) -> object:
+            raise errors.AuthKeyUnregisteredError(request=request)
+
+    desktop = _Client([_auth(0, current=True), _auth(2)])
+    clients = {"desktop": desktop, "mobile": _Dead([])}
+
+    async def _get_client(_account_id: str, device: str | None = None) -> _Client:
+        return clients[str(device)]
+
+    monkeypatch.setattr(_session_audit, "get_client", _get_client)
+    monkeypatch.setattr(_session_close, "get_client", _get_client)
+
+    outcomes = await close_sessions("acc-1", ["desktop", "mobile"], ["2"], [])
+
+    assert _statuses(outcomes) == [("2", "closed")]
+    assert desktop.reset_hashes == [2]

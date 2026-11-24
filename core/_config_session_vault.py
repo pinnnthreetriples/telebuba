@@ -32,6 +32,9 @@ class SessionVaultSettings(BaseSettings):
     # Each account's files are copied again at most this often by the background pass
     # (and at once after an import, a login or a re-key); an unchanged file is skipped.
     backup_interval_hours: float = Field(default=24.0, gt=0.0)
+    # An account whose copy failed (a full disk, an unreachable mirror) is tried again after
+    # this many minutes: not on every guard pass, and not only after a whole interval.
+    retry_minutes: float = Field(default=30.0, gt=0.0)
     # A removed ``.session`` (account deletion, reset, a discarded sign-in) is moved here
     # instead of deleted, and purged after this many days.
     quarantine_dir: Path = Path("runtime/session_quarantine")

@@ -232,6 +232,8 @@ class DbSettings(BaseSettings):
     backup_interval_hours: float = Field(default=24.0, gt=0)
     backup_dir: Path = Path("backups")
     backup_keep: int = Field(default=7, ge=1)
+    # After a failed backup run the loop retries after this many minutes, not a whole interval.
+    backup_retry_minutes: float = Field(default=15.0, gt=0)
 
 
 class ProxySettings(BaseSettings):

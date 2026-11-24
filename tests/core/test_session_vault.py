@@ -146,3 +146,65 @@ def test_the_cli_makes_a_key_and_restores(
     assert cli.main(["restore", str(copy), str(tmp_path / "back.session")]) == 0
     assert cli.main(["restore", str(copy), str(tmp_path / "back.session")]) == 1
     assert _key_of(tmp_path / "back.session") == b"k1"
+
+
+@pytest.mark.usefixtures("on")
+def test_a_failed_mirror_write_still_keeps_the_primary_and_the_next_call_fills_the_gap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mirror = tmp_path / "mirror"
+    monkeypatch.setattr(settings.session_vault, "mirror_dir", mirror)
+    mirror.write_bytes(b"the mirror disk is a file: every write under it fails")
+    session = tmp_path / "acc.session"
+    _session(session, b"k1")
+
+    with pytest.raises(OSError):  # noqa: PT011 - the errno differs per platform
+        vault.snapshot_session(session, now=_at(0))
+    (primary,) = vault.list_versions("acc")  # the primary version was written first
+
+    mirror.unlink()
+    assert vault.snapshot_session(session, now=_at(1)) is None  # unchanged for the primary
+    assert (mirror / "acc" / primary.name).read_bytes() == primary.read_bytes()
+
+
+@pytest.mark.usefixtures("on")
+def test_every_call_restores_a_version_the_mirror_lost_and_prunes_it_like_the_primary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.session_vault, "keep_versions", 2)
+    monkeypatch.setattr(settings.session_vault, "mirror_dir", tmp_path / "mirror")
+    session = tmp_path / "acc.session"
+    for minute in range(5):
+        _session(session, f"k{minute}".encode())
+        vault.snapshot_session(session, now=_at(minute))
+    mirror_folder = tmp_path / "mirror" / "acc"
+    primary = vault.list_versions("acc")
+    assert [p.name for p in sorted(mirror_folder.glob("*.enc"))] == [p.name for p in primary]
+
+    (mirror_folder / primary[-1].name).unlink()
+    vault.snapshot_session(session, now=_at(9))  # unchanged: nothing new, the gap is filled
+
+    assert (mirror_folder / primary[-1].name).read_bytes() == primary[-1].read_bytes()
+    assert len(list(mirror_folder.glob("*.enc"))) == len(primary)
+
+
+@pytest.mark.usefixtures("on")
+def test_stale_part_files_are_swept_before_a_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.session_vault, "mirror_dir", tmp_path / "mirror")
+    session = tmp_path / "acc.session"
+    _session(session, b"k1")
+    vault.snapshot_session(session, now=_at(0))
+    stale = [
+        settings.session_vault.dir / "acc" / "20200101T000000000000Z-abc.session.enc.part",
+        tmp_path / "mirror" / "acc" / "20200101T000000000000Z-abc.session.enc.part",
+    ]
+    for leftover in stale:
+        leftover.write_bytes(b"half a write")
+
+    _session(session, b"k2")
+    vault.snapshot_session(session, now=_at(1))
+
+    assert not any(leftover.exists() for leftover in stale)
+    assert len(vault.list_versions("acc")) == 2

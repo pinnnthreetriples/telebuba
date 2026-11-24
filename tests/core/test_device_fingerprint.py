@@ -38,6 +38,7 @@ from tests.factories import (
     DeviceFingerprintFactory,
     seed_account_proxy,
 )
+from tests.session_files import write_session_file
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -469,6 +470,8 @@ def test_create_telegram_client_disables_markdown_parsing(
 async def test_telegram_client_context_disconnects(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+    # The account's file exists: a pooled/context client is never built over a missing one.
+    write_session_file(tmp_path / "sessions" / "account-4.session")
     disconnected = False
 
     class FakeTelegramClient:

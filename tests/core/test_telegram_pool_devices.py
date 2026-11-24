@@ -85,6 +85,10 @@ def built(monkeypatch: pytest.MonkeyPatch) -> list[_FakeClient]:
         clients.append(client)
         return client
 
+    async def file_is_there(_profile: TelegramClientProfile) -> None:
+        """These tests are about the devices; the session-file check has its own module."""
+
+    monkeypatch.setattr("core.telegram_client._pool.require_session_file", file_is_there)
     monkeypatch.setattr("core.telegram_client._pool.create_telegram_client", fake_create)
     return clients
 

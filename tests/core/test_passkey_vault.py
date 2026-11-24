@@ -17,6 +17,7 @@ from core.passkey_vault import (
     passkey_vault_configured,
     sign_with_key,
     signing_key_exists,
+    vault_health,
     vault_key_name,
 )
 
@@ -286,3 +287,53 @@ async def test_a_non_json_200_is_a_vault_refusal_not_a_value_error() -> None:
         with pytest.raises(PasskeyVaultError) as caught:
             await sign_with_key("tb-acc", b"payload")
     assert caught.value.code == "passkey_vault_rejected"
+
+
+_HEALTH = "http://vault.test:8200/v1/sys/health"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "state"),
+    [(200, "ok"), (503, "sealed"), (429, "rejected"), (501, "rejected"), (500, "rejected")],
+)
+async def test_the_health_state_follows_the_status_code(status: int, state: str) -> None:
+    with respx.mock:
+        route = respx.get(_HEALTH).mock(return_value=httpx.Response(status, json={}))
+        assert await vault_health() == state
+    assert "X-Vault-Token" not in route.calls.last.request.headers  # the probe is anonymous
+
+
+@pytest.mark.asyncio
+async def test_an_unreachable_vault_is_a_state_not_an_exception() -> None:
+    with respx.mock:
+        respx.get(_HEALTH).mock(side_effect=httpx.ConnectError("refused"))
+        assert await vault_health() == "unreachable"
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_address_is_unreachable_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.passkey_vault, "addr", "not a url")
+    assert await vault_health() == "unreachable"
+
+
+@pytest.mark.asyncio
+async def test_with_no_token_the_vault_is_off_and_nothing_is_asked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.passkey_vault, "token", "")
+    with respx.mock:
+        route = respx.get(_HEALTH).mock(return_value=httpx.Response(200))
+        assert await vault_health() == "off"
+    assert route.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_the_health_probe_uses_the_configured_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.passkey_vault, "timeout_seconds", 3.5)
+    with respx.mock:
+        route = respx.get(_HEALTH).mock(return_value=httpx.Response(200))
+        await vault_health()
+    assert route.calls.last.request.extensions["timeout"]["read"] == 3.5

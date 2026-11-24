@@ -16,6 +16,8 @@ SessionJsonRefusalCode = Literal[
     "session_json_invalid",
     "session_json_phone_mismatch",
     "session_json_no_password",
+    # The uploaded ``.session`` itself is not a usable Telethon session (see ``core.session_file``).
+    "session_file_invalid",
 ]
 
 

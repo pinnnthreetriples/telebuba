@@ -6,13 +6,23 @@ import asyncio
 
 import pytest
 
+from core.config import settings
 from services import session_guard
 from services.session_guard import _loop
 
 
 @pytest.fixture(autouse=True)
-def _fresh() -> None:
+def _fresh(monkeypatch: pytest.MonkeyPatch) -> None:
     _loop.reset_for_tests()
+    # A developer's .env may configure a real vault; the pass's health step must not ask it.
+    monkeypatch.setattr(settings.passkey_vault, "token", "")
+
+    # The start-up file look has its own tests (``test_session_guard_file_check``); here it
+    # would only race the tests' tiny step deadline with real database reads.
+    async def _no_file_look() -> None:
+        return None
+
+    monkeypatch.setattr(_loop, "run_file_reconciliation", _no_file_look)
 
 
 def _steps(

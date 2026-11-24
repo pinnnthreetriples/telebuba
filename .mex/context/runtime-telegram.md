@@ -1,7 +1,7 @@
 ---
 name: runtime-telegram
 description: Telegram client, sessions, proxies, profile, privacy and account removal.
-last_updated: 2026-11-04
+last_updated: 2026-11-24
 edges:
   - target: patterns/account-devices.md
     condition: account devices, the second sign-in or the mobile container
@@ -36,6 +36,10 @@ grounds_to:
 - Web-login dresses the page AND every paused worker over a held-open CDP socket — Chrome strips overrides on detach; Chrome dies with the backend or an undressable worker. Language: the primary device's; timezone: the proxy's. A relative profile dir hands the argv to a running Chrome (operator's IP).
 - An RPC success doesn't prove every profile field is visible/stored: confirm from a fresh read, never persist a lag-sensitive "confirmed".
 - Session audit/closing/re-key: `docs/session-audit.md`; QR login: `docs/qr-login.md`.
+- A pooled client is never built for an account whose `.session` is missing, keyless or not a session: Telethon would create a junk key there and the check would read it as a dead key. The verdict is `session_file_missing` (not a death; restore from a copy), an upload is proven to be a Telethon session under a temporary name before it gets its real one, and a rollback quarantines instead of unlinking.
+- Closing sessions is refused while the account's auth lock is held (`sign_in_in_progress`): a session being signed in lists as foreign until it is recorded. "Close all foreign" ends only sessions the saved audit already showed. A non-primary device is left out of an audit only on an error that PROVES its key ended; the base 406 class and a transport 404 prove nothing.
+- `has_stored_password` means a password Telegram accepted; a seller's password is an unverified candidate until then, and a refusal of it is remembered (`twofa_candidate_refused`). The old-key checklist counts only proven credentials.
+- Copies and backups: `docs/session-vault.md` (the database is snapshotted at start when stale and before any pending migration; the engine is published only after migrations succeed).
 - Sending clients set `parse_mode=None`: operator text is never transformed, only generated text is cleaned.
 
 API/frontend hold no Telegram runtime policy; code, gateway tests and migrations are the detail.

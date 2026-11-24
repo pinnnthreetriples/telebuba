@@ -14,8 +14,10 @@ from core.device_fingerprint_android import ANDROID_LANG_PACK
 from core.instance import require_fleet_owner
 from core.logging import register_log_secrets
 from core.secure_paths import make_private_dir
+from core.session_file import inspect_session_file, session_file_of
 from core.telegram_client._api_credentials import api_credentials, new_api_id
 from core.telegram_client._guarded_client import GuardedTelegramClient
+from core.telegram_client._pool_errors import SessionFileMissingError
 from schemas.accounts import FORBIDDEN_SESSION_NAME_PARTS
 from schemas.device_fingerprint import (
     TelegramClientProfile,
@@ -240,6 +242,23 @@ async def prepare_session_check_profile(
     )
 
 
+async def require_session_file(profile: TelegramClientProfile) -> None:
+    """Refuse a client for an existing account whose ``.session`` is gone or holds no key.
+
+    Telethon's constructor creates a database at a path that holds none, and ``connect()``
+    then writes a fresh, unregistered key into it: a file moved away by an antivirus would read
+    as a key Telegram revoked, and the junk file would block putting the real one back. Only
+    the pooled build and :func:`telegram_client` call this. The sign-in flows that create or
+    replace a key (phone code, QR, passkey, second device, re-key) build their own clients and
+    must not. A file that is not a session (an empty file, another program's database, garbage)
+    is refused too: SQLite takes a 0-byte file for an empty database, so Telethon would fill it
+    in just the same. Only a file that cannot be read right now proceeds as before.
+    """
+    state = await to_thread.run_sync(inspect_session_file, session_file_of(profile.session_path))
+    if state not in {"ok", "unreadable"}:
+        raise SessionFileMissingError(profile.account_id, state)
+
+
 async def _ensure_session_dir() -> None:
     # Owner-only (0700): this is the dir a Telethon client will create the account's
     # ``.session`` credential in, and it is often the first site to create it.
@@ -306,6 +325,7 @@ def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
 @asynccontextmanager
 async def telegram_client(request: TelegramClientRequest) -> AsyncIterator[TelegramClient]:
     profile = await prepare_telegram_client_profile(request)
+    await require_session_file(profile)
     client = create_telegram_client(profile)
     try:
         yield client

@@ -6,7 +6,9 @@ each step guarded on its own so one failing never ends the loop or starves the o
 
 * old authorizations of re-keyed accounts whose time has come
   (``services.accounts.close_due_old_keys``);
-* the watch: one account's sessions re-read, if one is due (``_watch``).
+* the watch: one account's sessions re-read, if one is due (``_watch``);
+* the key vault's own health, once (``_vault_health``);
+* the first pass only: the sessions folder against the accounts (``_file_check``).
 
 Guarantees: a step that fails in ANY way is logged as ``session_guard_failed`` and the loop
 goes on, including a ``CancelledError`` that did not come from cancelling this task and a step
@@ -35,6 +37,10 @@ from core.logging import log_event
 from schemas.session_guard import SessionGuardStatus
 from services.accounts import close_due_old_keys
 from services.session_backups import run_backup_pass
+from services.session_guard._file_check import reset_for_tests as reset_file_check
+from services.session_guard._file_check import run_file_reconciliation
+from services.session_guard._vault_health import reset_for_tests as reset_vault_health
+from services.session_guard._vault_health import run_vault_health_check
 from services.session_guard._watch import run_watch_pass
 
 if TYPE_CHECKING:
@@ -136,6 +142,9 @@ async def run_guard_pass() -> int:
     watched = await _guarded("watch", run_watch_pass)
     # Local file work only (encrypted session copies, the quarantine purge): not counted.
     await _guarded("backups", run_backup_pass)
+    await _guarded("passkey_vault", run_vault_health_check)
+    # Once per start: files that went missing or belong to no account (reports only).
+    await _guarded("session_files", run_file_reconciliation)
     return ended + watched
 
 
@@ -182,3 +191,5 @@ def reset_for_tests() -> None:
     """Forget the task between tests."""
     global _state  # noqa: PLW0603 - one module-level runtime, reset between tests
     _state = _State()
+    reset_vault_health()
+    reset_file_check()
