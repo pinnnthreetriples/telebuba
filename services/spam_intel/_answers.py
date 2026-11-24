@@ -18,6 +18,7 @@ from schemas.spam_status import SpamStatusVerdict
 from services import _account_owner
 
 if TYPE_CHECKING:
+    from schemas.accounts import AccountRead
     from schemas.spam_intel import AttemptOutcome, BudgetSnapshot, Purpose, Reason, ServedFrom
     from services.spam_intel._policy import Decision
 
@@ -28,6 +29,17 @@ ASKABLE = frozenset({"new", "alive"})
 # account is not asked NOW, but it is not refused either. A refusal would be counted by a caller
 # (warming's quarantine) as an unreadable answer; a deferral with ``retry_at`` is not one.
 TRANSIENT = frozenset({"flood_wait", "proxy_error", "network_error", "unknown_error"})
+
+
+def link_failed(account: AccountRead) -> bool:
+    """The account cannot be asked NOW: a transient status, or a failed link beside a key status.
+
+    The session check keeps what it knows of the key in ``status`` and notes a flood wait, a
+    proxy or a network fault in ``link_status``; either spelling is the same deferral.
+    """
+    return account.status in TRANSIENT or account.link_status is not None
+
+
 # Every other status is a session that cannot answer (production showed five probes of a
 # revoked one): refused.
 

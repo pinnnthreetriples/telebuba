@@ -44,6 +44,15 @@ def extract_login_code(text: str | None, length: int = DEFAULT_CODE_LENGTH) -> s
     return None
 
 
+_CODE_LENGTHS = (5, 6)
+
+
+def has_login_code(text: str | None) -> bool:
+    """Whether a 777000 message carries a login code (the code itself is not returned)."""
+    # Telegram's codes are five digits today and were six on some routes: either is a code.
+    return any(extract_login_code(text, length) is not None for length in _CODE_LENGTHS)
+
+
 async def _service_messages(client: TelegramClient, *, after_id: int, limit: int) -> list[object]:
     try:
         messages = await client.get_messages(SERVICE_USER_ID, limit=limit, min_id=after_id)

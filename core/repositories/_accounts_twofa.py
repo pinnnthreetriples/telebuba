@@ -260,3 +260,23 @@ async def confirm_twofa_password_used(account_id: str, password: str) -> bool:
     changed since the read is never promoted in its place.
     """
     return await asyncio.to_thread(_promote_twofa_pending, account_id, password)
+
+
+def _list_verified_twofa_account_ids() -> set[str]:
+    with _get_engine().connect() as connection:
+        rows = connection.execute(
+            select(_accounts.c.account_id).where(
+                _accounts.c.twofa_password.is_not(None),
+                # An empty column value, not a password literal.
+                _accounts.c.twofa_password != "",  # nosec B105
+            )
+        ).all()
+    return {str(row[0]) for row in rows}
+
+
+async def list_verified_twofa_account_ids() -> set[str]:
+    """Accounts with a verified cloud password stored (the current column), in one query.
+
+    The unverified candidate (``twofa_password_pending``) does not count. Only ids leave.
+    """
+    return await asyncio.to_thread(_list_verified_twofa_account_ids)

@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
+from core.repositories.account_security_snapshots import forget_security_snapshot
 from core.telegram_client import UNCONFIRMED_ERROR_TYPE, execute
 from schemas.telegram_actions_twofa import ManageTwoFactorEmail
 from schemas.twofa import AccountTwoFactorEmailPending
@@ -113,6 +114,7 @@ async def set_account_twofa_email(
             ManageTwoFactorEmail(mode="set", current_password=current, email=request.email),
         )
         pending = result.twofa_email_unconfirmed
+        await forget_security_snapshot(account_id)
         await log_event(
             "INFO",
             "account_twofa_email_set",
@@ -155,6 +157,7 @@ async def confirm_account_twofa_email(
     view = await read_account_twofa(account_id)
     if lost and not _recovery_confirmed(view):
         raise_for_result(result)
+    await forget_security_snapshot(account_id)
     await log_event(
         "INFO",
         "account_twofa_email_confirmed",
@@ -207,6 +210,7 @@ async def clear_account_twofa_email(account_id: str) -> AccountTwoFactorView:
             account_id,
             ManageTwoFactorEmail(mode="clear", current_password=current),
         )
+        await forget_security_snapshot(account_id)
         await log_event(
             "INFO",
             "account_twofa_email_cleared",
@@ -225,6 +229,7 @@ async def cancel_account_twofa_email(account_id: str) -> AccountTwoFactorView:
     lives only on Telegram, which is why this feature added no column.
     """
     await _run_email_action(account_id, ManageTwoFactorEmail(mode="cancel"))
+    await forget_security_snapshot(account_id)
     await log_event(
         "INFO",
         "account_twofa_email_cancelled",

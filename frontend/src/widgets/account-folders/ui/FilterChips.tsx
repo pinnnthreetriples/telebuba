@@ -32,6 +32,7 @@ export function FilterChips({
     if (key === 'status' && filters.status) {
       return t('accounts.filters.chipStatus', { status: t(STATUS_LABEL_KEY[filters.status]) });
     }
+    if (key === 'unprotected') return t('accounts.filters.unprotected');
     if (key === 'minTrust') return t('accounts.filters.chipTrust', { value: filters.minTrust });
     const code = filters.proxy ?? '';
     const country =

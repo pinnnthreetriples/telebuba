@@ -166,7 +166,7 @@ async def _app_signed_in(
     # In the background only an entry screen is signed in; in front, always.
     if background:
         return await _or_hand_over(
-            account, _signed_in_as_it_stands(account, serial), background=True
+            account, _signed_in_as_it_stands(account, serial, background=True), background=True
         )
     return await sign_in_or_hand_over(account, serial, background=background)
 
@@ -183,20 +183,23 @@ async def running_app_signed_in(
         return await _app_signed_in(account, serial, background=background)
     await bring_app_to_front(serial)
     return await _or_hand_over(
-        account, _signed_in_as_it_stands(account, serial), background=background
+        account,
+        _signed_in_as_it_stands(account, serial, background=background),
+        background=background,
     )
 
 
-async def _signed_in_as_it_stands(account: AccountRead, serial: str) -> bool:
+async def _signed_in_as_it_stands(account: AccountRead, serial: str, *, background: bool) -> bool:
     """The app's screen read past its prompts; signed in from an entry screen only.
 
     A frozen app is restarted (twice at most) for the read, and again, as often, by a
     sign-in that then freezes it: never more than that. A sign-in left on its number
-    confirmation or code screen is started over from the phone screen.
+    confirmation or code screen is started over from the phone screen. In the background an
+    app that was signed in before is not signed in again (``emulator_signed_out``).
     """
     screen = await restarted_if_frozen(account.account_id, serial, partial(settled_screen, serial))
     if screen in _ENTRY_SCREENS:
-        await sign_in(account, serial)
+        await sign_in(account, serial, background=background)
         return True
     return screen == "chats"
 

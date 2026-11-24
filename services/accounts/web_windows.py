@@ -19,17 +19,25 @@ from core.logging import log_event
 from core.web_login import (
     account_profile_dir,
     close_orphaned_browsers,
+    list_marked_profiles,
+    mark_profile_for_removal,
     remove_profile_dir,
     web_profiles_root,
 )
 from services.accounts import web_login
 
 __all__ = [
+    "close_account_web_window",
     "close_all_web_windows",
     "close_orphaned_web_windows",
     "count_open_web_windows",
     "forget_account_web",
+    "remove_orphaned_web_profiles",
 ]
+
+# How long a proxy change waits for a login in progress to release the open lock before the
+# window is ended anyway: the change must not hang for the minutes a drive can take.
+_OPEN_LOCK_WAIT_SECONDS = 2.0
 
 
 async def count_open_web_windows() -> int:
@@ -101,7 +109,18 @@ async def forget_account_web(account_id: str) -> None:
             if entry is not None:
                 with suppress(Exception):
                     await entry[0].aclose()
-            await remove_profile_dir(account_profile_dir(account_id))
+            profile = account_profile_dir(account_id)
+            # Before the removal, so a removal that fails is finished by the startup sweep.
+            with suppress(OSError):
+                mark_profile_for_removal(profile)
+            try:
+                await remove_profile_dir(profile)
+            except BaseException:
+                # A removal that stopped half-way may have taken the mark with it (it is
+                # one of the files): written again, or the startup sweep never returns.
+                with suppress(OSError):
+                    mark_profile_for_removal(profile)
+                raise
     except Exception as exc:  # noqa: BLE001 - the delete must not fail because of this
         await log_event(
             "WARNING",
@@ -111,3 +130,84 @@ async def forget_account_web(account_id: str) -> None:
         )
     async with web_login._open_locks_guard:  # noqa: SLF001
         web_login._open_locks.pop(account_id, None)  # noqa: SLF001
+
+
+async def close_account_web_window(account_id: str) -> bool:
+    """End the account's web window and relay because its proxy changed; never raises.
+
+    A window keeps talking through the relay of the OLD proxy until the next open. Waits
+    for the open lock only briefly: a login in progress holds it for minutes, and the
+    proxy change must not wait on that, so after the bound the window is ended without
+    the lock (the running drive then fails on its dead window). The profile is untouched.
+    """
+    try:
+        lock = await web_login._account_open_lock(account_id)  # noqa: SLF001
+        held = False
+        try:
+            async with asyncio.timeout(_OPEN_LOCK_WAIT_SECONDS):
+                await lock.acquire()
+            held = True
+        except TimeoutError:
+            # An open is in flight and may register its window after this returns: it is
+            # told to end that window itself.
+            web_login._proxy_changed.add(account_id)  # noqa: SLF001
+        try:
+            async with web_login._windows_lock:  # noqa: SLF001
+                window = web_login._windows.get(account_id)  # noqa: SLF001
+            if window is None:
+                return False
+            await web_login._drop_window(account_id, window)  # noqa: SLF001
+        finally:
+            if held:
+                lock.release()
+    except Exception as exc:  # noqa: BLE001 - the proxy change must not fail because of this
+        await log_event(
+            "WARNING",
+            "account_web_window_close_failed",
+            account_id=account_id,
+            extra={"error_type": type(exc).__name__},
+        )
+        return False
+    await log_event(
+        "INFO",
+        "account_web_window_closed",
+        account_id=account_id,
+        extra={"reason": "proxy_changed"},
+    )
+    return True
+
+
+async def remove_orphaned_web_profiles() -> int:
+    """Remove the profiles an account delete marked but could not remove; startup only.
+
+    Only directories carrying the delete's tombstone, and never one whose window is open.
+    No database lookup: absence of an account proves nothing about a profile. A failure
+    for one directory is logged by type and skipped. Returns how many were removed.
+    """
+    try:
+        marked = await list_marked_profiles()
+    except OSError as exc:
+        await log_event(
+            "WARNING",
+            "account_web_profile_orphan_remove_failed",
+            extra={"error_type": type(exc).__name__},
+        )
+        return 0
+    removed = 0
+    for profile in marked:
+        async with web_login._windows_lock:  # noqa: SLF001
+            if profile.name in web_login._windows:  # noqa: SLF001
+                continue
+        try:
+            await remove_profile_dir(profile)
+        except Exception as exc:  # noqa: BLE001 - one stubborn profile must not stop the rest
+            await log_event(
+                "WARNING",
+                "account_web_profile_orphan_remove_failed",
+                extra={"error_type": type(exc).__name__},
+            )
+            continue
+        removed += 1
+    if removed:
+        await log_event("INFO", "account_web_profile_orphan_removed", extra={"count": removed})
+    return removed

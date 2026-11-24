@@ -17,6 +17,11 @@ from core.web_login._page import (
     release_capture,
     type_2fa_password,
 )
+from core.web_login._tombstone import (
+    clear_removal_mark,
+    list_marked_profiles,
+    mark_profile_for_removal,
+)
 from core.web_login.browser import (
     account_profile_dir,
     launch_account_web,
@@ -29,11 +34,14 @@ from core.web_login.relay import LocalProxyRelay
 __all__ = [
     "LocalProxyRelay",
     "account_profile_dir",
+    "clear_removal_mark",
     "close_orphaned_browsers",
     "fingerprint_for",
     "focus_window",
     "latest_login_token",
     "launch_account_web",
+    "list_marked_profiles",
+    "mark_profile_for_removal",
     "navigate_window",
     "page_state",
     "password_outcome",

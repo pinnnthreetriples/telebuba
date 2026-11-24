@@ -13,6 +13,7 @@ import pytest
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
+from core.telegram_client import SessionAuditGatewayError
 from schemas.outreach_protection import OutreachProtection  # noqa: TC001
 from services import warming
 from services.accounts import (
@@ -25,6 +26,7 @@ from services.accounts import (
 )
 from services.accounts import devices as devices_module
 from services.accounts import mobile_emulator as emulator_module
+from services.accounts import own_authorizations as own_authorizations_module
 from services.accounts import privacy as privacy_module
 from services.accounts import twofa as twofa_module
 from services.accounts._import_locks import _IMPORT_LOCKS
@@ -229,8 +231,18 @@ def mobile_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def container(monkeypatch: pytest.MonkeyPatch) -> _Container:
-    """The scripted pod on the service modules' own names."""
+    """The scripted pod on the service modules' own names.
+
+    The account's authorization list is out of reach (a sign-in's bookkeeping, best effort);
+    a test that wants one replaces ``own_authorizations.read_account_sessions``.
+    """
     fake = _Container()
+
+    async def _unreachable(*_args: object, **_kwargs: object) -> None:
+        code = "unavailable"
+        raise SessionAuditGatewayError(code, error_type="OSError")
+
+    monkeypatch.setattr(own_authorizations_module, "read_account_sessions", _unreachable)
     for name in _SERVICE_FAKES:
         modules = [m for m in (emulator_module, _mobile_start) if hasattr(m, name)]
         assert modules, name

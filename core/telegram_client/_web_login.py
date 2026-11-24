@@ -10,6 +10,8 @@ so the caller retries with the next captured token when an accept is rejected.
 
 from __future__ import annotations
 
+import logging
+
 from telethon.errors import (
     AuthTokenAlreadyAcceptedError,
     AuthTokenExceptionError,
@@ -24,6 +26,8 @@ from telethon.errors import (
 from telethon.tl import functions
 
 from core.telegram_client._pool import get_client
+
+logger = logging.getLogger(__name__)
 
 # WebK's exported token rotates; an accept against a stale one raises one of these.
 # Kept here (not in services) so the telethon dependency stays inside core.
@@ -82,4 +86,23 @@ async def accept_web_login_token(account_id: str, token: bytes) -> str | None:
     except _TRANSIENT_ERRORS as exc:
         raise WebLoginTransientError from exc
     new_hash = getattr(accepted, "hash", None)
-    return str(new_hash) if isinstance(new_hash, int) and not isinstance(new_hash, bool) else ""
+    if not isinstance(new_hash, int) or isinstance(new_hash, bool):
+        return ""
+    if getattr(accepted, "unconfirmed", None):
+        await _confirm_authorization(confirmer, new_hash)
+    return str(new_hash)
+
+
+async def _confirm_authorization(confirmer: object, new_hash: int) -> None:
+    """Answer "is this you?" with yes for the browser's own authorization; best effort.
+
+    An unconfirmed authorization is what Telegram's official clients ask the owner about.
+    The token is already spent, so a failure here is logged (type only) and never fails
+    or repeats the acceptance.
+    """
+    try:
+        await confirmer(  # ty: ignore[call-non-callable]
+            functions.account.ChangeAuthorizationSettingsRequest(hash=new_hash, confirmed=True)
+        )
+    except Exception as exc:  # noqa: BLE001 - the acceptance already succeeded
+        logger.warning("web_login_confirm_failed: %s", type(exc).__name__)

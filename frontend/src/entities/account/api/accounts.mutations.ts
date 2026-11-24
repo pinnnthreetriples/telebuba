@@ -53,6 +53,7 @@ export {
   rescheduleScheduledPostMutation,
   resendAccountTwofaEmailMutation,
   resetAccountSessionMutation,
+  restoreAccountSessionMutation,
   scheduleAccountPhotoMutation,
   scheduleAccountStoryMutation,
   setAccountChannelPhotoMutation,

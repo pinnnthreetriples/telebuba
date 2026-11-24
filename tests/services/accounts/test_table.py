@@ -407,12 +407,19 @@ async def test_health_taxonomy_matches_status(
             account_id="acc-h",
             session_path="sessions/acc-h",
             status=status,
-            is_temporary=status not in {"alive", "unauthorized", "session_error", "account_error"},
+            is_temporary=status
+            not in {"alive", "unauthorized", "session_error", "account_error", "frozen"},
         )
 
     monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
     await check_account_session(AccountCheckRequest(account_id="acc-h"))
     page = await list_accounts_page()
+    if status in {"flood_wait", "network_error", "proxy_error", "unknown_error"}:
+        # A transport result no longer rewrites the key state (a fresh row stays ``new``): the
+        # failure rides beside it as the RAW ``link_status`` the UI translates.
+        assert page.items[0].status == "new"
+        assert page.items[0].link_status == status
+        return
     assert health_for_status(page.items[0].status) == expected_health
     # Row carries the RAW status enum (e.g. "network_error"), not an English
     # label — the UI is the single translation point. Guards the regression

@@ -13,7 +13,9 @@ import { mutationErrorText } from '@/shared/lib';
 import { Button, FeedbackMark, Icon, IconButton, Notice, Spinner } from '@/shared/ui';
 
 import { closeResultNote, isRefused, sessionOutcomeText } from './_sessionOutcome';
+import { ResumeNotice } from './ResumeNotice';
 import { useMountedRef } from './useMountedRef';
+import { useResumableRun } from './useResumableRun';
 
 type RowState =
   | 'pending'
@@ -63,6 +65,9 @@ export function SessionAuditStep({
   const alive = useMountedRef();
   const started = useRef(false);
   const [rows, setRows] = useState<Record<string, Row>>({});
+  // The accounts this step works on: the wizard's, or what an interrupted run left over.
+  const [ids, setIds] = useState(accountIds);
+  const resumable = useResumableRun('session-audit');
   const check = useMutation({ ...checkAccountMutation(), meta: { inlineError: true } });
   const audit = useMutation({ ...auditAccountSessionsMutation(), meta: { inlineError: true } });
   const closeForeign = useMutation({
@@ -75,7 +80,7 @@ export function SessionAuditStep({
   };
 
   // Close what is foreign now; the row ends `closed`, or stays `foreign` with why.
-  const closeOne = async (accountId: string): Promise<void> => {
+  const closeOne = async (accountId: string): Promise<RowState> => {
     setRow(accountId, { state: 'working' });
     try {
       const result = await closeForeign.mutateAsync({ path: { account_id: accountId } });
@@ -92,16 +97,18 @@ export function SessionAuditStep({
               reason: note ?? (refused ? sessionOutcomeText(t, refused) : undefined),
             },
       );
+      return left === 0 ? 'closed' : 'foreign';
     } catch (error) {
       setRow(accountId, { state: 'foreign', foreign: 1, reason: mutationErrorText(error) });
+      return 'foreign';
     }
   };
 
   // CHECK, then AUDIT, for one account.
-  const examine = async (accountId: string, proxied: boolean): Promise<void> => {
+  const examine = async (accountId: string, proxied: boolean): Promise<RowState> => {
     if (!proxied) {
       setRow(accountId, { state: 'noProxy' });
-      return;
+      return 'noProxy';
     }
     setRow(accountId, { state: 'working' });
     try {
@@ -111,7 +118,7 @@ export function SessionAuditStep({
           state: 'unchecked',
           reason: t(`accounts.status.${checked.status}`),
         });
-        return;
+        return 'unchecked';
       }
       // The check already audited an account seen for the first time; read what it saved
       // and audit only when there is nothing yet (which also reports why it could not).
@@ -124,13 +131,14 @@ export function SessionAuditStep({
         : await audit.mutateAsync({ path: { account_id: accountId } });
       if (result.foreign_count === 0) {
         setRow(accountId, { state: 'clean' });
-      } else if (autoClose) {
-        await closeOne(accountId);
-      } else {
-        setRow(accountId, { state: 'foreign', foreign: result.foreign_count });
+        return 'clean';
       }
+      if (autoClose) return await closeOne(accountId);
+      setRow(accountId, { state: 'foreign', foreign: result.foreign_count });
+      return 'foreign';
     } catch (error) {
       setRow(accountId, { state: 'unchecked', reason: mutationErrorText(error) });
+      return 'unchecked';
     } finally {
       onImported();
     }
@@ -138,40 +146,74 @@ export function SessionAuditStep({
 
   // One account at a time: every check and audit is a Telegram connection, and a batch
   // reading its whole fleet at once is what the proxy pool is there to avoid.
-  const run = async (ids: string[]) => {
+  const run = async (list: string[]) => {
     const fleet = await queryClient.fetchQuery({ ...allAccountsQueryOptions(), staleTime: 0 });
     const proxied = new Map(fleet.items.map((row) => [row.account_id, Boolean(row.proxy_id)]));
-    for (const accountId of ids) {
+    // Progress is kept as each account finishes, so a closed tab can pick the rest up.
+    resumable.begin(list);
+    for (const accountId of list) {
       if (!alive.current) return;
-      await examine(accountId, proxied.get(accountId) ?? false);
+      const state = await examine(accountId, proxied.get(accountId) ?? false);
+      resumable.mark(accountId, state === 'unchecked' ? 'failed' : 'done');
     }
+    resumable.finish();
   };
 
-  useEffect(() => {
-    // StrictMode mounts twice in development; the run must start once.
-    if (started.current) return;
+  const start = (list: string[]) => {
     started.current = true;
-    setRows(Object.fromEntries(accountIds.map((id) => [id, { state: 'pending' as const }])));
-    void run(accountIds).catch(() => {
+    setIds(list);
+    setRows(Object.fromEntries(list.map((id) => [id, { state: 'pending' as const }])));
+    void run(list).catch(() => {
       // The fleet could not be read: nothing was checked, and every row says so.
       setRows(
         Object.fromEntries(
-          accountIds.map((id) => [id, { state: 'unchecked' as const, reason: undefined }]),
+          list.map((id) => [id, { state: 'unchecked' as const, reason: undefined }]),
         ),
       );
     });
+  };
+
+  useEffect(() => {
+    // StrictMode mounts twice in development; the run must start once. An interrupted run
+    // waits for the operator's answer first.
+    if (started.current || resumable.interrupted) return;
+    start(accountIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a one-shot start per mount
   }, []);
 
-  const states = accountIds.map((id) => rows[id]?.state ?? 'pending');
+  const continueInterrupted = async () => {
+    try {
+      const fleet = await queryClient.fetchQuery({ ...allAccountsQueryOptions(), staleTime: 0 });
+      const remaining = resumable.resume(fleet.items.map((row) => row.account_id));
+      // Nothing of it is left: the step goes on with its own accounts.
+      start(remaining.length > 0 ? remaining : accountIds);
+    } catch {
+      resumable.reset();
+      start(accountIds);
+    }
+  };
+
+  const states = ids.map((id) => rows[id]?.state ?? 'pending');
   const busy = states.some((state) => state === 'pending' || state === 'working');
-  const held = accountIds.filter((id) => !PROCEEDS.has(rows[id]?.state ?? 'pending'));
+  const held = ids.filter((id) => !PROCEEDS.has(rows[id]?.state ?? 'pending'));
 
   return (
     <>
+      {resumable.interrupted ? (
+        <ResumeNotice
+          run={resumable.interrupted}
+          onContinue={() => {
+            void continueInterrupted();
+          }}
+          onReset={() => {
+            resumable.reset();
+            start(accountIds);
+          }}
+        />
+      ) : null}
       <div className="mb-4 type-body text-content-subtle">{t('accounts.addWizard.audit.hint')}</div>
       <div className="flex flex-col gap-3">
-        {accountIds.map((accountId) => {
+        {ids.map((accountId) => {
           const row = rows[accountId] ?? { state: 'pending' as const };
           const decide = row.state === 'foreign';
           return (
@@ -255,7 +297,7 @@ export function SessionAuditStep({
           variant="primary"
           disabled={busy}
           onClick={() => {
-            onDone(accountIds.filter((id) => PROCEEDS.has(rows[id]?.state ?? 'pending')));
+            onDone(ids.filter((id) => PROCEEDS.has(rows[id]?.state ?? 'pending')));
           }}
         >
           {t('accounts.addWizard.next')}

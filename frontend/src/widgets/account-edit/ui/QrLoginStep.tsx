@@ -23,9 +23,16 @@ const KNOWN_ERRORS = new Set([
   'password_invalid',
   'flood_wait',
   'connection_failed',
+  'session_not_dead',
+  'qr_user_mismatch',
 ]);
 // Codes after which asking for a new QR cannot help: the account is gone or taken.
-const FINAL_ERRORS = new Set(['unknown_account', 'already_signed_in', 'account_exists']);
+const FINAL_ERRORS = new Set([
+  'unknown_account',
+  'already_signed_in',
+  'account_exists',
+  'qr_user_mismatch',
+]);
 
 // The add-wizard's step for the QR method: show the QR Telegram issued for this
 // account, wait for the operator to scan it from a signed-in phone, ask for the

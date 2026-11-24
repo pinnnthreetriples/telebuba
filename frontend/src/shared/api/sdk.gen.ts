@@ -256,6 +256,9 @@ import type {
   GetAccountSessionAuditData,
   GetAccountSessionAuditErrors,
   GetAccountSessionAuditResponses,
+  GetAccountSessionCopiesData,
+  GetAccountSessionCopiesErrors,
+  GetAccountSessionCopiesResponses,
   GetAccountTwofaData,
   GetAccountTwofaErrors,
   GetAccountTwofaResponses,
@@ -598,6 +601,9 @@ import type {
   ResolveChatBroadcastTargetsData,
   ResolveChatBroadcastTargetsErrors,
   ResolveChatBroadcastTargetsResponses,
+  RestoreAccountSessionData,
+  RestoreAccountSessionErrors,
+  RestoreAccountSessionResponses,
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
@@ -897,6 +903,7 @@ export const getReadiness = <ThrowOnError extends boolean = false>(
  * ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
  * ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
  * ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
+ * ``unprotected``: only accounts that miss a protection (the row's ``protection.missing``).
  */
 export const listAccounts = <ThrowOnError extends boolean = false>(
   options?: Options<ListAccountsData, ThrowOnError>,
@@ -2646,6 +2653,37 @@ export const addAccountDevice = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * Get Account Session Copies
+ *
+ * How many vault copies the account's own session has and when the newest was made.
+ */
+export const getAccountSessionCopies = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountSessionCopiesData, ThrowOnError>,
+): RequestResult<GetAccountSessionCopiesResponses, GetAccountSessionCopiesErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetAccountSessionCopiesResponses,
+    GetAccountSessionCopiesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/session/copies', ...options });
+
+/**
+ * Restore Account Session Route
+ *
+ * Put the newest vault copy back when the account's session file is missing or keyless.
+ *
+ * Refused with a stable code (``session_restore_file_present``, ``session_vault_off``,
+ * ``session_restore_no_copy``); never over a file that holds a key.
+ */
+export const restoreAccountSession = <ThrowOnError extends boolean = false>(
+  options: Options<RestoreAccountSessionData, ThrowOnError>,
+): RequestResult<RestoreAccountSessionResponses, RestoreAccountSessionErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    RestoreAccountSessionResponses,
+    RestoreAccountSessionErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/session/restore', ...options });
 
 /**
  * Emulator Status

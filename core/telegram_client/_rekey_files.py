@@ -6,6 +6,7 @@ Split out of ``_rekey`` (file size). Everything here touches only files, never T
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import sqlite3
 import time
@@ -34,6 +35,16 @@ def file_key(session_file: str) -> bytes | None:
     except sqlite3.Error:
         return None
     return bytes(row[0]) if row and row[0] else None
+
+
+def key_mark(session_file: str) -> str | None:
+    """A one-way mark (sha256 hex) of the key a session file holds; ``None`` if unknown.
+
+    What the intent journal keeps to tell, after a crash, whether the account's file still
+    holds the key a re-key began with. The key itself is never stored.
+    """
+    key = file_key(session_file)
+    return None if key is None else hashlib.sha256(key).hexdigest()
 
 
 async def same_key(first: str, second: str) -> bool:

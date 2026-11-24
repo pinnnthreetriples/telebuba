@@ -27,15 +27,23 @@ import asyncio
 import contextlib
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import fetch_account
 from core.events import subscribe
 from core.logging import log_event
+from core.passkey_vault import PasskeyVaultError
+from core.passkey_vault_snapshot import (
+    newest_vault_snapshot_at,
+    snapshot_enabled,
+    take_vault_snapshot,
+)
 from core.repositories.accounts import list_accounts
-from core.session_vault import purge_quarantine, vault_enabled
+from core.session_vault import copy_meta, purge_quarantine, vault_enabled
 from core.telegram_client import back_up_account_session
+from services.accounts._recovery_bundle import build_recovery_bundle
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -73,9 +81,25 @@ class _State:
     # When each account's last copy attempt failed; it is retried after the retry delay.
     failed: dict[str, float] = field(default_factory=dict)
     warned_off: bool = False
+    # When the last key-vault snapshot failed (``time.monotonic``); retried after the retry delay.
+    vault_failed: float | None = None
 
 
 _state = _State()
+
+
+async def _bundle_or_none(account: AccountRead) -> bytes | None:
+    """The recovery bundle for the copies; one that cannot be built never fails the copy."""
+    try:
+        return await build_recovery_bundle(account)
+    except Exception as exc:  # noqa: BLE001 - the key copy matters more than its bundle.
+        await log_event(
+            "WARNING",
+            "session_bundle_failed",
+            account_id=account.account_id,
+            extra={"error_type": type(exc).__name__},
+        )
+        return None
 
 
 async def back_up_account(account: AccountRead) -> int:
@@ -85,21 +109,26 @@ async def back_up_account(account: AccountRead) -> int:
     """
     written = 0
     complete = True
+    token = copy_meta.set(await _bundle_or_none(account))
     # The primary file (its stored name, or the account id), then a second device's, if any.
     names = [account.session_name]
     if account.second_session_name is not None:
         names.append(account.second_session_name)
-    for name in names:
-        try:
-            written += int(await back_up_account_session(account.account_id, name))
-        except Exception as exc:  # noqa: BLE001 - a backup must never break its caller.
-            complete = False
-            await log_event(
-                "WARNING",
-                "session_backup_failed",
-                account_id=account.account_id,
-                extra={"error_type": type(exc).__name__},
-            )
+    try:
+        for name in names:
+            try:
+                written += int(await back_up_account_session(account.account_id, name))
+            except Exception as exc:  # noqa: BLE001 - a backup must never break its caller.
+                complete = False
+                await log_event(
+                    "WARNING",
+                    "session_backup_failed",
+                    account_id=account.account_id,
+                    extra={"error_type": type(exc).__name__},
+                )
+    finally:
+        # Also on a cancellation: the next account must never be copied with this bundle.
+        copy_meta.reset(token)
     if complete:
         _state.copied[account.account_id] = time.monotonic()
         _state.failed.pop(account.account_id, None)
@@ -120,10 +149,43 @@ def _due(account_id: str, now: float) -> bool:
     return now - failed_at >= settings.session_vault.retry_minutes * _SECONDS_PER_MINUTE
 
 
+async def _snapshot_key_vault() -> None:
+    """Once per DB-backup interval, when ``PASSKEY_VAULT__SNAPSHOT_TOKEN`` is set; never raises."""
+    if not snapshot_enabled():
+        return
+    failed_at = _state.vault_failed
+    if failed_at is not None and (
+        time.monotonic() - failed_at < settings.session_vault.retry_minutes * _SECONDS_PER_MINUTE
+    ):
+        return
+    _state.vault_failed = None
+    try:
+        newest = await asyncio.to_thread(newest_vault_snapshot_at)
+        interval = settings.db.backup_interval_hours * _SECONDS_PER_HOUR
+        if newest is not None and (datetime.now(UTC) - newest).total_seconds() < interval:
+            return
+        await take_vault_snapshot()
+    except PasskeyVaultError as exc:
+        _state.vault_failed = time.monotonic()
+        await log_event(
+            "WARNING",
+            "passkey_vault_snapshot_failed",
+            extra={"error_type": exc.code, "status": exc.detail},
+        )
+    except Exception as exc:  # noqa: BLE001 - a vault snapshot must never break the pass.
+        _state.vault_failed = time.monotonic()
+        await log_event(
+            "WARNING",
+            "passkey_vault_snapshot_failed",
+            extra={"error_type": type(exc).__name__},
+        )
+
+
 async def run_backup_pass() -> int:
     """Copy the accounts that are due and purge the old quarantine; how many versions."""
     with contextlib.suppress(OSError):
         await asyncio.to_thread(purge_quarantine)
+    await _snapshot_key_vault()
     if not vault_enabled():
         if not _state.warned_off:
             _state.warned_off = True

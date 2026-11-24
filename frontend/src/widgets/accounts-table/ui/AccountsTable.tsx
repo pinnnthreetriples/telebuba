@@ -6,6 +6,7 @@ import {
   AccountAvatar,
   accountAvatarTint,
   accountDisplayName,
+  ProtectionBadge,
   StatusBadge,
 } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
@@ -166,11 +167,26 @@ export function AccountsTable({
         return (
           <div className="flex flex-col items-start gap-1">
             <StatusBadge status={row.original.status} />
+            {/* The last check could not reach Telegram: the key state above is unchanged. */}
+            {row.original.link_status ? (
+              <Badge
+                tone="warning"
+                size="sm"
+                data-testid="account-link-status"
+                data-link={row.original.link_status}
+              >
+                {t(`accounts.link.${row.original.link_status}`)}
+              </Badge>
+            ) : null}
             {/* Somebody else holds a session of this account (the last session audit). */}
             {foreign > 0 ? (
               <Badge tone="warning" size="sm">
                 {t('accounts.table.foreignSessions', { count: foreign })}
               </Badge>
+            ) : null}
+            {/* How many protections the account has; the tooltip names the missing ones. */}
+            {row.original.protection ? (
+              <ProtectionBadge protection={row.original.protection} />
             ) : null}
             {/* No passkey: a dead key could then only come back with an SMS or a code. */}
             {row.original.has_passkey === false ? (

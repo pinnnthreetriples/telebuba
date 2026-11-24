@@ -13,8 +13,13 @@ const PERMANENT: ReadonlySet<AccountStatus> = new Set([
   'frozen',
 ]);
 
-export function accountHealth(status: AccountStatus): AccountHealth {
-  if (status === 'alive') return 'ok';
+// `linkStatus` is the last check that could not reach Telegram: the key state (`status`) is
+// unchanged, but an alive account whose link is failing is not "ok" either.
+export function accountHealth(
+  status: AccountStatus,
+  linkStatus?: AccountRead['link_status'],
+): AccountHealth {
+  if (status === 'alive') return linkStatus ? 'warn' : 'ok';
   if (PERMANENT.has(status)) return 'fail';
   return 'warn';
 }

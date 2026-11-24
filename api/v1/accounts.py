@@ -31,6 +31,7 @@ from api.v1._accounts_qr_login import qr_login_router
 from api.v1._accounts_registered import registered_router
 from api.v1._accounts_scheduled import scheduled_router
 from api.v1._accounts_session_audit import session_audit_router
+from api.v1._accounts_session_restore import session_restore_router
 from api.v1._accounts_spam_check import spam_check_router
 from api.v1._accounts_twofa import twofa_router
 from api.v1._errors import service_errors_to_http
@@ -83,6 +84,7 @@ async def list_accounts(  # noqa: PLR0913 - one query parameter per filter of th
     phone_code: Annotated[int | None, Query(ge=1, le=999)] = None,
     proxy_country: Annotated[str | None, Query(pattern=_PROXY_COUNTRY_PATTERN)] = None,
     min_trust: Annotated[int | None, Query(ge=0, le=100)] = None,
+    unprotected: bool = False,  # noqa: FBT001, FBT002 - a FastAPI query parameter
     cursor: str | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> AccountPage:
@@ -91,6 +93,7 @@ async def list_accounts(  # noqa: PLR0913 - one query parameter per filter of th
     ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
     ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
     ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
+    ``unprotected``: only accounts that miss a protection (the row's ``protection.missing``).
     """
     try:
         return await accounts.list_accounts_page(
@@ -100,6 +103,7 @@ async def list_accounts(  # noqa: PLR0913 - one query parameter per filter of th
             phone_code=phone_code,
             proxy_country=proxy_country,
             min_trust=min_trust,
+            unprotected=unprotected,
             cursor=cursor,
             limit=limit,
         )
@@ -419,5 +423,6 @@ router.include_router(lead_queue_router)
 router.include_router(scheduled_router)
 # The account's second device (a separate sign-in of the other device type).
 router.include_router(devices_router)
+router.include_router(session_restore_router)
 # The mobile account's local Android container (redroid under Docker).
 router.include_router(emulator_router)

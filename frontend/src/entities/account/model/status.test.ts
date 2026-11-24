@@ -18,6 +18,12 @@ describe('accountHealth', () => {
     expect(accountHealth('session_file_missing')).toBe('fail');
   });
 
+  it('maps an alive account with a failing link to warn, and never softens a dead key', () => {
+    expect(accountHealth('alive', null)).toBe('ok');
+    expect(accountHealth('alive', 'proxy_error')).toBe('warn');
+    expect(accountHealth('unauthorized', 'proxy_error')).toBe('fail');
+  });
+
   it('maps everything else to warn', () => {
     expect(accountHealth('new')).toBe('warn');
     expect(accountHealth('flood_wait')).toBe('warn');

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import _get_engine
+from core.db_mirror import drain_mirror_errors
 from core.db_snapshot import (
     default_clock as _default_backup_clock,
 )
@@ -82,6 +83,14 @@ def _seconds_until_first_run() -> float:
     return max(0.0, interval - age)
 
 
+async def _report_mirror_errors() -> None:
+    """Log the encrypted-mirror writes that failed (core cannot log); the snapshot itself stood."""
+    from core.logging import log_event  # noqa: PLC0415 - avoids an import cycle
+
+    for error_type in drain_mirror_errors():
+        await log_event("WARNING", "db_mirror_failed", extra={"error_type": error_type})
+
+
 async def run_db_maintenance_loop() -> None:
     """Run :func:`run_db_maintenance` until cancelled.
 
@@ -121,3 +130,4 @@ async def run_db_maintenance_loop() -> None:
             )
         else:
             delay = interval_seconds
+        await _report_mirror_errors()

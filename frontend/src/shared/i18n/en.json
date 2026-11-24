@@ -60,6 +60,8 @@
       "chipProxy": "Proxy: {{country}}",
       "chipStatus": "Status: {{status}}",
       "chipTrust": "Trust ≥ {{value}}",
+      "protection": "Protection",
+      "unprotected": "Not fully protected",
       "remove": "Remove filter «{{label}}»"
     },
     "status": {
@@ -84,6 +86,23 @@
       "actions": "Actions",
       "foreignSessions": "Foreign sessions: {{count}}",
       "noPasskey": "no passkey"
+    },
+    "link": {
+      "flood_wait": "check deferred: Telegram asks to wait",
+      "network_error": "unreachable: network",
+      "proxy_error": "unreachable: proxy",
+      "unknown_error": "the check failed"
+    },
+    "protection": {
+      "title": "What this account is missing",
+      "chip": "Protection {{score}}/{{total}}",
+      "proxy": "No proxy bound",
+      "session_copy": "No copy of the session file",
+      "own_key": "Key not re-issued: the seller may still hold it",
+      "old_key_closed": "Old authorization not closed",
+      "twofa_stored": "No verified cloud password",
+      "passkey": "No passkey",
+      "audit_clean": "Session audit never ran or found foreign sessions"
     },
     "stats": {
       "total": "Total",
@@ -447,6 +466,12 @@
       "sessionsOursExplain": "Sign-ins Telebuba itself uses: the account's devices and its own Telegram Web login.",
       "sessionsForeignExplain": "Not our sign-in: somebody else holds the account too.",
       "sessionsOursImported": "“Signed in” is when this key was made. On a bought account the seller may have made it and kept a copy: replace the key with the button below.",
+      "sessionsPhoneTelebuba": "Telebuba phone",
+      "restore": {
+        "title": "The session file is gone, but the vault holds a copy of it",
+        "copyFrom": "Latest copy: {{date}}",
+        "action": "Restore from the copy"
+      },
       "sessionsWebTelebuba": "Telebuba Telegram Web",
       "sessionsFingerprint": "Telebuba fingerprint",
       "sessionsKeyPredates": "This key was made before the account was added to Telebuba (by the seller) — they may hold a copy. Replace the key with the “Re-key the session” button below.",
@@ -1274,6 +1299,9 @@
     },
     "addWizard": {
       "title": "Add account",
+      "interrupted": "The last run was interrupted: {{done}} of {{total}} processed",
+      "interruptedContinue": "Continue",
+      "interruptedReset": "Reset",
       "close": "Close",
       "step1Label": "Step 1 · add method",
       "step2Label": "Step 2 · proxy",
@@ -1320,6 +1348,7 @@
         "flood_wait": "Telegram asks to wait {{seconds}} s — try again later",
         "connection_failed": "Could not reach Telegram — check the proxy and try again",
         "generic": "Could not sign in by QR code",
+        "qr_user_mismatch": "The QR was scanned by another Telegram account — the sign-in was undone. Scan it with the account you are restoring.",
         "session_not_dead": "Check the account first: a QR sign-in replaces its session and is allowed only once that session is known not to work."
       },
       "sendCode": "Send code",
@@ -1798,6 +1827,13 @@
       "rekey_incomplete": "The re-key did not finish: no session was ended and a copy of the old file is kept. The account needs a manual check.",
       "rekey_old_key_none": "There is no old session to close: it is already closed, or the account was never re-keyed.",
       "logout_unconfirmed": "Telegram did not confirm the logout. Nothing was changed: the session, its file and the second device are as they were. Check the proxy and try again.",
+      "session_user_mismatch": "This account's session file holds another Telegram user's key. The account was left as is: remove the foreign file and sign in again.",
+      "session_restore_file_present": "The account's session file is in place and holds a key — it cannot be restored over.",
+      "session_vault_off": "Session copies are off: SESSION_VAULT__KEY is not set.",
+      "session_restore_no_copy": "The vault holds no copy of this account's session.",
+      "session_restore_copy_unreadable": "The session copy could not be decrypted: it was made with another vault key or is damaged.",
+      "emulator_signed_out": "The phone's Telegram app is signed out. Open the account's phone yourself — warming does not sign it in again.",
+      "emulator_code_refused": "Telegram refused to send a login code: too many attempts. Try again later.",
       "proxy_required": "The account has no proxy: Telebuba does not connect it to Telegram without one (it would use your own IP). Assign a proxy.",
       "session_not_listed": "The last check does not list this session, or it is ours by proof: no mark needed."
     },
@@ -1899,6 +1935,9 @@
         "lastDb": "Database backup: {{date}}",
         "noDbYet": "No database backups yet",
         "dbOff": "Database backups are off",
+        "dbMirrorOff": "Database copies do not leave this disk (needs the vault key and a mirror)",
+        "dbMirrorLast": "Encrypted database copy on the mirror: {{date}}",
+        "dbMirrorNone": "No encrypted database copy on the mirror yet",
         "dbOverdue": "The database backup is overdue",
         "vault": {
           "off": "Passkey vault is off",
@@ -1951,6 +1990,40 @@
     }
   },
   "logEvent": {
+    "account_session_user_mismatch": "The account's session file holds another Telegram user's key: the account was left as is",
+    "account_link_restored": "The account is reachable again: the re-check passed",
+    "account_mobile_pending_removals_settled": "Phones of deleted accounts that could not be removed earlier are gone",
+    "account_mobile_pod_off_proxy_stopped": "Phones running off their account's current proxy were stopped",
+    "account_mobile_tombstone_uncleared": "The phone's removal mark could not be cleared (a repeat cleanup is harmless)",
+    "account_mobile_tombstone_unwritten": "The phone's removal mark could not be written: a failed cleanup will not be retried",
+    "account_session_restored": "The account's session file was restored from a copy",
+    "account_tombstone_failed": "The deleted account's data could not be saved to the quarantine",
+    "account_web_profile_orphan_remove_failed": "A deleted account's browser profile could not be removed",
+    "account_web_profile_orphan_removed": "Browser profiles of deleted accounts were removed",
+    "account_web_window_close_failed": "The account's browser window could not be closed after its proxy changed",
+    "account_web_window_closed": "The account's browser window was closed",
+    "db_mirror_failed": "The encrypted database copy could not be written to the mirror",
+    "sign_in_api_recovered": "After an interrupted sign-in the account's key got its API id back",
+    "flow_intent_repair_failed": "An interrupted re-key or sign-in could not be settled",
+    "flow_intent_unresolved": "An interrupted re-key or sign-in needs your attention",
+    "login_code_unrequested": "A login code arrived that Telebuba did not ask for: someone is trying to sign in",
+    "own_phone_authorization_recorded": "The phone app's sign-in was recorded as ours",
+    "own_phone_login_not_recorded": "The phone app's sign-in could not be recorded as ours",
+    "passkey_vault_snapshot_failed": "The passkey vault snapshot failed",
+    "phone_authorization_orphaned": "The phone app's earlier sign-in is still active with no device: close it",
+    "phone_signed_out": "The phone app is signed out: warming will not sign it in again by itself",
+    "phone_signed_out_mark_failed": "The phone app's signed-out mark could not be saved",
+    "proxy_check_failed": "A proxy failed its background check",
+    "proxy_exit_changed": "A proxy's exit address or country changed",
+    "qr_login_user_mismatch": "The QR was scanned by another Telegram account: the sign-in was undone",
+    "second_device_interrupted": "An interrupted second-device sign-in was undone",
+    "security_settings_changed": "The account's security settings changed outside Telebuba",
+    "session_bundle_failed": "The recovery bundle could not be saved next to the session copy",
+    "session_leftover_authorization": "An interrupted sign-in left an extra session: close it under Sessions",
+    "session_rekey_interrupted": "An interrupted re-key was undone: the account keeps its previous key",
+    "session_rekey_recovered": "An interrupted re-key was completed: the old key is waiting to be closed",
+    "telegram_service_message": "A service message from Telegram",
+    "twofa_reset_pending": "A cloud password reset was requested: the password is removed in 7 days",
     "telephony_otp_typing_failed": "Code not typed into the phone",
     "account_remove_web_cleanup_failed": "Could not close the deleted account's web window or remove its browser profile",
     "web_login_locale_rejected": "Chrome rejected the account's device language; the web window opened in the proxy country's language instead",
@@ -2421,6 +2494,7 @@
     "own_session_marked": "The operator marked a session as ours (or took the mark back)"
   },
   "logEventReason": {
+    "proxy_changed": "the proxy changed",
     "account_not_alive": "the account is not in a working state, @SpamBot was not asked",
     "no_proxy": "the account has no proxy, @SpamBot was not asked",
     "account_status_transient": "the account is in a temporary state, @SpamBot will be asked again later",

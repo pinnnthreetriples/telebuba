@@ -21,3 +21,5 @@ If the scanned Telegram user is already in Telebuba under another id, the new au
 ## Only on a placeholder or a dead session
 
 A QR sign-in writes the new key into the account's own session file. It is allowed only on a `qr-` placeholder (the "add by QR" flow) or on an account whose session check already said the key is gone (`unauthorized`, `session_error`). Any other account (an import never checked, one failing for another reason) is refused with `session_not_dead`: its file may hold a live key, and a duplicate would even be logged out.
+
+A QR sign-in on an existing (non-placeholder) account that already has a Telegram user id must be scanned by that same user. Another user is refused with `qr_user_mismatch` (400): the authorization the scan created is ended and its file quarantined exactly like a duplicate, but the row is NOT written or deleted (the previous owner's password, passkey and proxy stay attached to a dead key), so it stays `unauthorized`. WARNING `qr_login_user_mismatch` (account id only).

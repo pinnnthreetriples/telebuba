@@ -51,10 +51,33 @@ _EVENT_KINDS: dict[str, NotificationKind] = {
     "account_twofa_store_failed": "twofa_store_failed",
     # A session check or the start-up look found the account's .session file gone.
     "account_session_file_missing": "session_file_missing",
+    # A re-key or a second-device sign-in was cut short; the repair settled it or could not.
+    "session_rekey_recovered": "interrupted_key_flow",
+    "session_rekey_interrupted": "interrupted_key_flow",
+    "second_device_interrupted": "interrupted_key_flow",
+    "session_leftover_authorization": "interrupted_key_flow",
+    "flow_intent_unresolved": "interrupted_key_flow",
+    # The phone's Telegram app lost its sign-in; warming does not sign it in again by itself.
+    "phone_signed_out": "phone_signed_out",
+    "phone_authorization_orphaned": "phone_signed_out",
+    # The watch saw the account's security settings move without Telebuba moving them.
+    "twofa_reset_pending": "twofa_reset_pending",
+    "security_settings_changed": "security_changed",
+    # Telegram sent a login code nobody here asked for.
+    "login_code_unrequested": "login_code_unrequested",
+    # The background proxy check: a dead proxy, or one that now exits in another country.
+    "proxy_check_failed": "proxy_problem",
+    # The copies that leave the disk, and the key vault's own snapshot.
+    "db_mirror_failed": "db_maintenance",
+    "passkey_vault_snapshot_failed": "passkey_vault",
 }
+# ``proxy_exit_changed`` is news only when the country moved: a rotating proxy's IP moves all day.
+_PROXY_EXIT_EVENT = "proxy_exit_changed"
 # Kinds that tell one fleet-wide thing however many accounts raise it (a full disk fails every
 # account's copy at once): the throttle slot is shared, not one per account.
-FLEET_KINDS: frozenset[NotificationKind] = frozenset({"session_backup_failed", "passkey_vault"})
+FLEET_KINDS: frozenset[NotificationKind] = frozenset(
+    {"session_backup_failed", "passkey_vault", "proxy_problem"}
+)
 
 _PREFIX = "Telebuba · "
 _TEMPLATES: dict[NotificationKind, str] = {
@@ -121,6 +144,32 @@ _TEMPLATES: dict[NotificationKind, str] = {
         "аккаунт не работает. Ключ в Telegram может быть ещё жив — верните файл из копии "
         "(docs/session-vault.md) или войдите по коду."
     ),
+    "interrupted_key_flow": (
+        "{label}: смена ключа или вход второго устройства были прерваны. "
+        "Откройте карточку аккаунта, раздел «Сессии»: проверьте, нет ли лишней сессии "
+        "и закрыт ли старый ключ."
+    ),
+    "phone_signed_out": (
+        "{label}: приложение Telegram на телефоне (эмулятор) вышло из аккаунта. "
+        "Прогрев не входит заново сам — откройте телефон аккаунта вручную. "
+        "Если прежний вход ещё виден в «Сессиях», закройте его."
+    ),
+    "twofa_reset_pending": (
+        "{label}: запрошен СБРОС облачного пароля — через 7 дней пароль будет снят. "
+        "Если это не вы, откройте карточку аккаунта и отмените сброс."
+    ),
+    "security_changed": (
+        "{label}: облачный пароль или почта восстановления изменились не из Telebuba. "
+        "Проверьте карточку аккаунта: в настройках безопасности был кто-то ещё."
+    ),
+    "login_code_unrequested": (
+        "{label}: пришёл код входа, который Telebuba не запрашивала, — кто-то пытается войти "
+        "в аккаунт. Проверьте раздел «Сессии» на карточке аккаунта."
+    ),
+    "proxy_problem": (
+        "Фоновая проверка прокси: прокси перестал отвечать или сменил страну выхода. "
+        "Аккаунты на нём под риском — откройте раздел «Прокси»."
+    ),
 }
 TEST_MESSAGE = f"{_PREFIX}тестовое уведомление: бот настроен и пишет в этот чат."
 UNNAMED_ACCOUNT = "аккаунт без имени"
@@ -142,6 +191,8 @@ def notification_kind(entry: LogEntry) -> NotificationKind | None:
         return spam
     if entry.event in SPAM_ONLY_EVENTS:
         return None
+    if entry.event == _PROXY_EXIT_EVENT:
+        return "proxy_problem" if entry.extra.get("what") == "country" else None
     return _EVENT_KINDS.get(entry.event)
 
 

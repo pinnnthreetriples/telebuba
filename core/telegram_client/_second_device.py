@@ -45,6 +45,7 @@ from core.telegram_client._client import (
     mobile_api_configured,
     prepare_telegram_client_profile,
 )
+from core.telegram_client._key_intent import advance_quietly, close_quietly, open_quietly
 from core.telegram_client._login_code import (
     DEFAULT_CODE_LENGTH,
     last_service_message_id,
@@ -131,16 +132,20 @@ async def _sign_in(
     identity: _Identity,
 ) -> None:
     # Taken immediately before the request: any code already in 777000 is older.
-    cutoff = await last_service_message_id(primary)
     async with asyncio.timeout(auth_deadline()):
+        cutoff = await last_service_message_id(primary)
         sent = await client.send_code_request(identity.phone)
-    code = await wait_for_login_code(
-        primary,
-        after_id=cutoff,
-        wait_seconds=settings.telegram.second_device_code_wait_seconds,
-        poll_seconds=settings.telegram.second_device_code_poll_seconds,
-        length=int(getattr(getattr(sent, "type", None), "length", 0) or DEFAULT_CODE_LENGTH),
-    )
+    wait_seconds = settings.telegram.second_device_code_wait_seconds
+    # The legitimate wait for the code is ``wait_seconds``; the extra deadline only covers a
+    # poll that hangs on the wire.
+    async with asyncio.timeout(wait_seconds + auth_deadline()):
+        code = await wait_for_login_code(
+            primary,
+            after_id=cutoff,
+            wait_seconds=wait_seconds,
+            poll_seconds=settings.telegram.second_device_code_poll_seconds,
+            length=int(getattr(getattr(sent, "type", None), "length", 0) or DEFAULT_CODE_LENGTH),
+        )
     if code is None:
         raise _SignInRefusedError(_CODE_TIMEOUT)
     try:
@@ -178,7 +183,8 @@ def _classify(request: SecondDeviceSignIn, exc: Exception) -> SecondDeviceResult
 
 async def _confirm_same_user(client: TelegramClient, user_id: int) -> None:
     """Refuse to keep a sign-in that landed on a different Telegram user."""
-    me = await client.get_me()
+    async with asyncio.timeout(auth_deadline()):
+        me = await client.get_me()
     if getattr(me, "id", None) != user_id:
         raise _SignInRefusedError(_USER_MISMATCH)
 
@@ -194,23 +200,37 @@ async def _authorized_after_timeout(client: TelegramClient) -> bool:
         return False
 
 
-async def _discard(client: TelegramClient, session_path: str, *, signed_in: bool) -> None:
+async def _discard(
+    client: TelegramClient, session_path: str, *, signed_in: bool, intent_id: int | None = None
+) -> None:
     """Undo a failed attempt: revoke a sign-in that happened, disconnect, remove the file.
 
-    Each step runs whatever the one before did: a logout or disconnect that raises
-    must not leave the half-made ``.session`` behind to refuse every retry.
+    Each step runs whatever the one before did: a disconnect that raises must not leave the
+    half-made ``.session`` behind to refuse every retry. A sign-in whose logout Telegram did
+    not confirm keeps the file, its only handle, and the intent open: the repair ends it later.
     """
+    confirmed = True
     steps = (("logout", client.log_out),) if signed_in else ()
     for step, call in (*steps, ("disconnect", client.disconnect)):
         try:
             async with asyncio.timeout(settings.telegram.signin_probe_timeout_seconds):
-                await call()
+                answer = await call()
+            # Telethon answers ``False`` for a refused logout: not a confirmation either.
+            if step == "logout" and answer is False:
+                confirmed = False
         except Exception as exc:  # noqa: BLE001 - best effort; the file still goes below.
             logger.warning("second-device %s failed (%s)", step, type(exc).__name__)
+            if step == "logout":
+                confirmed = False
+    if not confirmed:
+        logger.warning("second-device session file kept: the logout was not confirmed")
+        return
     try:
         await _remove_session_file(session_path)
     except OSError as exc:
         logger.warning("second-device session file kept (%s)", type(exc).__name__)
+        return
+    await close_quietly(intent_id, "undone")
 
 
 async def _primary_identity(primary: TelegramClient) -> _Identity | None:
@@ -280,6 +300,13 @@ async def authorize_second_device(request: SecondDeviceSignIn) -> SecondDeviceRe
         _auth_lock(request.account_id),
         removing_client(request.account_id, request.device_type),
     ):
+        intent_id = await open_quietly(
+            account_id=request.account_id,
+            device_type=request.device_type,
+            session_name=request.session_name,
+            api_id=fingerprint.api_id,
+            device_json=fingerprint.model_dump_json(),
+        )
         refusal = await _attempt(
             request,
             create_telegram_client(profile),
@@ -287,6 +314,7 @@ async def authorize_second_device(request: SecondDeviceSignIn) -> SecondDeviceRe
             primary,
             identity,
             fingerprint,
+            intent_id,
         )
     return refusal or SecondDeviceResult(
         account_id=request.account_id, device_type=request.device_type
@@ -300,6 +328,7 @@ async def _attempt(  # noqa: PLR0913 - one sign-in's whole context
     primary: TelegramClient,
     identity: _Identity,
     fingerprint: DeviceFingerprint,
+    intent_id: int | None = None,
 ) -> SecondDeviceResult | None:
     """One sign-in, recorded or undone; the refusal, or ``None`` once it is recorded."""
     signed_in = False
@@ -309,6 +338,7 @@ async def _attempt(  # noqa: PLR0913 - one sign-in's whole context
             await client.connect()
         await _sign_in(client, primary, request, identity)
         signed_in = True
+        await advance_quietly(intent_id, stage="signed_in")
         await _confirm_same_user(client, identity.user_id)
         # The commit runs on a worker thread a cancellation cannot stop, so it is
         # shielded and its outcome read below rather than guessed.
@@ -318,18 +348,32 @@ async def _attempt(  # noqa: PLR0913 - one sign-in's whole context
         # Abandoned mid-sign-in: keep what was recorded, revoke and remove anything else.
         if await _recorded(recording):
             await asyncio.shield(_close(client, request.account_id))
+            await asyncio.shield(close_quietly(intent_id, "done"))
         else:
-            await asyncio.shield(_discard(client, session_path, signed_in=signed_in))
+            await asyncio.shield(
+                _discard_abandoned(client, session_path, signed_in=signed_in, intent_id=intent_id)
+            )
         raise
     except Exception as exc:  # noqa: BLE001 - every failure is classified and undone.
-        if isinstance(exc, TimeoutError) and not signed_in:
-            # The deadline may have fired AFTER Telegram accepted the sign-in: that
-            # authorization must be revoked, not leaked with the discarded file.
+        if not signed_in and not isinstance(exc, (errors.RPCError, _SignInRefusedError)):
+            # Anything but Telegram's own refusal (a deadline, a dropped socket, a proxy
+            # fault) may have hit AFTER it accepted the sign-in: that authorization must be
+            # revoked, not leaked with the discarded file.
             signed_in = await _authorized_after_timeout(client)
-        await _discard(client, session_path, signed_in=signed_in)
+        await _discard(client, session_path, signed_in=signed_in, intent_id=intent_id)
         return _classify(request, exc)
     await _close(client, request.account_id)
+    await close_quietly(intent_id, "done")
     return None
+
+
+async def _discard_abandoned(
+    client: TelegramClient, session_path: str, *, signed_in: bool, intent_id: int | None
+) -> None:
+    """Undo a sign-in the caller walked away from; Telegram may have accepted it just before."""
+    if not signed_in:
+        signed_in = await _authorized_after_timeout(client)
+    await _discard(client, session_path, signed_in=signed_in, intent_id=intent_id)
 
 
 async def _recorded(recording: asyncio.Future[None] | None) -> bool:

@@ -23,6 +23,7 @@ The gateway function is imported at module scope so tests monkeypatch it at
 
 from __future__ import annotations
 
+import asyncio
 import weakref
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -47,11 +48,14 @@ if TYPE_CHECKING:
 __all__ = [
     "forget_login_baseline",
     "mark_session_ours",
+    "record_accepted_web_login",
     "record_own_web_login",
     "remember_login_baseline",
 ]
 
 _KIND = "web"
+# The acceptance-time write must never hold up the login behind a stuck database.
+_ACCEPT_RECORD_TIMEOUT_SECONDS = 5.0
 # A seller on a desktop/mobile app in the same window must never become ours.
 _KIND_MARK = "web"
 # Authorization hashes the account listed when each window was launched, kept with the window
@@ -111,6 +115,37 @@ def _candidates(
     return [session.hash for session in web if session.hash not in baseline]
 
 
+async def record_accepted_web_login(account_id: str, accepted_hash: str) -> bool:
+    """Record the authorization WebK's token was just accepted into, the moment it is known.
+
+    Proof by construction: the token came out of OUR browser window through OUR relay and
+    was accepted by OUR session, so the hash Telegram returned is that browser's. Written
+    before anything else happens to the window, so a restart or a failed listing later
+    cannot leave the browser's login for ever shown as foreign. Bounded and never raising:
+    a failure is logged and the login goes on (the later recorder tries again).
+    """
+    try:
+        async with asyncio.timeout(_ACCEPT_RECORD_TIMEOUT_SECONDS):
+            await save_own_authorizations(
+                account_id, [accepted_hash], kind=_KIND, recorded_at=datetime.now(UTC).isoformat()
+            )
+    except Exception as exc:  # noqa: BLE001 - the login must not fail because of this
+        await log_event(
+            "WARNING",
+            "own_web_authorizations_unrecorded",
+            account_id=account_id,
+            extra={"error_type": type(exc).__name__, "at": "acceptance"},
+        )
+        return False
+    await log_event(
+        "INFO",
+        "own_web_authorizations_recorded",
+        account_id=account_id,
+        extra={"at": "acceptance", "hash_tail": accepted_hash[-4:]},
+    )
+    return True
+
+
 async def record_own_web_login(
     account_id: str, window: WebWindow, *, accepted_hash: str | None = None
 ) -> int:
@@ -125,6 +160,17 @@ async def record_own_web_login(
     baseline = _baselines.get(window)
     async with account_audit_lock(account_id):
         listing, known = await _list_sessions(account_id)
+        if accepted_hash and known.get(accepted_hash) == _KIND:
+            # Already ours since the acceptance: only the saved audit is left to refresh.
+            await _refresh_snapshot(account_id, known)
+            forget_login_baseline(window)
+            await log_event(
+                "INFO",
+                "own_web_authorizations_recorded",
+                account_id=account_id,
+                extra={"at": "refresh", "listed": len(listing.sessions)},
+            )
+            return 1
         fresh = _candidates(listing.sessions, baseline, accepted_hash)
         if len(fresh) == 1:
             now = datetime.now(UTC).isoformat()

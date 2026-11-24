@@ -83,6 +83,9 @@ class RekeyResult(BaseModel):
 
     old_hash: str = Field(pattern=r"^-?[0-9]+$")
     new_hash: str = Field(pattern=r"^-?[0-9]+$")
+    # The journal row of this re-key (``account_key_intents``): the service closes it once
+    # the old hash is stored. ``None`` only for a caller that journals nothing.
+    intent_id: int | None = None
 
 
 class StoredRekey(BaseModel):

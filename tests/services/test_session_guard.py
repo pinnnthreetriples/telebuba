@@ -24,6 +24,28 @@ def _fresh(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(_loop, "run_file_reconciliation", _no_file_look)
 
+    # Likewise the key-intent repair (``test_key_repair``): a real read of the journal.
+    async def _no_key_repair() -> int:
+        return 0
+
+    monkeypatch.setattr(_loop, "repair_key_intents", _no_key_repair)
+
+    # And the link re-check (``test_link_status``): a real list of the accounts.
+    async def _no_recheck() -> None:
+        return None
+
+    monkeypatch.setattr(_loop, "run_recheck_pass", _no_recheck)
+
+    # The proxy watch and the stray-pod stop have their own tests (``test_proxy_watch``).
+    async def _no_proxy_watch() -> str | None:
+        return None
+
+    async def _no_pods_stopped() -> int:
+        return 0
+
+    monkeypatch.setattr(_loop, "run_proxy_watch_pass", _no_proxy_watch)
+    monkeypatch.setattr(_loop, "stop_pods_off_proxy", _no_pods_stopped)
+
 
 def _steps(
     monkeypatch: pytest.MonkeyPatch, *, old_keys: int | BaseException, watched: str | None
@@ -191,3 +213,31 @@ async def test_shutdown_cancels_a_step_in_flight(monkeypatch: pytest.MonkeyPatch
     await asyncio.wait_for(session_guard.shutdown_session_guard(), timeout=5)
 
     assert task.done()
+
+
+@pytest.mark.asyncio
+async def test_the_proxy_watch_and_the_stray_pod_stop_run_each_pass_and_failures_stay_logged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _steps(monkeypatch, old_keys=0, watched=None)
+    ran: list[str] = []
+    events = _capture_events(monkeypatch)
+
+    async def _proxy() -> str | None:
+        ran.append("proxy_watch")
+        msg = "boom"
+        raise RuntimeError(msg)
+
+    async def _pods() -> int:
+        ran.append("pods_off_proxy")
+        return 2
+
+    monkeypatch.setattr(_loop, "run_proxy_watch_pass", _proxy)
+    monkeypatch.setattr(_loop, "stop_pods_off_proxy", _pods)
+
+    await _loop.run_guard_pass()
+
+    assert ran == ["proxy_watch", "pods_off_proxy"]
+    assert [(e[1], e[2]) for e in events if e[1] == "session_guard_failed"] == [
+        ("session_guard_failed", {"step": "proxy_watch", "error_type": "RuntimeError"})
+    ]

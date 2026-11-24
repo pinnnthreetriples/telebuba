@@ -171,3 +171,22 @@ async def test_a_hung_baseline_listing_never_holds_the_window_launch(
     await asyncio.wait_for(_web_drive_run.take_login_baseline("acct", cast("Any", object())), 5)
 
     assert events == ["own_web_baseline_failed"]
+
+
+@pytest.mark.usefixtures("relay")
+@pytest.mark.asyncio
+async def test_the_accepted_hash_is_recorded_at_acceptance_before_the_background_task(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: dict[str, Any] = {}
+    _patch_proxy(monkeypatch, _PROXY)
+    _patch_profile(monkeypatch, tmp_path / "acct")
+    _wire(monkeypatch, calls, states=["qr"])  # never signs in: no background task ever runs
+    monkeypatch.setattr(web_login, "_DRIVE_TIMEOUT", 0.05)
+
+    result = await open_account_web("acct")
+    await _settle_recorders()
+
+    assert result.signed_in is False
+    assert "recorded" not in calls
+    assert calls["accepted_recorded"][0] == ("acct", "777")

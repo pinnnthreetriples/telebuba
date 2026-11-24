@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,7 @@ from core.db import (
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
 from core.phone_geo import evaluate_geo
+from core.session_vault import write_tombstone
 from core.telegram_client import (
     account_auth_lock,
     cancel_qr_login,
@@ -26,6 +28,7 @@ from core.telegram_client import (
 )
 from schemas.geo import GeoMatch
 from schemas.lifecycle import AccountDeleteReasonGuess
+from services.accounts._recovery_bundle import build_recovery_bundle
 from services.accounts._result import AccountNotFoundError
 from services.accounts.devices import forget_device_cooldown
 from services.accounts.web_windows import forget_account_web
@@ -104,6 +107,20 @@ async def _wait_for_channel_search(account_id: str) -> None:
 
     while (ended := _account_owner.loan_end(account_id)) is not None:
         await ended.wait()
+
+
+async def _write_tombstone(account: AccountRead) -> None:
+    """Leave the recovery bundle in the quarantine before the row goes; never blocks the delete."""
+    try:
+        bundle = await build_recovery_bundle(account, deleted=True)
+        await asyncio.to_thread(write_tombstone, account.session_name or account.account_id, bundle)
+    except Exception as exc:  # noqa: BLE001 - a missing tombstone must not keep an account alive.
+        await log_event(
+            "WARNING",
+            "account_tombstone_failed",
+            account_id=account.account_id,
+            extra={"error_type": type(exc).__name__},
+        )
 
 
 async def remove_account(  # noqa: PLR0915 - one ordered teardown sequence
@@ -203,6 +220,7 @@ async def remove_account(  # noqa: PLR0915 - one ordered teardown sequence
                 # an unvalidated id (``..\..\evil``) unlinked whatever that
                 # resolved to. Guard, never sanitise; the API maps this to 404.
                 raise AccountNotFoundError(account_id)
+            await _write_tombstone(account)
             await remove_account_session(account_id, account.session_name)
             # The account's second authorization is its own ``.session``; its
             # fingerprint row goes with the rest of the account's rows below.

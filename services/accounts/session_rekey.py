@@ -49,6 +49,8 @@ from core.telegram_client import (
 )
 from schemas.session_rekey import AccountRekeyView, StoredRekey
 from services._account_owner import is_lent, owner_of
+from services.accounts._key_repair import repair_key_intents
+from services.accounts._key_repair_rekey import finish_gateway_rekey, settle_legacy_leftover
 from services.accounts._old_key_checklist import old_key_checklist
 from services.accounts._result import AccountActionError
 from services.accounts._session_classify import parse_moment
@@ -282,6 +284,11 @@ async def rekey_account_session(account_id: str) -> AccountRekeyView:
     scratch = f"{account.session_name or account_id}_rekey"
     passwords = await twofa_password_candidates(account_id)
     async with account_audit_lock(account_id):
+        # What an earlier interrupted re-key left: finished or undone first. A swap that had
+        # landed leaves the old key open for the operator, and starts nothing over it.
+        await repair_key_intents(account_id)
+        if await settle_legacy_leftover(account, scratch):
+            return await _view(account, await fetch_rekey(account_id))
         # Inside the lock: a concurrent rekey that finished while this one waited has
         # left its pending row, and a second rekey must not start over it.
         previous = await fetch_rekey(account_id)
@@ -307,14 +314,14 @@ async def rekey_account_session(account_id: str) -> AccountRekeyView:
             if exc.code == _INCOMPLETE and exc.old_hash:
                 await _keep_incomplete(account_id, exc.old_hash)
             raise AccountActionError(exc.code, retry_after_seconds=exc.retry_after_seconds) from exc
-        stored = StoredRekey(
-            account_id=account_id,
-            old_hash=result.old_hash,
-            rekeyed_at=_now().isoformat(),
+        stored = await finish_gateway_rekey(
+            account_id,
+            device,
+            scratch,
+            result,
             # Off, no time to try: the operator closes it from the card.
             close_after=_now().isoformat() if _auto_close() else None,
         )
-        await save_rekey(stored)
         await log_event("INFO", "session_rekeyed", account_id=account_id)
         if _auto_close():
             stored = await _end_old_key(account, stored)

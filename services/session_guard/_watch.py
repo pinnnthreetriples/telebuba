@@ -10,9 +10,10 @@ It is a read of one list, not an action, but it is still a Telegram connection t
 account's proxy, so it is paced like the survival probes (``services.survival``): one account
 per pass, no two accounts behind the same proxy within a spacing, and an interval per account
 drawn afresh from a range (a clipped log-normal, drawn here: core holds no randomness), so a
-fleet imported together never reads in step. An account another feature holds is skipped
-until it is free. Due times and proxy stamps live in memory, which is safe with one uvicorn
-worker; after a restart the saved audit time and a fresh draw decide, and the first pass waits.
+fleet imported together never reads in step. An account another feature holds (warming,
+campaigns) is read once its last audit is older than ``watch_busy_hours``; a lent one never.
+Due times and proxy stamps live in memory, which is safe with one uvicorn worker; after a
+restart the saved audit time and a fresh draw decide, and the first pass waits.
 
 An account that has a stored passkey is asked whether Telegram still lists it
 (``check_account_passkey``, read-only): a passkey that is gone means somebody else was in the
@@ -48,6 +49,7 @@ from services.accounts import (
     check_account_session,
     check_passkey_vault,
 )
+from services.session_guard._security_watch import check_security
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -86,14 +88,23 @@ def _interval() -> timedelta:
     )
 
 
-def _free(account: AccountRead) -> bool:
-    """An alive account behind a proxy that no other feature holds right now."""
-    return (
-        account.status == "alive"
-        and account.proxy_id is not None
-        and owner_of(account.account_id) is None
-        and not is_lent(account.account_id)
-    )
+def _free(account: AccountRead, audited: dict[str, str], now: datetime) -> bool:
+    """An alive account behind a proxy that no other feature holds right now.
+
+    An account another feature holds (warming for weeks) is still read once its last audit is
+    older than ``watch_busy_hours``, or when it was never audited at all (nobody has ever
+    looked at who else holds it): the read is one list through the pooled client and does not
+    take the account from its owner. A lent account never is.
+    """
+    if account.status != "alive" or account.proxy_id is None or is_lent(account.account_id):
+        return False
+    if owner_of(account.account_id) is None:
+        return True
+    last = audited.get(account.account_id)
+    if last is None:
+        return True
+    busy = timedelta(hours=settings.session_audit.watch_busy_hours)
+    return now - datetime.fromisoformat(last) >= busy
 
 
 def _due_at(account: AccountRead, audited: dict[str, str], now: datetime) -> datetime:
@@ -119,7 +130,7 @@ def _pick(
     spacing = timedelta(seconds=settings.session_audit.watch_proxy_spacing_seconds)
     ready: list[tuple[datetime, AccountRead]] = []
     for account in accounts:
-        if not _free(account):
+        if not _free(account, audited, now):
             continue
         due = _due_at(account, audited, now)
         last_on_proxy = _state.asked_by_proxy.get(account.proxy_id or "")
@@ -175,6 +186,7 @@ async def run_watch_pass(*, now: datetime | None = None) -> str | None:
     await check_passkey_vault(account.account_id)
     if answered:
         await _check_passkey(account.account_id)
+        await check_security(account.account_id)
     return account.account_id
 
 

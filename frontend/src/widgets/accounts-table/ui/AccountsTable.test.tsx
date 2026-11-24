@@ -166,6 +166,25 @@ test('a row without a stored passkey says so; unknown stays quiet', () => {
   expect(screen.getAllByText('без passkey')).toHaveLength(1);
 });
 
+test('notes a failing link beside the key state, only on the row that has one', () => {
+  render(
+    <AccountsTable
+      data={[
+        { ...ACCOUNTS[0]!, status: 'alive', link_status: 'proxy_error' },
+        { ...ACCOUNTS[1]!, link_status: null },
+      ]}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+
+  const notes = screen.getAllByTestId('account-link-status');
+  expect(notes).toHaveLength(1);
+  expect(notes[0]).toHaveAttribute('data-link', 'proxy_error');
+});
+
 test('fires the row actions for the clicked account', async () => {
   const onCheck = vi.fn();
   const onDelete = vi.fn();
@@ -475,4 +494,30 @@ test('the page slots render around the identity, and selected rows are tinted', 
   expect(screen.getByText('tags acc-2')).toBeInTheDocument();
   expect(screen.getByText('pick acc-2').closest('tr')).toHaveClass('bg-info-tint');
   expect(screen.getByText('pick acc-1').closest('tr')).not.toHaveClass('bg-info-tint');
+});
+
+test('a row shows its protection chip with the missing items in the tooltip', () => {
+  const protectedRows: AccountRead[] = [
+    {
+      account_id: 'prot-1',
+      status: 'alive',
+      created_at: 'now',
+      updated_at: 'now',
+      protection: { score: 5, total: 7, missing: ['proxy', 'passkey'] },
+    },
+    { account_id: 'prot-2', status: 'alive', created_at: 'now', updated_at: 'now' },
+  ];
+  render(
+    <AccountsTable
+      data={protectedRows}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+  const chips = screen.getAllByTestId('account-protection');
+  expect(chips).toHaveLength(1);
+  expect(chips[0]).toHaveTextContent('Защита 5/7');
+  expect(chips[0]?.title).toContain('Не привязан прокси');
 });

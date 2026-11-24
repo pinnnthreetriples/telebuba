@@ -44,10 +44,11 @@ class _Wire:
         self.passkey_state = "present"
         self.vault_checked: list[str] = []
         self.events: list[tuple[str, str, str | None]] = []
+        self.security_checked: list[str] = []
 
 
 @pytest.fixture
-def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:
+def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:  # noqa: C901 - one stub per seam
     state = _Wire()
     _watch.reset_for_tests()
     _account_owner.reset_for_tests()
@@ -87,6 +88,11 @@ def wire(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Wire]:
     monkeypatch.setattr(_watch, "fetch_account_passkey", _has_passkey)
     monkeypatch.setattr(_watch, "check_account_passkey", _passkey)
     monkeypatch.setattr(_watch, "check_passkey_vault", _vault)
+
+    async def _security(account_id: str) -> None:
+        state.security_checked.append(account_id)
+
+    monkeypatch.setattr(_watch, "check_security", _security)
     monkeypatch.setattr(_watch, "log_event", _log)
     yield state
     _account_owner.reset_for_tests()
@@ -147,10 +153,20 @@ async def test_only_alive_free_accounts_behind_a_proxy_are_read(wire: _Wire) -> 
         _account("ok", proxy="p9"),
     ]
     _account_owner.try_claim("busy", "warming", "run-1")
+    # Held by warming and audited an hour ago: not due while its owner works.
+    wire.audited = {"busy": (NOW - timedelta(hours=1)).isoformat()}
 
     assert await _watch.run_watch_pass(now=NOW) == "ok"
     assert await _watch.run_watch_pass(now=NOW) is None
     assert wire.reads == ["ok"]
+
+
+@pytest.mark.asyncio
+async def test_a_busy_account_nobody_ever_audited_is_read(wire: _Wire) -> None:
+    wire.accounts = [_account("busy")]
+    _account_owner.try_claim("busy", "warming", "run-1")
+
+    assert await _watch.run_watch_pass(now=NOW) == "busy"
 
 
 @pytest.mark.asyncio
@@ -249,3 +265,50 @@ async def test_the_vault_is_checked_each_pass_whether_or_not_the_audit_answered(
     await _watch.run_watch_pass(now=NOW)
 
     assert wire.vault_checked == ["a"]
+
+
+@pytest.mark.asyncio
+async def test_a_busy_account_is_read_once_its_last_audit_is_older_than_the_busy_hours(
+    wire: _Wire,
+) -> None:
+    wire.accounts = [_account("warming")]
+    _account_owner.try_claim("warming", "warming", "run-1")
+    wire.audited = {"warming": (NOW - timedelta(hours=25)).isoformat()}
+    _watch._state.due["warming"] = NOW
+
+    assert await _watch.run_watch_pass(now=NOW) == "warming"
+    assert wire.reads == ["warming"]
+    assert _account_owner.owner_of("warming") is not None  # the owner keeps the account
+
+
+@pytest.mark.asyncio
+async def test_a_busy_account_audited_recently_is_left_alone(wire: _Wire) -> None:
+    wire.accounts = [_account("warming")]
+    _account_owner.try_claim("warming", "warming", "run-1")
+    wire.audited = {"warming": (NOW - timedelta(hours=23)).isoformat()}
+    _watch._state.due["warming"] = NOW
+
+    assert await _watch.run_watch_pass(now=NOW) is None
+    assert wire.reads == []
+
+
+@pytest.mark.asyncio
+async def test_a_lent_account_is_never_read_however_old_its_audit(wire: _Wire) -> None:
+    wire.accounts = [_account("lent")]
+    _account_owner.lend("lent", "laptop")
+    wire.audited = {"lent": (NOW - timedelta(days=30)).isoformat()}
+    _watch._state.due["lent"] = NOW
+
+    assert await _watch.run_watch_pass(now=NOW) is None
+    assert wire.reads == []
+
+
+@pytest.mark.asyncio
+async def test_the_security_watch_runs_after_an_answered_audit_only(wire: _Wire) -> None:
+    wire.accounts = [_account("a", proxy="p1"), _account("b", proxy="p2")]
+    wire.refusal["b"] = "unavailable"
+
+    await _watch.run_watch_pass(now=NOW)
+    await _watch.run_watch_pass(now=NOW)
+
+    assert wire.security_checked == ["a"]

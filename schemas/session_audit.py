@@ -49,10 +49,11 @@ class AccountSession(BaseModel):
     # authorization it is.
     is_ours: bool
     # What made an own authorization that is not a Telethon device: ``web`` is Telebuba's
-    # own Telegram Web login (recorded when it ended); ``manual`` one the operator marked
-    # as ours (an orphan of a failed sign-in, a login made by hand). ``None`` for a device
-    # of ours and for every foreign session.
-    kind: Literal["web", "manual"] | None = None
+    # own Telegram Web login (recorded when it ended); ``phone`` the sign-in of the
+    # container's Telegram app (recorded when it reached the chat list); ``manual`` one the
+    # operator marked as ours (an orphan of a failed sign-in, a login made by hand). ``None``
+    # for a device of ours and for every foreign session.
+    kind: Literal["web", "phone", "manual"] | None = None
     # One of ours whose key was created BEFORE the account was added to Telebuba: the
     # seller made it and very likely still holds a copy. The device name shown is the
     # fingerprint Telebuba presents, the date is the key's; the remedy is the re-key.

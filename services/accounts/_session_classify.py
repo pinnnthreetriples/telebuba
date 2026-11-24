@@ -32,11 +32,11 @@ def parse_moment(value: str | None) -> datetime | None:
 
 
 def mark_own(sessions: list[AccountSession], own: Mapping[str, str]) -> list[AccountSession]:
-    """``sessions`` with every recorded own authorization marked ours (``web`` or ``manual``)."""
+    """``sessions`` with every recorded own authorization (web, phone, manual) marked ours."""
     marked: list[AccountSession] = []
     for session in sessions:
         kind = own.get(session.hash)
-        if kind in {"web", "manual"} and not session.is_ours:
+        if kind in {"web", "phone", "manual"} and not session.is_ours:
             session = session.model_copy(update={"is_ours": True, "kind": kind})  # noqa: PLW2901
         marked.append(session)
     return marked

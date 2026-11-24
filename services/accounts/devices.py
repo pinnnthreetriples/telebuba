@@ -20,6 +20,8 @@ from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client import authorize_second_device, mobile_api_configured
 from schemas.devices import DeviceRefusalCode, SecondDeviceSignIn
+from services.accounts._expected_codes import expect_login_code
+from services.accounts._key_repair import repair_key_intents
 from services.accounts._result import AccountActionError, AccountNotFoundError
 
 if TYPE_CHECKING:
@@ -36,6 +38,7 @@ __all__ = [
 ]
 
 _LAST_CODE_REQUEST: dict[str, float] = {}
+_CODE_MARGIN_SECONDS = 60.0
 _PRESENT: DeviceRefusalCode = "device_already_present"
 _NO_MOBILE_API: DeviceRefusalCode = "mobile_api_not_configured"
 _COOLDOWN: DeviceRefusalCode = "device_code_cooldown"
@@ -88,6 +91,11 @@ def claim_code_request(account_id: str) -> None:
         if left > 0:
             raise DeviceRefusedError(_COOLDOWN, retry_after_seconds=left)
     _LAST_CODE_REQUEST[account_id] = now
+    # The code that follows is ours: the inbox must not report it as somebody else's.
+    wait = max(
+        settings.telegram.second_device_code_wait_seconds, settings.emulator.code_wait_seconds
+    )
+    expect_login_code(account_id, wait + _CODE_MARGIN_SECONDS)
 
 
 async def sign_in_account_device(account_id: str, device_type: DeviceType) -> AccountRead:
@@ -101,6 +109,8 @@ async def sign_in_account_device(account_id: str, device_type: DeviceType) -> Ac
     if device_type in account.devices:
         raise DeviceRefusedError(_PRESENT)
     assert_device_configured(device_type)
+    # An earlier attempt that was cut short leaves a file that refuses this one: settle it first.
+    await repair_key_intents(account_id)
     claim_code_request(account_id)
     result = await authorize_second_device(
         SecondDeviceSignIn(

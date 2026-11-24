@@ -37,6 +37,12 @@ NotificationKind = Literal[
     "db_maintenance",
     "twofa_store_failed",
     "session_file_missing",
+    "interrupted_key_flow",
+    "phone_signed_out",
+    "twofa_reset_pending",
+    "security_changed",
+    "login_code_unrequested",
+    "proxy_problem",
 ]
 BotSendStatus = Literal["sent", "rejected", "unreachable"]
 

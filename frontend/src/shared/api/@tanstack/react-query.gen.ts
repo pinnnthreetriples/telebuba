@@ -91,6 +91,7 @@ import {
   getAccountProfileSnapshot,
   getAccountRekey,
   getAccountSessionAudit,
+  getAccountSessionCopies,
   getAccountTwofa,
   getActiveBulkMessageJob,
   getActiveContactLookupJob,
@@ -206,6 +207,7 @@ import {
   resendAccountTwofaEmail,
   resetAccountSession,
   resolveChatBroadcastTargets,
+  restoreAccountSession,
   resyncAccountAvatar,
   rewarmAccount,
   saveChatBroadcastPace,
@@ -520,6 +522,9 @@ import type {
   GetAccountSessionAuditData,
   GetAccountSessionAuditError,
   GetAccountSessionAuditResponse,
+  GetAccountSessionCopiesData,
+  GetAccountSessionCopiesError,
+  GetAccountSessionCopiesResponse,
   GetAccountTwofaData,
   GetAccountTwofaError,
   GetAccountTwofaResponse,
@@ -862,6 +867,9 @@ import type {
   ResolveChatBroadcastTargetsData,
   ResolveChatBroadcastTargetsError,
   ResolveChatBroadcastTargetsResponse,
+  RestoreAccountSessionData,
+  RestoreAccountSessionError,
+  RestoreAccountSessionResponse,
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
@@ -1233,6 +1241,7 @@ export const listAccountsQueryKey = (options?: Options<ListAccountsData>) =>
  * ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
  * ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
  * ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
+ * ``unprotected``: only accounts that miss a protection (the row's ``protection.missing``).
  */
 export const listAccountsOptions = (options?: Options<ListAccountsData>) =>
   queryOptions<
@@ -1299,6 +1308,7 @@ export const listAccountsInfiniteQueryKey = (
  * ``status``: ``all``, a stat-tile bucket (``active`` / ``idle`` / ``needs_code`` /
  * ``problem``) or one raw account status. ``folder``: a folder id or ``unfiled``.
  * ``phone_code``: a calling code (``7``). ``proxy_country``: ISO alpha-2 or ``none``.
+ * ``unprotected``: only accounts that miss a protection (the row's ``protection.missing``).
  */
 export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>) => {
   const opts = infiniteQueryOptions<
@@ -4386,6 +4396,65 @@ export const addAccountDeviceMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await addAccountDevice({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountSessionCopiesQueryKey = (options: Options<GetAccountSessionCopiesData>) =>
+  createQueryKey('getAccountSessionCopies', options);
+
+/**
+ * Get Account Session Copies
+ *
+ * How many vault copies the account's own session has and when the newest was made.
+ */
+export const getAccountSessionCopiesOptions = (options: Options<GetAccountSessionCopiesData>) =>
+  queryOptions<
+    GetAccountSessionCopiesResponse,
+    GetAccountSessionCopiesError,
+    GetAccountSessionCopiesResponse,
+    ReturnType<typeof getAccountSessionCopiesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountSessionCopies({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountSessionCopiesQueryKey(options),
+  });
+
+/**
+ * Restore Account Session Route
+ *
+ * Put the newest vault copy back when the account's session file is missing or keyless.
+ *
+ * Refused with a stable code (``session_restore_file_present``, ``session_vault_off``,
+ * ``session_restore_no_copy``); never over a file that holds a key.
+ */
+export const restoreAccountSessionMutation = (
+  options?: Partial<Options<RestoreAccountSessionData>>,
+): UseMutationOptions<
+  RestoreAccountSessionResponse,
+  RestoreAccountSessionError,
+  Options<RestoreAccountSessionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RestoreAccountSessionResponse,
+    RestoreAccountSessionError,
+    Options<RestoreAccountSessionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await restoreAccountSession({
         ...options,
         ...fnOptions,
         throwOnError: true,

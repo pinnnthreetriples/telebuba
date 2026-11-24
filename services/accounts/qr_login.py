@@ -80,9 +80,12 @@ _SESSION_NOT_DEAD: QrLoginErrorCode = "session_not_dead"
 _PLACEHOLDER_PREFIX = "qr-"
 # The statuses that say the account's own key no longer works: only then may a QR sign-in
 # write over its session file.
-_DEAD_STATUSES = frozenset({"unauthorized", "session_error", "session_file_missing"})
+# ``session_error`` is not one of them: it only means the account cannot be probed (mobile API or
+# credentials not configured), which proves nothing about the key.
+_DEAD_STATUSES = frozenset({"unauthorized", "session_file_missing"})
 _ACCOUNT_EXISTS: QrLoginErrorCode = "account_exists"
 _NO_QR_LOGIN: QrLoginErrorCode = "no_qr_login"
+_USER_MISMATCH: QrLoginErrorCode = "qr_user_mismatch"
 
 
 class QrLoginError(ValueError):
@@ -206,6 +209,20 @@ async def _finish(state: QrLoginState) -> AccountRead:
         result = state.result
         if result is None:  # pragma: no cover - the gateway publishes alive with a result
             raise QrLoginError(_NO_QR_LOGIN)
+        known = await fetch_account(account_id)
+        if (
+            known is not None
+            and not account_id.startswith(_PLACEHOLDER_PREFIX)
+            and known.user_id is not None
+            and result.user_id != known.user_id
+        ):
+            # Another Telegram user scanned this account's QR: the stored password, passkey and
+            # proxy belong to the previous one. The row is a real account with a dead key, so
+            # it stays (``unauthorized``); only the authorization the scan made is ended.
+            await _end_scanned_session(account_id, account_id)
+            forget_qr_login(account_id)
+            await log_event("WARNING", "qr_login_user_mismatch", account_id=account_id)
+            raise QrLoginError(_USER_MISMATCH)
         existing_id = await _existing_account_of(account_id, result.user_id)
         if existing_id is not None:
             await _drop_duplicate(account_id, existing_id, result.session_path)
@@ -228,18 +245,10 @@ async def _existing_account_of(account_id: str, user_id: int | None) -> str | No
     return None
 
 
-async def _drop_duplicate(account_id: str, existing_id: str, session_path: str) -> None:
-    """Revoke the authorization the scan just created and delete the placeholder.
+async def _end_scanned_session(account_id: str, existing_id: str) -> bool:
+    """Log out the authorization a QR scan created; quarantine its file if that is unconfirmed.
 
-    The scanned account is already in Telebuba under another id, so this second
-    authorization is surplus: logging it out removes it from the account's device
-    list in Telegram, and the placeholder row goes with its ``.session`` file.
-
-    ``log_out_session`` does not raise when it could not confirm the logout: it RETURNS a
-    ``network_error`` and keeps the file. The authorization may then still be alive on the
-    existing account, so the file is set aside in the quarantine (never unlinked, it is the
-    only copy of that key) before the row goes, and the operator is told to close the surplus
-    session from the existing account's Sessions card.
+    ``False`` when the file could not be set aside (the row keeps owning it).
     """
     account = await fetch_account(account_id)
     session_name = account.session_name if account else None
@@ -288,8 +297,26 @@ async def _drop_duplicate(account_id: str, existing_id: str, session_path: str) 
                     "error_type": type(exc).__name__,
                 },
             )
-            forget_qr_login(account_id)
-            return
+            return False
+    return True
+
+
+async def _drop_duplicate(account_id: str, existing_id: str, session_path: str) -> None:
+    """Revoke the authorization the scan just created and delete the placeholder.
+
+    The scanned account is already in Telebuba under another id, so this second
+    authorization is surplus: logging it out removes it from the account's device
+    list in Telegram, and the placeholder row goes with its ``.session`` file.
+
+    ``log_out_session`` does not raise when it could not confirm the logout: it RETURNS a
+    ``network_error`` and keeps the file. The authorization may then still be alive on the
+    existing account, so the file is set aside in the quarantine (never unlinked, it is the
+    only copy of that key) before the row goes, and the operator is told to close the surplus
+    session from the existing account's Sessions card.
+    """
+    if not await _end_scanned_session(account_id, existing_id):
+        forget_qr_login(account_id)
+        return
     await discard_imported_session(account_id, Path(f"{session_path}.session"))
     forget_qr_login(account_id)
     await log_event(

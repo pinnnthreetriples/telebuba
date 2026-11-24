@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
+import time
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -32,6 +34,35 @@ _RETRIES: dict[str, asyncio.Task[None]] = {}
 _MONITORS: dict[str, asyncio.Task[None]] = {}
 _STARTUP_TASK: asyncio.Task[None] | None = None
 _START_SEMAPHORE = asyncio.Semaphore(3)
+# Starts behind one proxy are one at a time with a short random gap, so a fleet that shares a
+# proxy never connects in the same instant; accounts on different proxies still overlap.
+_START_GAP_SECONDS = (1.0, 3.0)
+_PROXY_LOCKS: dict[str, asyncio.Lock] = {}
+_NEXT_START_AT: dict[str, float] = {}
+# Seam for tests; only pauses and the monitor's jitter are drawn.
+_rng = random.Random()  # nosec B311  # noqa: S311 - pacing jitter, not security
+
+
+async def _pause(seconds: float) -> None:
+    await asyncio.sleep(seconds)
+
+
+async def _connect_behind_proxy(account_id: str, proxy_id: str | None) -> bool:
+    """Subscribe ``account_id``, one start at a time per proxy, a random gap after a connect."""
+    if proxy_id is None:  # direct: no proxy to share, nothing to serialize.
+        async with _START_SEMAPHORE:
+            return await subscribe_incoming_messages(account_id, on_message_received)
+    async with _PROXY_LOCKS.setdefault(proxy_id, asyncio.Lock()):
+        wait = _NEXT_START_AT.get(proxy_id, 0.0) - time.monotonic()
+        if wait > 0:
+            await _pause(wait)
+        # A start slot is taken only for the connection itself: accounts queued behind one
+        # proxy's lock and gap must not hold the slots other proxies' accounts could use.
+        async with _START_SEMAPHORE:
+            subscribed = await subscribe_incoming_messages(account_id, on_message_received)
+        if subscribed:
+            _NEXT_START_AT[proxy_id] = time.monotonic() + _rng.uniform(*_START_GAP_SECONDS)
+        return subscribed
 
 
 async def _start_account(account_id: str, account: AccountRead | None = None) -> bool:
@@ -43,7 +74,7 @@ async def _start_account(account_id: str, account: AccountRead | None = None) ->
         # Never connected without a proxy (it would use this computer's own IP); not a
         # failure to retry either.
         return False
-    subscribed = await subscribe_incoming_messages(account_id, on_message_received)
+    subscribed = await _connect_behind_proxy(account_id, getattr(account, "proxy_id", None))
     if subscribed:
         _ACTIVE.add(account_id)
         _schedule_monitor(account_id)
@@ -101,7 +132,8 @@ async def _monitor_account(account_id: str) -> None:
     delay = _HEALTH_INTERVAL_SECONDS
     outage_logged = False
     while _RUNNING and account_id in _ACTIVE:
-        await asyncio.sleep(delay)
+        # ±20 % so monitors that woke together (the PC slept) do not reconnect together.
+        await asyncio.sleep(delay * _rng.uniform(0.8, 1.2))
         try:
             attached = await ensure_incoming_message_connection(account_id)
             if not attached:
@@ -134,9 +166,8 @@ async def start_account_inbox(account_id: str) -> None:
     if not _RUNNING or account_id in _ACTIVE:
         return
     try:
-        async with _START_SEMAPHORE:
-            if await _start_account(account_id):
-                return
+        if await _start_account(account_id):
+            return
     except SessionFileMissingError:
         # Permanent until the operator restores the file: retrying only fills the log.
         await log_event("WARNING", "account_session_file_missing", account_id=account_id)
@@ -166,18 +197,17 @@ async def _reconcile_startup() -> None:
     async def start_bounded(account: AccountRead) -> None:
         if account.status in _NON_AUTHORIZED_STATUSES:
             return
-        async with _START_SEMAPHORE:
-            try:
-                await _start_account(account.account_id, account)
-            except Exception as exc:
-                logger.exception("inbox listener startup failed for %s", account.account_id)
-                await log_event(
-                    "WARNING",
-                    "inbox_listener_start_failed",
-                    account_id=account.account_id,
-                    extra={"error_type": type(exc).__name__},
-                )
-                _schedule_retry(account.account_id)
+        try:
+            await _start_account(account.account_id, account)
+        except Exception as exc:
+            logger.exception("inbox listener startup failed for %s", account.account_id)
+            await log_event(
+                "WARNING",
+                "inbox_listener_start_failed",
+                account_id=account.account_id,
+                extra={"error_type": type(exc).__name__},
+            )
+            _schedule_retry(account.account_id)
 
     while _RUNNING:
         try:
@@ -234,3 +264,5 @@ def _reset_for_tests() -> None:
     _MONITORS.clear()
     _STARTUP_TASK = None
     _START_SEMAPHORE = asyncio.Semaphore(3)
+    _PROXY_LOCKS.clear()
+    _NEXT_START_AT.clear()

@@ -12,6 +12,11 @@ asked for only as the per-account pacing allows. An app left on its number confi
 or code screen (a sign-in started by hand) is taken back to the phone screen with BACK
 and signed in from there. A cloud password Telegram does not take is a refusal of its
 own: the operator is needed, and no further code is requested for it.
+
+The authorization a sign-in creates is recorded as ours (``_phone_authorization``); one
+recorded already, on an app showing an entry screen, is settled first: warming then refuses
+to sign it in again. A pod whose proxy was changed under an open aborts it before the code
+is asked for (``_pod_cleanup``).
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.emulator import (
     EmulatorError,
+    app_error,
     confirm_number,
     enter_code,
     enter_password,
@@ -37,6 +43,8 @@ from core.telegram_client import (
 )
 from services.accounts._app_screen import APP_UNRESPONSIVE, restarted_if_frozen, settled_screen
 from services.accounts._mobile_progress import report_stage
+from services.accounts._phone_authorization import PhoneSignIn, settle_recorded_authorization
+from services.accounts._pod_cleanup import refuse_if_proxy_changed
 from services.accounts.devices import DeviceRefusedError, claim_code_request
 from services.accounts.twofa import authorising_twofa_password
 
@@ -48,6 +56,7 @@ if TYPE_CHECKING:
 
 _DEVICE_PHONE_UNKNOWN: DeviceRefusalCode = "device_phone_unknown"
 _DEVICE_PRIMARY_UNAVAILABLE: DeviceRefusalCode = "device_primary_unavailable"
+_EMULATOR_CODE_REFUSED: EmulatorRefusalCode = "emulator_code_refused"
 _EMULATOR_CODE_TIMEOUT: EmulatorRefusalCode = "emulator_code_timeout"
 _EMULATOR_FIELD_MISSING: EmulatorRefusalCode = "emulator_field_missing"
 _EMULATOR_PASSWORD_REJECTED: EmulatorRefusalCode = "emulator_password_rejected"  # noqa: S105 - a refusal code
@@ -69,22 +78,37 @@ _BACKS_TO_PHONE = 3
 # What a submitted code or password leads to.
 _PAST_CODE: set[Screen] = {"chats", "password", "permission", "contacts"}
 _SIGNED_IN: set[Screen] = {"chats"}
+# The screens of an app that is signed out (the rest of ``_ENTRY`` is a sign-in under way).
+_SIGNED_OUT: set[Screen] = {"intro", "phone", "confirm", "code"}
 
 
-async def sign_in(account: AccountRead, serial: str) -> None:
-    """Sign the app in until its chat list shows, or raise why it did not."""
-    await restarted_if_frozen(account.account_id, serial, partial(_sign_in, account, serial))
+async def sign_in(account: AccountRead, serial: str, *, background: bool = False) -> None:
+    """Sign the app in until its chat list shows, or raise why it did not.
+
+    ``background`` (warming) refuses an app that was signed in before (``emulator_signed_out``).
+    """
+    phone = PhoneSignIn(account.account_id)
+    await restarted_if_frozen(
+        account.account_id,
+        serial,
+        partial(_sign_in, account, serial, phone, background=background),
+    )
+    await phone.record()
 
 
-async def _sign_in(account: AccountRead, serial: str) -> None:
+async def _sign_in(
+    account: AccountRead, serial: str, phone: PhoneSignIn, *, background: bool
+) -> None:
     screen, nodes = await _wait(serial, _ENTRY)
+    if screen in _SIGNED_OUT:
+        await settle_recorded_authorization(account.account_id, background=background)
     if screen in {"confirm", "code"}:
         screen, nodes = await _back_to_phone(serial)
     if screen == "intro":
         await press_start(serial, nodes)
         screen, nodes = await _wait(serial, {"phone"})
     if screen == "phone":
-        screen, nodes = await _submit_phone_and_code(account, serial, nodes)
+        screen, nodes = await _submit_phone_and_code(account, serial, nodes, phone)
     if screen == "password":
         screen, nodes = await _submit_password(account, serial, nodes)
     if await settled_screen(serial, _SIGNED_IN, seen=(screen, nodes)) != "chats":
@@ -120,19 +144,24 @@ async def _submit_phone_and_code(
     account: AccountRead,
     serial: str,
     nodes: list[UiNode],
+    phone: PhoneSignIn,
 ) -> tuple[Screen, list[UiNode]]:
     if not account.phone:
         raise DeviceRefusedError(_DEVICE_PHONE_UNKNOWN)
     report_stage(account.account_id, "phone")
+    # A proxy changed under this open: nothing is asked of Telegram from the old address.
+    refuse_if_proxy_changed(account.account_id)
     claim_code_request(account.account_id)
     cutoff = await _code_cutoff(account.account_id)
+    await phone.take_baseline()
     await enter_phone(serial, nodes, account.phone)
     screen, nodes = await _wait(serial, {"confirm", "code", "password", "chats"})
     if screen == "confirm":
         await confirm_number(serial, nodes)
         screen, nodes = await _wait(serial, {"code", "password", "chats"})
     if screen != "code":
-        raise EmulatorError(_EMULATOR_FIELD_MISSING)
+        # Telegram's error dialog over the number: it will not send a code (flood, attempts).
+        raise EmulatorError(_EMULATOR_CODE_REFUSED if app_error(nodes) else _EMULATOR_FIELD_MISSING)
     report_stage(account.account_id, "code")
     try:
         code = await wait_account_login_code(
