@@ -70,6 +70,11 @@ class AclError(RuntimeError):
         self.code = code
 
 
+# Each Windows call sits behind a literal ``sys.platform`` check: the type checker follows
+# that test (and nothing else) when it decides what ``ctypes`` offers on the platform it runs on.
+_WINDOWS_ONLY = "NTFS access lists exist on Windows only"
+
+
 def _split_dacl(sddl: str) -> tuple[str, list[str]] | None:
     """The DACL's flags text and its ACE bodies, or ``None`` when ``sddl`` has no ``D:`` part.
 
@@ -151,7 +156,9 @@ def broad_grants_in_sddl(sddl: str) -> list[str]:
     return found
 
 
-def _advapi32() -> ctypes.WinDLL:
+def _advapi32() -> ctypes.CDLL:
+    if sys.platform != "win32":
+        raise AclError(_WINDOWS_ONLY)
     advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
     advapi32.GetNamedSecurityInfoW.argtypes = [
         wintypes.LPCWSTR,
@@ -194,7 +201,9 @@ def _advapi32() -> ctypes.WinDLL:
     return advapi32
 
 
-def _kernel32() -> ctypes.WinDLL:
+def _kernel32() -> ctypes.CDLL:
+    if sys.platform != "win32":
+        raise AclError(_WINDOWS_ONLY)
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.LocalFree.argtypes = [ctypes.c_void_p]
     kernel32.LocalFree.restype = ctypes.c_void_p
@@ -206,7 +215,7 @@ def _kernel32() -> ctypes.WinDLL:
     return kernel32
 
 
-def _take_string(pointer: ctypes.c_void_p, kernel32: ctypes.WinDLL) -> str:
+def _take_string(pointer: ctypes.c_void_p, kernel32: ctypes.CDLL) -> str:
     """The text a Windows call allocated at ``pointer``; the allocation is freed."""
     try:
         return ctypes.wstring_at(pointer.value or 0)
@@ -217,8 +226,7 @@ def _take_string(pointer: ctypes.c_void_p, kernel32: ctypes.WinDLL) -> str:
 def read_sddl(path: Path) -> str:
     """The DACL of ``path`` as an SDDL string. Windows only."""
     if sys.platform != "win32":
-        msg = "NTFS access lists exist on Windows only"
-        raise AclError(msg)
+        raise AclError(_WINDOWS_ONLY)
     advapi32, kernel32 = _advapi32(), _kernel32()
     descriptor = ctypes.c_void_p()
     # A junction or symlink has a list of its own; the data lives behind it.
@@ -257,6 +265,8 @@ def broad_grants(path: Path) -> list[str]:
 
 def current_user_sid() -> str:
     """The SID of the user this process runs as (the token's owner, whatever the language)."""
+    if sys.platform != "win32":
+        raise AclError(_WINDOWS_ONLY)
     advapi32, kernel32 = _advapi32(), _kernel32()
     token = wintypes.HANDLE()
     if not advapi32.OpenProcessToken(
@@ -286,6 +296,8 @@ def current_user_sid() -> str:
 
 
 def _icacls() -> str:
+    if sys.platform != "win32":
+        raise AclError(_WINDOWS_ONLY)
     kernel32 = _kernel32()
     buffer = ctypes.create_unicode_buffer(260)
     if not kernel32.GetSystemDirectoryW(buffer, len(buffer)):

@@ -11,6 +11,7 @@ last_updated: 2026-10-10
 - Never print, log, commit or paste secrets, sessions, tdata, JWTs or proxy credentials.
 - Behavior changes ship with tests. Run one uvicorn worker.
 - Report only checks you actually ran.
+- Files in `configs/custody_manifest.toml` need the operator's `custody-reviewed` label; agents never add it.
 
 ## Read next
 - Commands, CI and hooks: `.mex/context/setup.md`.
