@@ -39,6 +39,8 @@ npx --yes mex-agent@0.8.3 check && npx --yes mex-agent@0.8.3 doctor
 cd frontend && npm run gates && npm run build
 ```
 
+Tests copy one per-process template database instead of building each from nothing (`tests/_db_template.py`). `TELEBUBA_TEST_FRESH_DB=1` turns that off for the whole run (Nightly's extended pytest and mutation jobs set it); `@pytest.mark.fresh_database` turns it off for one test.
+
 Run the relevant subset. `.github/workflows/*.yml` are the CI source of truth. Code CI and MEX memory CI run on every PR/push to `main`. MEX blocks on every issue except `STALE_FILE`, which only nags: it counts commits and days across the WHOLE repo, so it reddens on other people's activity and blocking it would just train agents to bump `last_updated`. The weekly MEX schedule is a backstop when no PR is open. A Claude Code Stop hook (`tools/mex_grow_gate.py`) demands GROW once per session and HEAD when branch commits touch code but not `.mex/`. Nightly is the third workflow and gates no PR: its mutation sweep over `services/`/`schemas/` is far too slow for one, so it holds a tracked aggregate score floor — never a demand that each mutant die — and reports catalogue drift rather than failing on it. Policy lives in `docs/mutation-testing.md`.
 
 Deep-domain memory is grounded: `grounds_to` in the frontmatter pins a claim to an exact code symbol, and CI rebuilds the graph (`.mex/graph.db`, gitignored, never committed) before checking. Delete a grounded symbol → `GROUNDING_GONE` (error). Change its BODY under a note still describing the old behaviour → `GROUNDING_DRIFT` (warning, and warnings block). A rename that keeps the body is silently reconciled as a move, by design.

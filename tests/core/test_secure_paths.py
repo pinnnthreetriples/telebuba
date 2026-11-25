@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _POSIX_ONLY = pytest.mark.skipif(os.name != "posix", reason="chmod is a no-op off POSIX")
+# The modes of a database as the build creates it: never a copy of the test template.
+pytestmark = pytest.mark.fresh_database
 
 
 def _mode(path: Path) -> int:

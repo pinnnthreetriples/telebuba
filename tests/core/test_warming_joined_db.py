@@ -123,6 +123,7 @@ def _create_legacy_joined(engine: object) -> None:
         )
 
 
+@pytest.mark.fresh_database  # asserts what the fresh build produced
 def test_the_step_is_idempotent_registered_and_keeps_legacy_rows_joined(
     legacy_engine: _EngineFactory,
 ) -> None:

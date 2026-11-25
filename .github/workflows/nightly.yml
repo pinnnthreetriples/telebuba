@@ -86,6 +86,9 @@ jobs:
     timeout-minutes: 30
     env:
       HYPOTHESIS_PROFILE: extended
+      # Every test database built from nothing, not copied from the per-process template
+      # (tests/_db_template.py): the daily full-fidelity control for that shortcut.
+      TELEBUBA_TEST_FRESH_DB: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -165,6 +168,9 @@ jobs:
       MUTMUT_MAX_CHILDREN: "4"
       PYTHONHASHSEED: "0"
       TZ: UTC
+      # Test databases built from nothing, as when the baseline was measured: copying the
+      # template (tests/_db_template.py) would move per-mutant timings and timeouts.
+      TELEBUBA_TEST_FRESH_DB: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

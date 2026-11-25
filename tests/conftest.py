@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 from telethon.client.telegrambaseclient import TelegramBaseClient
 
+import core.db as core_db
 from core.config import settings
 from core.db import configure_database
 from core.spam_signals import reset_signals_for_tests
@@ -20,6 +21,7 @@ from core.web_login.fingerprint import note_installed_browser
 from services import _account_owner, _join_lock, pacing
 from services.neuroshilling import _state as neuroshilling_state
 from services.spam_intel import _signals as spam_signal_receiver
+from tests import _db_template
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -130,6 +132,47 @@ def _isolate_database(tmp_path: Path) -> None:
     Tests that configure their own database still do: this is the floor.
     """
     configure_database(tmp_path / "telebuba.db")
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Mark every test in a file about building the database (``_db_template.FRESH_DB_PATHS``)."""
+    for item in items:
+        if _db_template.wants_fresh_database(item.path.relative_to(config.rootpath).as_posix()):
+            item.add_marker(_db_template.FRESH_DB_MARKER)
+
+
+@pytest.fixture(scope="session")
+def database_template(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> _db_template.DatabaseTemplate | None:
+    """Build this process's database template, before any test-level fixture can patch.
+
+    Session scope runs it ahead of every function fixture of the first test, so the build
+    sees the registry and the schema as imported, never a test's monkeypatch. Each xdist
+    worker builds its own. ``_isolate_database`` re-points the engine for every test.
+    """
+    if _db_template.fresh_database_forced():
+        return None
+    return _db_template.build_template(tmp_path_factory.mktemp("db-template"))
+
+
+@pytest.fixture(autouse=True)
+def _database_template_shortcut(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    database_template: _db_template.DatabaseTemplate | None,
+) -> None:
+    """Copy the template in where production code would build a database from nothing.
+
+    Only ever adds a copy before the real ``prepare_schema`` runs, and only when the copy is
+    what the build would produce (``DatabaseTemplate.matches``); see ``tests/_db_template.py``.
+    """
+    if database_template is None or request.node.get_closest_marker(_db_template.FRESH_DB_MARKER):
+        return
+    real = core_db.prepare_schema
+    monkeypatch.setattr(
+        core_db, "prepare_schema", _db_template.prepare_schema_from(database_template, real)
+    )
 
 
 @pytest.fixture(autouse=True)

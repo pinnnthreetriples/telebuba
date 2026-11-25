@@ -25,6 +25,7 @@ def _isolate_db(tmp_path: Path) -> None:
     configure_database(tmp_path / "telebuba.db")
 
 
+@pytest.mark.fresh_database  # what the build itself produces
 def test_runtime_table_created_and_migration_stamped() -> None:
     engine = _get_engine()
     assert inspect(engine).has_table("neurocomment_runtime")
@@ -64,6 +65,7 @@ async def test_clear_listener_id() -> None:
     assert await get_listener_account_id() is None
 
 
+@pytest.mark.fresh_database  # what the build itself produces
 def test_listener_running_migration_stamped_and_column_present() -> None:
     # Migration #24 splits the run flag from the remembered listener id.
     engine = _get_engine()

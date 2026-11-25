@@ -32,6 +32,7 @@ def _event(post_id: int, *, date_unix: int = 1_700_000_000) -> NewPostEvent:
     )
 
 
+@pytest.mark.fresh_database  # what the build itself produces
 def test_inbox_migration_creates_both_tables_index_and_stamp() -> None:
     engine = _get_engine()
     inspector = inspect(engine)
