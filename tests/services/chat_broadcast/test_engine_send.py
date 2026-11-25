@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from core.config import settings
 from core.repositories import chat_broadcast as repository
 from services.chat_broadcast import _seams
 from tests.services.chat_broadcast.fakes import refused, run_to_end, seed
@@ -251,7 +253,14 @@ async def test_a_spam_block_lifted_by_the_end_of_the_rest_brings_the_account_bac
 
 
 @pytest.mark.asyncio
-async def test_errors_in_a_row_take_the_account_out(telegram: FakeTelegram) -> None:
+@pytest.mark.usefixtures("no_rebalance")
+async def test_errors_in_a_row_take_the_account_out(
+    telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Both of a1's chats must stay with it, and the halt is what is read here: with a2 quick
+    # the balance would hand a1's second chat over before it failed there, and with a2 slow
+    # the retry would bring a1 back before the run ended (the recovery tests' business).
+    monkeypatch.setattr(settings.chat_broadcast, "halt_retry_max", 0)
     campaign_id = await seed(
         accounts=("a1", "a2"),
         targets=("@chat1", "@chat2", "@chat3", "@chat4"),
@@ -266,6 +275,42 @@ async def test_errors_in_a_row_take_the_account_out(telegram: FakeTelegram) -> N
     assert (roster["a1"].state, roster["a1"].halted_reason) == ("halted", "errors_in_a_row")
     skipped = [t for t in await repository.list_targets(campaign_id) if t.skip_reason == "error"]
     assert len(skipped) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("no_rebalance")
+async def test_the_halt_is_on_record_when_the_failed_chat_was_the_last_one(
+    telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings.chat_broadcast, "halt_retry_max", 0)
+    campaign_id = await seed(
+        accounts=("a1", "a2"),
+        targets=("@chat1", "@chat2", "@chat3", "@chat4"),
+        messages=("Hi",),
+        max_consecutive_errors=2,
+    )
+    telegram.send_answers["a1"] = [refused(error_type="RPCError"), refused(error_type="RPCError")]
+    # a1 gets no further than the skip of its second chat. Once a2 is through nothing is
+    # left, so the run ends and cancels a1 there: the halt must be on record by then.
+    add_event = repository.add_event
+    skips: list[str] = []
+
+    async def _add_event(campaign: str, chat_key: str, **fields: Any) -> None:
+        if fields["kind"] == "skipped":
+            skips.append(chat_key)
+            if len(skips) == 2:
+                await asyncio.Event().wait()
+        await add_event(campaign, chat_key, **fields)
+
+    monkeypatch.setattr(repository, "add_event", _add_event)
+
+    await run_to_end(campaign_id)
+
+    record = await repository.fetch_campaign(campaign_id)
+    assert record is not None
+    assert record.status == "done"
+    roster = {r.account_id: r for r in await repository.list_roster(campaign_id)}
+    assert (roster["a1"].state, roster["a1"].halted_reason) == ("halted", "errors_in_a_row")
 
 
 @pytest.mark.asyncio

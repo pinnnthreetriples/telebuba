@@ -4,6 +4,8 @@ A pass runs every working account in parallel until each has nothing left, has s
 its day, or dropped out. Then:
 
 * nothing left in work → ``done``;
+* an account that had found nothing left for it can take people another gave back as it
+  stopped → another pass at once;
 * an account spent its day → the campaign rests until the next day begins and goes on
   by itself (``resting``);
 * an account reached the operator's "stop after N" → the campaign pauses;
@@ -123,22 +125,33 @@ async def _pass(ctx: RunContext) -> RunOutcome | Literal["rest", "again"]:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-    return await _after_pass(ctx, outcomes)
+    stopped = {
+        account.account_id
+        for account, outcome in zip(live, outcomes, strict=True)
+        if outcome != "done"
+    }
+    return await _after_pass(ctx, outcomes, stopped)
 
 
 async def _after_pass(
-    ctx: RunContext, outcomes: list[_worker.WorkerOutcome]
+    ctx: RunContext, outcomes: list[_worker.WorkerOutcome], stopped: set[str]
 ) -> RunOutcome | Literal["rest", "again"]:
     if not await _anything_left(ctx):
         return "done"
     if all(outcome == "flood_out" for outcome in outcomes):
         return "floods"
-    if "resting" in outcomes or "flood_out" in outcomes:
-        return "rest"
-    if "volume" in outcomes:
+    resting = "resting" in outcomes or "flood_out" in outcomes
+    if "volume" in outcomes and not resting:
         return "volume"
-    # An account finished while another dropped out and gave its people back.
-    still = await live_accounts(ctx.campaign_id, ctx.halted)
+    # An account found nothing left for it while another still held people, and that one
+    # then gave them back: it dropped out, was flooded out or spent its day. The one that
+    # can still work takes them now instead of the campaign waiting for tomorrow. Accounts
+    # that stopped this pass are not asked: they would stop again at once.
+    still = [
+        account
+        for account in await live_accounts(ctx.campaign_id, ctx.halted)
+        if account.account_id not in stopped
+    ]
     targets = await repository.list_targets(ctx.campaign_id)
     if any(
         t.state in _moves.PICKABLE and _worker.takes(t, account.account_id)
@@ -146,7 +159,7 @@ async def _after_pass(
         for account in still
     ):
         return "again"
-    return "no_accounts"
+    return "rest" if resting else "no_accounts"
 
 
 async def _anything_left(ctx: RunContext) -> bool:
