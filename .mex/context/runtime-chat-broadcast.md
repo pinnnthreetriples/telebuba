@@ -1,7 +1,7 @@
 ---
 name: runtime-chat-broadcast
 description: Chat broadcast campaigns, joins into lists, chains, rounds and the board by chat.
-last_updated: 2026-11-18
+last_updated: 2026-11-25
 edges:
   - target: context/runtime-neuroshilling.md
     condition: the run lifecycle it copies, or the account-ownership registry
@@ -50,9 +50,14 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
 - The AI rewrite is an embellishment, never a gate: any failure or unsafe answer sends
   the operator's text.
 - An account Telegram stops is rested, not lost (`services/chat_broadcast/_rotation.py`):
-  a flood wait, its own limit or a spam block (known too) rests it until a known moment, a waker
-  brings it back, and its chats stay, are handed over or are all handed over by the
-  length of the rest. A ban is asked to @SpamBot at once: a clean account loses only
+  a flood wait, its own limit or a spam block (known too) rests it until a known moment and a waker
+  brings it back. Each of its chats goes to whoever would write there before it is back:
+  an account already inside (the campaign's join history counts) before a stranger, a
+  stranger only when its join and the operator's pause beat the rest, and no receiver past
+  the sends its limits leave it; otherwise the chat waits. Handing every chat on at each
+  hourly rest made them bounce between accounts, paying a re-join each time. While the rest is
+  its OWN limit (not Telegram's), the waker joins its next chats so the pause after a join
+  runs out during the rest. A ban is asked to @SpamBot at once: a clean account loses only
   that chat, moved once (skipped when it bans a second account); only a ban @SpamBot
   confirms rests the account. Only a dead session leaves for good.
 - The run does not stall while an account can come back. A busy account is claimed as
@@ -64,7 +69,10 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
   after `CHAT_BROADCAST__CLAIM_GIVE_UP_SECONDS`).
 - Supervisor and scheduler faults are logged and retried, never charged to an account.
 - Settings cannot be saved while a run is attached, except the pauses: they are read live
-  and the rests under way are redrawn from their own start.
+  and the rests under way are redrawn from their own start. The pause dialogs show each
+  pause's effect and a one-click recommendation (`model/paceTips.ts`); the default pause
+  between chats spreads the default hourly limit over the hour, and a test holds the two
+  together on both sides.
 - The run ends only when no chat is left in play, checked together with the write that
   marks the campaign done, so a chat kept from the board at that instant is never
   dropped. A volume stop (messages or time) ends the run in any state; chats it
