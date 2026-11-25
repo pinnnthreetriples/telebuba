@@ -51,6 +51,8 @@ OLD = b"old-auth-key"
 _EPOCH = datetime(2026, 11, 7, 13, 0, tzinfo=UTC)
 # Steps whose failure is a file or database fault, not a dropped connection.
 _IO_PREFIXES = ("file.", "journal.", "db.", "svc.", "gateway.", "vault.")
+# How long a worker thread waits for the loop to deliver the cancellation it asked for.
+_CANCEL_WAIT_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -389,9 +391,20 @@ class World:
         if on_loop:
             raise asyncio.CancelledError
         # A worker thread cannot be cancelled: the file operation runs on, the awaiter is told.
+        # The thread waits until the loop has cancelled the flow. A thread that returned first
+        # could finish before the loop attached to its future: asyncio then completes the call
+        # inside the awaiting step, the await never yields, and the flow runs on to its next
+        # await as if this step had succeeded (after a copy that was never made).
         task = self.task
         assert task is not None
-        task.get_loop().call_soon_threadsafe(task.cancel)
+        told = threading.Event()
+
+        def cancel() -> None:
+            task.cancel()
+            told.set()
+
+        task.get_loop().call_soon_threadsafe(cancel)
+        assert told.wait(_CANCEL_WAIT_SECONDS), "the cancellation was not delivered"
 
     # --- freezing the world at the instant of a death -------------------------------------------
 
