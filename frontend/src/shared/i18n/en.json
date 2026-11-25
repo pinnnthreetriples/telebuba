@@ -5003,7 +5003,40 @@
         "delay120": "2 hours",
         "betweenChats": "Between chats",
         "betweenChatsHint": "The pause before the next chat, random within these bounds every time.",
-        "betweenChatsExample": "30–90 s → wrote to chat A, 47 s later to chat B.",
+        "betweenChatsExample": "150–210 s → wrote to chat A, 3 min later to chat B.",
+        "tips": {
+          "apply": "Use it",
+          "hour": {
+            "lead": "An account is like a postman: at most {{cap}} letters an hour.",
+            "leadFree": "An account is like a postman: it delivers letters non-stop.",
+            "burst": "Too fast: {{sent}} letters in {{busy}} min, then asleep for {{rest}} min. Telegram dislikes such bursts.",
+            "even": "Great: letters go out evenly all hour.",
+            "slow": "Calm: {{sent}} of {{cap}} letters an hour.",
+            "free": "No limit: about {{sent}} letters an hour.",
+            "sleep": "asleep {{minutes}} min",
+            "from": "0 min",
+            "to": "60 min",
+            "advice": "Better {{min}}–{{max}} s — letters go out evenly."
+          },
+          "join": {
+            "entered": "Joined",
+            "waits": "Waits {{wait}}",
+            "noWait": "No wait",
+            "writes": "Writes",
+            "risky": "Writing right after joining gets accounts banned most often.",
+            "short": "Better than at once, but an hour is safer.",
+            "good": "Great: the chat gets used to the newcomer.",
+            "advice": "Best — 1 hour."
+          },
+          "rest": {
+            "wrote": "Wrote",
+            "rests": "Rest {{min}}–{{max}} min",
+            "again": "Writes again",
+            "often": "Too often: the same text every {{minutes}} min — admins will start deleting it.",
+            "good": "Great: one chat hears from us at most once an hour.",
+            "advice": "Best — 1–2 hours."
+          }
+        },
         "betweenMessages": "Between messages",
         "betweenMessagesHint": "The pause between the chain's messages in one chat.",
         "betweenMessagesExample": "Text, 5 s later — a photo.",

@@ -40,7 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   randomize: true,
   approval_wait_hours: 24,
   join_delay_minutes: 60,
-  between_chats: { min: 30, max: 90 },
+  between_chats: { min: 150, max: 210 },
   between_messages: { min: 3, max: 8 },
   typing: true,
   stop_mode: 'count',

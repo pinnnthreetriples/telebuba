@@ -35,6 +35,8 @@ _EVENTS = _chat_broadcast_events
 _CHARGED = ("pending", "sent", "unconfirmed", "deleted")
 # What "we already wrote there" means for the skip-already-written switch.
 _WRITTEN = ("sent", "unconfirmed", "deleted")
+# History entries that put an account inside a chat.
+_ENTERED = ("joined", "already_member")
 
 
 def _key_filter(key: JournalKey) -> ColumnElement[bool]:
@@ -264,3 +266,29 @@ def _list_events(campaign_id: str) -> list[EventRecord]:
 
 async def list_events(campaign_id: str) -> list[EventRecord]:
     return await asyncio.to_thread(_list_events, campaign_id)
+
+
+def _list_chat_members(campaign_id: str) -> dict[str, set[str]]:
+    statement = (
+        select(_EVENTS.c.chat_key, _EVENTS.c.account_id)
+        .where(
+            _EVENTS.c.campaign_id == campaign_id,
+            _EVENTS.c.kind.in_(_ENTERED),
+            _EVENTS.c.account_id.is_not(None),
+        )
+        .distinct()
+    )
+    members: dict[str, set[str]] = {}
+    with _get_engine().connect() as connection:
+        for chat_key, account_id in connection.execute(statement):
+            members.setdefault(chat_key, set()).add(account_id)
+    return members
+
+
+async def list_chat_members(campaign_id: str) -> dict[str, set[str]]:
+    """Every account this campaign ever got into each chat, by ``chat_key``.
+
+    Its history, not Telegram's word: an account removed since still shows. Picking who takes
+    a chat over is all it is for, and the join path checks membership before acting on it.
+    """
+    return await asyncio.to_thread(_list_chat_members, campaign_id)

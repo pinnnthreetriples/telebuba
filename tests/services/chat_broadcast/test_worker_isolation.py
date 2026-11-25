@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -142,11 +142,11 @@ async def test_a_crash_in_a_resting_accounts_waker_is_counted_and_the_wait_resum
     real = _rotation.sit_out
     calls: list[str] = []
 
-    async def sit_out(ctx: RunContext, account_id: str) -> bool:
+    async def sit_out(ctx: RunContext, account_id: str, **kwargs: Any) -> bool:
         calls.append(account_id)
         if len(calls) == 1:
             raise RuntimeError(_BOOM)
-        return await real(ctx, account_id)
+        return await real(ctx, account_id, **kwargs)
 
     monkeypatch.setattr(_rotation, "sit_out", sit_out)
     started = clock.now()

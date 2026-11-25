@@ -8,14 +8,14 @@ and every move leaves a history entry the board shows.
 from __future__ import annotations
 
 from collections import Counter
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, NamedTuple
 
 from core.logging import log_event
 from core.repositories import chat_broadcast as repository
 from services.chat_broadcast import _seams, _state
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
 
     from schemas.chat_broadcast import MinutesRange
     from schemas.chat_broadcast_board import ChatBroadcastSkipReason
@@ -74,6 +74,23 @@ def receivers(accounts: Iterable[str], target: TargetRecord) -> list[str]:
 def least_loaded(candidates: list[str], load: Counter[str]) -> str | None:
     """The idlest of ``candidates``, the first of them on a tie; ``None`` when there are none."""
     return min(candidates, key=lambda a: (load[a], candidates.index(a)), default=None)
+
+
+def members_of(target: TargetRecord, known: Mapping[str, set[str]]) -> set[str]:
+    """The accounts known to be inside ``target``: its current member and the history's."""
+    inside = set(known.get(target.chat_key, ()))
+    if target.member_account_id:
+        inside.add(target.member_account_id)
+    return inside
+
+
+def best_receiver(candidates: list[str], inside: set[str], load: Counter[str]) -> str | None:
+    """One already inside writes at once; a stranger joins and waits. Then the idlest."""
+    return min(
+        candidates,
+        key=lambda a: (a not in inside, load[a], candidates.index(a)),
+        default=None,
+    )
 
 
 def rest_end(started_unix: int, bounds: MinutesRange) -> int:
@@ -143,36 +160,86 @@ async def defer(
         )
 
 
+class _Return(NamedTuple):
+    """When a resting owner writes again, now, and the operator's pause after a join."""
+
+    back_at: int
+    now: int
+    pause: int
+
+
+def _sooner(
+    candidates: list[str],
+    inside: set[str],
+    owner: str,
+    when: _Return,
+    budget: Mapping[str, int | None],
+) -> list[str]:
+    """The candidates that would write in the chat before its resting owner, with sends left.
+
+    One inside writes at once; a stranger joins and waits the pause first — and so does an
+    owner that is not inside yet.
+    """
+    own = when.back_at if owner in inside else when.back_at + when.pause
+    return [
+        account
+        for account in candidates
+        if (when.now if account in inside else when.now + when.pause) < own
+        and budget.get(account) != 0
+    ]
+
+
 async def hand_over(
     ctx: RunContext,
     from_account: str,
     live: list[str],
     *,
-    only_unjoined: bool = False,
+    back_at: int | None = None,
+    spare: Mapping[str, int | None] | None = None,
 ) -> int:
-    """Give ``from_account``'s unfinished chats to the live accounts, least loaded first.
+    """Give ``from_account``'s unfinished chats to the live accounts; the count moved.
 
-    A chat the new account is not in starts over at the join — and at the pause after
-    it — but keeps its place in the chain. With no live account left, or none that the chat
-    has not banned or muted, the chat waits for one. ``only_unjoined`` is the limit case:
-    chats it already sits in stay with it.
+    Each chat goes to an account already inside it if there is one (it writes at once),
+    else to the idlest. A chat the new account is not in starts over at the join — and at
+    the pause after it — but keeps its place in the chain. With no live account left, or
+    none that the chat has not banned or muted, the chat waits for one.
+
+    ``back_at`` is when a resting ``from_account`` writes again: a chat moves only to an
+    account that would write there sooner, so a stranger whose join and pause outlast the
+    rest leaves it be. ``spare`` caps how many chats each account takes (``None`` = no cap):
+    one with a single send left in its hour would hand the rest straight back. The chats
+    due first are placed first.
     """
     targets = await repository.list_targets(ctx.campaign_id)
+    known = await repository.list_chat_members(ctx.campaign_id)
     others = [account for account in live if account != from_account]
     load = open_load(targets)
+    budget = dict(spare or {})
+    now = _seams.now()
+    pause = ctx.settings.join_delay_minutes * 60
+    mine = sorted(
+        (t for t in targets if t.assigned_account_id == from_account and t.state in _HANDABLE),
+        key=lambda t: (t.next_action_unix or 0, t.round, t.position),
+    )
     moved = 0
-    for target in targets:
-        if target.assigned_account_id != from_account or target.state not in _HANDABLE:
-            continue
-        if only_unjoined and target.member_account_id == from_account:
-            continue
-        to = least_loaded(receivers(others, target), load)
-        if to is None:
+    for target in mine:
+        candidates = receivers(others, target)
+        if not candidates:
             await _wait_for_account(ctx, target)
+            continue
+        inside = members_of(target, known)
+        if back_at is not None:
+            candidates = _sooner(
+                candidates, inside, from_account, _Return(back_at, now, pause), budget
+            )
+        to = best_receiver(candidates, inside, load)
+        if to is None:
             continue
         if await assign(ctx, target, to):
             load[to] += 1
             moved += 1
+            if (left := budget.get(to)) is not None:
+                budget[to] = left - 1
     if moved:
         await log_event(
             "WARNING",
@@ -246,11 +313,13 @@ async def adopt_orphans(ctx: RunContext, live: list[str], keep: list[str] | None
     """
     owners = set(live) | set(keep or ())
     targets = await repository.list_targets(ctx.campaign_id)
+    orphans = [t for t in targets if t.state in _HANDABLE and t.assigned_account_id not in owners]
+    if not orphans or not live:
+        return
+    known = await repository.list_chat_members(ctx.campaign_id)
     load = open_load(targets)
-    for target in targets:
-        if target.state not in _HANDABLE or target.assigned_account_id in owners or not live:
-            continue
-        to = least_loaded(receivers(live, target), load)
+    for target in orphans:
+        to = best_receiver(receivers(live, target), members_of(target, known), load)
         if to is None:
             await _wait_for_account(ctx, target)
         elif await assign(ctx, target, to):
@@ -267,6 +336,9 @@ async def reclaim_waiting(ctx: RunContext, live: list[str]) -> None:
     if not live:
         return
     targets = await repository.list_targets(ctx.campaign_id)
+    if not any(t.state == "waiting_account" for t in targets):
+        return
+    known = await repository.list_chat_members(ctx.campaign_id)
     load = open_load(targets)
     for target in targets:
         if target.state != "waiting_account":
@@ -281,12 +353,7 @@ async def reclaim_waiting(ctx: RunContext, live: list[str]) -> None:
                 next_action_unix=_seams.now() if inside else None,
             )
             continue
-        candidates = receivers(live, target)
-        to = (
-            target.member_account_id
-            if target.member_account_id in candidates
-            else least_loaded(candidates, load)
-        )
+        to = best_receiver(receivers(live, target), members_of(target, known), load)
         if to is not None and await assign(ctx, target, to):
             load[to] += 1
 

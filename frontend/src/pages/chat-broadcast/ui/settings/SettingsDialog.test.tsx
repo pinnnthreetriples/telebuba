@@ -164,8 +164,8 @@ test('pace: ranges, volume and safety write the draft', async () => {
 
   const from = screen.getByLabelText('Между чатами: от');
   await user.clear(from);
-  await user.type(from, '100');
-  expect(screen.getByLabelText('Между чатами: до')).toHaveValue(100);
+  await user.type(from, '300');
+  expect(screen.getByLabelText('Между чатами: до')).toHaveValue(300);
   await user.click(screen.getByRole('radio', { name: 'По времени' }));
   expect(screen.getByLabelText('Часов')).toHaveValue(6);
   await user.click(screen.getByRole('switch', { name: 'Повторять по кругу' }));

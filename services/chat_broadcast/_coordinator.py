@@ -23,6 +23,7 @@ from core.config import settings
 from core.logging import log_event
 from core.repositories import chat_broadcast as repository
 from services.chat_broadcast import (
+    _join,
     _moves,
     _recovery,
     _rotation,
@@ -42,6 +43,13 @@ if TYPE_CHECKING:
 
 rest_end = _moves.rest_end
 _Kind = Literal["worker", "waker", "claimer", "retrier"]
+
+
+async def _sit_out(ctx: RunContext, account_id: str) -> bool:
+    """A resting account's wait, spent joining its next chats while only its own limit holds it."""
+    return await _rotation.sit_out(
+        ctx, account_id, meanwhile=lambda: _join.join_ahead(ctx, account_id)
+    )
 
 
 class RunOutcome(NamedTuple):
@@ -194,9 +202,7 @@ class _Tasks:
                 self.workers[account_id] = asyncio.create_task(_worker.work(self.ctx, account_id))
         for account_id in resting:
             if account_id not in self.workers and account_id not in self.wakers:
-                self.wakers[account_id] = asyncio.create_task(
-                    _rotation.sit_out(self.ctx, account_id)
-                )
+                self.wakers[account_id] = asyncio.create_task(_sit_out(self.ctx, account_id))
         campaign_id = self.ctx.campaign_id
         if "claimer" not in self.helpers and await _recovery.left_out(campaign_id):
             self.helpers["claimer"] = asyncio.create_task(_recovery.watch_left_out(self.ctx))
@@ -279,9 +285,7 @@ class _Tasks:
         elif kind == "worker":
             self.workers[name] = asyncio.create_task(_after_pause(lambda: _worker.work(ctx, name)))
         else:
-            self.wakers[name] = asyncio.create_task(
-                _after_pause(lambda: _rotation.sit_out(ctx, name))
-            )
+            self.wakers[name] = asyncio.create_task(_after_pause(lambda: _sit_out(ctx, name)))
 
     def _restart_helper(self, kind: _Kind) -> None:
         ctx = self.ctx
