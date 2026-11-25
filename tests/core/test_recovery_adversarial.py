@@ -45,6 +45,8 @@ def on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
+# The first build must take the "no tables" branch of the snapshot check, not a copy's.
+@pytest.mark.fresh_database
 def test_newer_db_is_byte_identical_and_no_snapshot_taken(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

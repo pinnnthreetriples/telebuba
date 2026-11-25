@@ -112,6 +112,7 @@ def _create_legacy_settings(engine: object) -> None:
         )
 
 
+@pytest.mark.fresh_database  # asserts what the fresh build produced
 def test_the_step_is_idempotent_and_registered(legacy_engine: _EngineFactory) -> None:
     engine = legacy_engine("legacy.db")
     _create_legacy_settings(engine)

@@ -159,6 +159,9 @@ filterwarnings = [
     # Every entry must carry a comment explaining WHY it cannot be fixed upstream.
 ]
 asyncio_mode = "strict"
+markers = [
+    "fresh_database: build this test's database from nothing instead of copying the per-process template (tests/_db_template.py)",
+]
 xfail_strict = true
 log_cli = true
 log_cli_level = "INFO"
