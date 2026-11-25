@@ -283,7 +283,8 @@ def test_migrations_read_no_configuration_or_randomness_beyond_their_backfills()
             if isinstance(node, ast.Import):
                 imported.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.module:
-                imported.add(node.module)
+                imported.add(node.module)  # ``from core import config`` counts as ``core.config``
+                imported.update(f"{node.module}.{alias.name}" for alias in node.names)
         relative = path.relative_to(_ROOT).as_posix()
         hits = (imported & forbidden) - allowed.get(relative, set())
         if hits:

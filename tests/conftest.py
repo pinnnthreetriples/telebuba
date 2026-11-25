@@ -137,7 +137,10 @@ def _isolate_database(tmp_path: Path) -> None:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Mark every test in a file about building the database (``_db_template.FRESH_DB_PATHS``)."""
     for item in items:
-        if _db_template.wants_fresh_database(item.path.relative_to(config.rootpath).as_posix()):
+        # A test outside the repository is not one of those files (and must not crash here).
+        if item.path.is_relative_to(config.rootpath) and _db_template.wants_fresh_database(
+            item.path.relative_to(config.rootpath).as_posix()
+        ):
             item.add_marker(_db_template.FRESH_DB_MARKER)
 
 
