@@ -28,11 +28,9 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
   after its rest, every other skip is final. A new chat added on Continue starts at
   round 1.
 - Work is balanced across live accounts. A throttled scheduler pass (at once when an
-  account comes back) promotes chats whose rest is over, re-places the chats of resting
-  accounts, returns waiting ones and hands chats from the busiest account to the idlest
-  until loads differ by at most one. A chat in flight (joining, captcha, writing,
-  awaiting approval) is never taken; a handover racing a worker is refused by the owner
-  check on the worker's own write. Chats the receiver must join are not given to an
+  account comes back) promotes rested chats, re-places resting accounts' chats, returns
+  waiting ones and evens the load to within one chat. A chat in flight (a join, captcha,
+  send or request) is never taken; a handover racing a worker loses to the owner check. Chats the receiver must join are not given to an
   account at its join cap. No placement (balance, hand-over, adoption, return from
   waiting, reroute) gives a chat to an account that was banned or muted in it:
   `chat_broadcast_targets.refused_by` keeps that across restarts, and with nobody else the
@@ -51,13 +49,10 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
   the operator's text.
 - An account Telegram stops is rested, not lost (`services/chat_broadcast/_rotation.py`):
   a flood wait, its own limit or a spam block (known too) rests it until a known moment and a waker
-  brings it back. Each of its chats goes to whoever would write there before it is back:
-  an account already inside (the campaign's join history counts) before a stranger, a
-  stranger only when its join and the operator's pause beat the rest, and no receiver past
-  the sends its limits leave it; otherwise the chat waits. Handing every chat on at each
-  hourly rest made them bounce between accounts, paying a re-join each time. While the rest is
-  its OWN limit (not Telegram's), the waker joins its next chats so the pause after a join
-  runs out during the rest. A ban is asked to @SpamBot at once: a clean account loses only
+  brings it back. A chat moves only to an account that writes there sooner: one inside
+  first, a stranger only if join + pause beat the rest, none past its spare sends. On its
+  OWN limit the waker joins its next chats ahead.
+  A ban is asked to @SpamBot at once: a clean account loses only
   that chat, moved once (skipped when it bans a second account); only a ban @SpamBot
   confirms rests the account. Only a dead session leaves for good.
 - The run does not stall while an account can come back. A busy account is claimed as
@@ -69,10 +64,7 @@ neuroshilling's (claim, run id, fenced seams, journal, restart resume).
   after `CHAT_BROADCAST__CLAIM_GIVE_UP_SECONDS`).
 - Supervisor and scheduler faults are logged and retried, never charged to an account.
 - Settings cannot be saved while a run is attached, except the pauses: they are read live
-  and the rests under way are redrawn from their own start. The pause dialogs show each
-  pause's effect and a one-click recommendation (`model/paceTips.ts`); the default pause
-  between chats spreads the default hourly limit over the hour, and a test holds the two
-  together on both sides.
+  and the rests under way are redrawn from their own start.
 - The run ends only when no chat is left in play, checked together with the write that
   marks the campaign done, so a chat kept from the board at that instant is never
   dropped. A volume stop (messages or time) ends the run in any state; chats it
