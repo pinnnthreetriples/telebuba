@@ -15,7 +15,8 @@ Android itself knows nothing of the proxy: no VPN, no in-app setting. The I/O li
 * the container is a real phone's firmware with the proxy country's timezone and
   carrier (the phone number's country while the proxy has none on record); a
   stopped container gets them rewritten before it boots, as the proxy may have moved;
-* every start gives the gateway the account's CURRENT proxy before Android runs;
+* every start gives the gateway the account's CURRENT proxy before Android runs; an
+  existing pod's gateway barrier is re-checked at every use (``_mobile_guard``);
 * a running pod is used as it stands only while its gateway runs the current proxy;
   one on another proxy (or whose gateway died) is stopped and started again, and a
   proxy change stops the account's pod at once (``stop_account_pod``);
@@ -76,6 +77,7 @@ from core.emulator import (
 from core.logging import log_event
 from core.phone_geo import country_for_phone
 from schemas.emulator import OpenMobileResult
+from services.accounts._mobile_guard import verify_pod_gateway
 from services.accounts._mobile_holds import (
     _ACTIVE,
     _LOCKS,
@@ -278,12 +280,18 @@ async def _open(
     )
     name = container_name(account.account_id)
     instance = await find_instance(name)
+    verified = False
     if instance is not None and instance.paused:
-        # Parked after a close visit: thawed in a moment, then checked like a running one.
+        # Parked after a close visit: its barrier is checked before it is thawed, then it
+        # is checked like a running one.
+        await verify_pod_gateway(account.account_id, name)
+        verified = True
         await unpause_pod(name)
         instance = instance._replace(running=True, paused=False)
     if instance is not None and instance.running:
         if await pod_runs_proxy(name, proxy):
+            if not verified:
+                await verify_pod_gateway(account.account_id, name)
             # Up already and on the current proxy: not booted or reconfigured again.
             # Only an entry screen (or an app never installed) is acted on.
             serial = adb_serial(instance.index)
@@ -382,6 +390,7 @@ async def _serial_on_current_proxy(account_id: str) -> str:
     instance = await find_instance(name)
     if instance is None or not instance.running or not await pod_runs_proxy(name, proxy):
         raise EmulatorRefusedError(_EMULATOR_NOT_RUNNING)
+    await verify_pod_gateway(account_id, name)
     serial = adb_serial(instance.index)
     await connect_device(serial)
     await bring_app_to_front(serial)

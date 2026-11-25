@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { AccountTwoFactorCreated } from '@/shared/api';
 import { mutationErrorText, useClearedTimeouts } from '@/shared/lib';
-import { Button, Icon, IconButton, Notice, useModalDirty } from '@/shared/ui';
+import { Button, ConfirmModal, Icon, IconButton, Notice, useModalDirty } from '@/shared/ui';
 
 import type { BulkTwofaRow } from './useBulkTwofa';
 
@@ -56,6 +56,8 @@ export function TwoFactorBulkResults({
   // These passwords exist nowhere else: closing the dialog before the operator copied
   // them all or saved the file asks first (the add wizard's own close guard).
   const [saved, setSaved] = useState(false);
+  // The file holds every password in plain text: one click must not write it to disk.
+  const [confirmingDownload, setConfirmingDownload] = useState(false);
   const clipboard: Clipboard | undefined = navigator.clipboard;
   // A predicate, not a plain `!== null`: without it every read below needs a
   // `?? ''` fallback that can never run, and unreachable branches in the one
@@ -141,7 +143,12 @@ export function TwoFactorBulkResults({
                 : t('accounts.addWizard.twofaCopyAll')}
             </Button>
           ) : null}
-          <Button size="sm" onClick={download}>
+          <Button
+            size="sm"
+            onClick={() => {
+              setConfirmingDownload(true);
+            }}
+          >
             {t('accounts.addWizard.twofaDownload')}
           </Button>
         </span>
@@ -249,6 +256,18 @@ export function TwoFactorBulkResults({
           {t('accounts.addWizard.done')}
         </Button>
       </div>
+      {confirmingDownload ? (
+        <ConfirmModal
+          title={t('accounts.addWizard.twofaDownloadConfirmTitle')}
+          body={t('accounts.addWizard.twofaDownloadConfirmBody')}
+          confirmLabel={t('accounts.addWizard.twofaDownloadConfirmAction')}
+          cancelLabel={t('accounts.edit.cancel')}
+          onClose={() => {
+            setConfirmingDownload(false);
+          }}
+          onConfirm={download}
+        />
+      ) : null}
     </>
   );
 }

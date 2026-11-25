@@ -110,6 +110,24 @@ async def fetch_intent(intent_id: int) -> KeyIntent | None:
     return await asyncio.to_thread(_fetch_intent, intent_id)
 
 
+def _fetch_last_closed_intent(account_id: str, kind: str) -> KeyIntent | None:
+    query = (
+        select(_TABLE)
+        .where(_TABLE.c.account_id == account_id, _TABLE.c.kind == kind)
+        .where(_TABLE.c.closed_at.is_not(None))
+        .order_by(_TABLE.c.id.desc())
+        .limit(1)
+    )
+    with _get_engine().connect() as connection:
+        row = connection.execute(query).first()
+    return None if row is None else KeyIntent.model_validate(dict(row._mapping))  # noqa: SLF001
+
+
+async def fetch_last_closed_intent(account_id: str, kind: KeyIntentKind) -> KeyIntent | None:
+    """The account's most recent CLOSED intent of ``kind``: what its last finished flow did."""
+    return await asyncio.to_thread(_fetch_last_closed_intent, account_id, kind)
+
+
 def _list_open_intents(account_id: str | None) -> list[KeyIntent]:
     query = select(_TABLE).where(_TABLE.c.closed_at.is_(None)).order_by(_TABLE.c.id)
     if account_id is not None:

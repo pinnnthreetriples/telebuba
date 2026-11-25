@@ -51,6 +51,7 @@ from core.logging import log_event
 from schemas.emulator import OpenMobileResult
 from services.accounts._app_screen import restarted_if_frozen, settled_screen
 from services.accounts._emulator_sign_in import sign_in
+from services.accounts._mobile_guard import refuse_if_host_full
 from services.accounts._mobile_holds import container_name
 from services.accounts._mobile_progress import report_stage
 from services.accounts.devices import DeviceRefusedError
@@ -96,6 +97,8 @@ async def start_and_sign_in(
     The device farm's ``boot`` only boots the pod: no APK, no install, no sign-in.
     """
     name = container_name(account.account_id)
+    if mode != "warming":  # warming holds its own slot (``max_running_pods``)
+        await refuse_if_host_full(name)
     # A new container has no Telegram yet: its APK is fetched while the pod starts.
     apk = asyncio.create_task(ensure_telegram_apk()) if new and mode != "boot" else None
     try:

@@ -19,6 +19,7 @@ from services.session_death_watch import shutdown_session_death_watch, start_ses
 from services.session_guard import _loop
 from services.session_guard._backup_status import read_backup_status
 from services.session_guard._loop import guard_status, run_guard_pass
+from services.session_guard._private_paths import check_private_paths
 from services.session_guard._watchdog import start_watchdog, stop_watchdog
 
 if TYPE_CHECKING:
@@ -35,6 +36,8 @@ __all__ = [
 async def start_session_guard() -> None:
     """Start the guard, its watchdog and the death watch (lifespan startup).
 
+    First it looks once at who can open the credential folders (``_private_paths``).
+
     On a computer that is not the fleet owner every Telegram client is refused; that is
     said once here, so the operator reads why nothing connects.
     """
@@ -42,6 +45,8 @@ async def start_session_guard() -> None:
         await log_event(
             "WARNING", "instance_not_fleet_owner", extra={"fleet_owner_host": fleet_owner_host()}
         )
+    # Who else on this computer can open the credential folders (journalled, never changed).
+    await check_private_paths()
     await _loop.start_session_guard()
     start_watchdog()
     await start_session_death_watch()

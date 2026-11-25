@@ -44,6 +44,20 @@ _binder_seen = False
 _dri_seen = False
 
 
+async def host_memory_bytes() -> int | None:
+    """The Docker host's total memory in bytes; ``None`` when docker cannot say.
+
+    Asked on each check, never cached: the daemon's host (a WSL VM, say) may be resized.
+    A figure that cannot be read blocks nothing, so every failure here is ``None``.
+    """
+    try:
+        reply = await _process.docker_or_none("info", "--format", "{{.MemTotal}}")
+        total = int((reply or "").strip())
+    except (EmulatorError, ValueError):
+        return None
+    return total if total > 0 else None
+
+
 async def check_host() -> None:
     """Refuse a host that cannot run a phone; the first code found wins."""
     try:

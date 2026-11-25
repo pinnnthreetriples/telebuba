@@ -20,6 +20,9 @@ class SessionClaims(BaseModel):
 
     sub: str
     ver: int
+    # Unix time of the original login, carried unchanged through every sliding
+    # re-issue so the absolute session lifetime can be enforced.
+    auth_time: int
 
 
 class UserRead(BaseModel):

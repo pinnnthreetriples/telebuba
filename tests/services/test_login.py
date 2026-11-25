@@ -177,6 +177,7 @@ async def test_request_login_code_caches_the_hash(monkeypatch: pytest.MonkeyPatc
             "code": "01234",
             "password": "2fa",
             "fallback_passwords": [],
+            "password_typed": True,
             "new_key": False,
         },
     ]

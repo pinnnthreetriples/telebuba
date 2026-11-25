@@ -240,6 +240,17 @@ async def type_text(serial: str, text: str) -> None:
     await shell(serial, "input", "text", escape_input_text(text))
 
 
+async def type_secret(serial: str, text: str) -> None:
+    """``type_text`` for a password or a login code: the secret never reaches adb's argv.
+
+    The device-side command goes through the STDIN of ``adb -s <serial> shell``, so the
+    host's process list (and anything that logs argv) shows ``adb shell`` and nothing
+    typed. The escaping is ``type_text``'s own. A failure carries only a code.
+    """
+    command = f"input text {escape_input_text(text)}\n"
+    await shell(serial, stdin=command.encode())
+
+
 _default_input_engine = HumanInputEngine()
 
 
@@ -264,18 +275,20 @@ async def human_tap(
     )
 
 
-async def human_type(
+async def human_type(  # noqa: PLR0913 - one keyword per way of typing.
     serial: str,
     text: str,
     *,
     typo_probability: float | None = None,
     engine: HumanInputEngine | None = None,
     as_code: bool = False,
+    secret: bool = False,
 ) -> None:
     """Type ``text`` with stochastic keystroke intervals and realistic typo-correction.
 
     ``as_code`` types a verification code instead: steady digits, no typos, and the
     mid-code glance of a six-digit code (``HumanInputEngine.generate_code_sequence``).
+    ``secret`` sends every character through ``type_secret`` (a password, a login code).
     """
     escape_input_text(text)
     eng = engine or _default_input_engine
@@ -291,7 +304,7 @@ async def human_type(
         if event.key_event is not None:
             await press(serial, event.key_event)
         else:
-            await type_text(serial, event.char)
+            await (type_secret if secret else type_text)(serial, event.char)
 
 
 async def human_swipe(
@@ -365,6 +378,7 @@ __all__ = [
     "push",
     "shell",
     "start_app",
+    "type_secret",
     "type_text",
     "wait_for_boot",
 ]

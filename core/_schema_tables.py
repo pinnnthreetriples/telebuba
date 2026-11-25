@@ -72,6 +72,10 @@ _accounts = Table(
     # When Telegram last definitively refused ``twofa_password_pending``; NULL = never
     # refused, or the candidate changed since. Written only by ``_accounts_twofa``.
     Column("twofa_pending_refused_at", String, nullable=True),
+    # Wrong cloud-password answers Telegram gave this account in the current window, and when
+    # the window started; NULL = none. Written only by ``_accounts_twofa``.
+    Column("twofa_rejected_count", Integer, nullable=True),
+    Column("twofa_rejected_since", String, nullable=True),
     # Telegram Premium as ``get_me`` last reported it; NULL until a check answered.
     Column("premium", Boolean, nullable=True),
     # Small (~160px) profile photo captured on the session check, served by the

@@ -25,6 +25,9 @@ def _isolate_runtime(
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
+    # Existing tests clear freshly seeded WARNING/ERROR rows; the protection window
+    # has its own tests (``test_clear_logs_*protected*``) that turn it back on.
+    monkeypatch.setattr(settings.logging, "protected_retention_days", 0)
     reset_logging_for_tests()
     setup_logging()
     yield
@@ -269,7 +272,7 @@ async def test_clear_logs_empty_prefix_wipes_everything() -> None:
     So "everything deleted" is no longer "table empty": the audit row is written after
     the delete, precisely so it outlives it. Asserting emptiness here would be asserting
     that the wipe left no trace, which is the bug this row exists to close. The empty
-    prefix reaches that row as ``*``, legible to the operator reading it.
+    prefix reads as ``prefix_scoped: False`` in that row.
     """
     await log_event("INFO", "neurocomment_posted")
     await log_event("INFO", "warming_cycle_completed")
@@ -279,7 +282,7 @@ async def test_clear_logs_empty_prefix_wipes_everything() -> None:
     assert result.deleted == 2
     remaining = (await load_logs_page(LogFilter())).entries
     assert [e.event for e in remaining] == ["logs_cleared"]
-    assert remaining[0].extra == {"deleted": 2, "event_prefix": "*"}
+    assert remaining[0].extra == {"deleted": 2, "prefix_scoped": False, "kept_protected": 0}
 
 
 @pytest.mark.asyncio
@@ -301,7 +304,7 @@ async def test_clear_logs_writes_an_audit_row_that_its_own_prefix_cannot_delete(
     entries = (await load_logs_page(LogFilter())).entries
     audit = next(entry for entry in entries if entry.event == "logs_cleared")
     assert audit.level == "INFO"
-    assert audit.extra == {"deleted": 2, "event_prefix": "neurocomment"}
+    assert audit.extra == {"deleted": 2, "prefix_scoped": True, "kept_protected": 0}
 
     second = await clear_logs("neurocomment")
 

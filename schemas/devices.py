@@ -27,6 +27,7 @@ DeviceRefusalCode = Literal[
     "device_code_invalid",
     "device_twofa_missing",
     "device_twofa_invalid",
+    "twofa_attempts_exhausted",
     "device_user_mismatch",
     "device_flood_wait",
     "device_lang_pack_invalid",

@@ -85,6 +85,8 @@ _PASSING_CODES = frozenset(
         _SCREEN_UNKNOWN,
         "device_code_cooldown",
         "device_primary_unavailable",
+        # Enforced barrier check: the pod was stopped, the next cycle starts a fresh one.
+        "emulator_gateway_unhealthy",
     }
 )
 # Failed cycles in a row after which even a passing cause parks the account.

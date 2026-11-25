@@ -150,6 +150,49 @@ leave the container); a pod on another proxy, whose gateway died, or whose gatew
 again after Android (`State.StartedAt`: Android is then left in the old namespace, cut off) is
 stopped and started again.
 
+### Limits, the barrier of a pod that exists, and typed secrets
+
+- **The operator's open obeys the pod limit.** Warming holds a slot per pod
+  (`EMULATOR__MAX_RUNNING_PODS`) and never saw the operator's. A start of the operator's (their
+  open, the device farm's boot) now counts what Docker really runs (running or frozen pods,
+  not its own) and answers `emulator_pod_limit` at the limit. It also answers
+  `emulator_host_memory` when `(pods + 1) x EMULATOR__MEMORY_MB` is more than
+  `EMULATOR__HOST_MEMORY_FRACTION` (0.8) of the Docker host's `MemTotal` (`docker info`, read
+  on each check). A host that cannot say its memory blocks nothing; the count still applies. A
+  pod the account already runs is not a new pod and opens as before. Warming's own open is not
+  asked: its slot is its limit.
+- **The barrier is asked again.** `core.emulator.verify_gateway` re-runs, on a pod that already
+  exists, what its start waited for (`net-gateway ready`: tunnel process, tun0, routing rule)
+  and reads the kill-switch back: `iptables -S OUTPUT` / `ip6tables -S OUTPUT` must show policy
+  DROP, and every rule is parsed into tokens (`core.emulator._gateway_rules`). Every ACCEPT must
+  be loopback, tun0, a REPLY on eth0 (`--ctdir REPLY`) or go to eth0 with `-d` equal to the
+  proxy's address (read from `/etc/net-gateway/address`; `/32` or bare, nothing wider, no list);
+  no match on an ACCEPT may be negated (`! -o tun0` is everything but tun0); the v6 chain may
+  hold no ACCEPT but loopback or tun0; any rule whose target is not ACCEPT, DROP or REJECT (a
+  jump into a chain `-S OUTPUT` does not print, `RETURN`) is a fault, as is a line that cannot
+  be parsed. An address file that cannot be read is `kill_switch_unreadable`. `ip -4 route get 198.51.100.1` (TEST-NET-2, nothing is sent) must leave by
+  tun0. It runs at the start of every use of an existing pod: the operator's open (a parked
+  pod before it is thawed), the phone sign-in and warming's open that go through it, and a
+  session that was not just opened by a visit. All of it is bounded by
+  `EMULATOR__GATEWAY_CHECK_SECONDS` (10). A check that cannot run at all (no such gateway, docker failing) is a failure too, reason `check_failed`, and never aborts the open unless enforced. A failure is always journalled: `emulator_gateway_unhealthy`
+  (WARNING, account id, a reason word, `enforced`). By default (`EMULATOR__GATEWAY_CHECK_ENFORCE=false`) the pod is
+  still used: the check has not been run against a real gateway yet, and a false alarm would stop every phone.
+  With `true` it fails closed: the pod is stopped and the open is refused; the next open starts a new pod. A routing failure is asked once more after 1.2 s (the gateway puts its
+  rules back every second after netd flushes them); the kill-switch is never retried. There is
+  no end-to-end probe: the gateway image has no client whose behaviour is pinned, so "the
+  proxy carries traffic" is judged by the tunnel process, its routing and the rules, not by a
+  request.
+- **Passwords and login codes are not in the host's process list.** `adb.type_secret` sends
+  `input text <escaped>` through the stdin of `adb -s <serial> shell` (the escaping is
+  `type_text`'s), so `adb.exe` shows no typed text in its arguments. The cloud password and the
+  login code (`telegram_app.enter_password` / `enter_code`, one character at a time through
+  `human_type(secret=True)`) use it; search words and the phone number stay on `type_text`.
+  The runner never logs stdin, and a failure carries a code only.
+- **The account's Chrome resolves no name itself.** `core/web_login/_launch_args.py` adds
+  `--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1` (the HTTP proxy resolves: the
+  relay sees `CONNECT host:443`) and turns Secure DNS off (`--disable-features=DnsOverHttps`,
+  the single `--disable-features` flag).
+
 ## Identity and region
 
 The container is a real phone (`core/emulator/_profile.py`):

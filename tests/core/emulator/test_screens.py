@@ -153,7 +153,7 @@ async def test_the_phone_is_typed_into_the_two_boxes_the_dump_showed(console: Co
 
     await telegram_app.enter_phone("emulator-5554", nodes, "+52 155 5000 1111")
 
-    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    typed = console.typed()
     # The prefilled country box is tapped to be emptied, then each box to be typed into.
     swipes = [call[2:] for call in console.shell_calls() if call[:2] == ["input", "swipe"]]
     assert len(swipes) == 3  # clear the country box, then type both
@@ -265,7 +265,7 @@ async def test_the_password_goes_only_into_the_dumps_password_field(console: Con
     assert 0 <= x <= 100
     assert 0 <= y <= 50
 
-    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    typed = console.typed()
     assert typed == ["s", "3", "c", "r", "e", "t", "\\!"]
     assert console.shell_calls()[-1] == ["input", "keyevent", "66"]
 
@@ -306,7 +306,7 @@ async def test_a_password_box_missing_characters_is_emptied_and_typed_again(
 
     await telegram_app.enter_password("emulator-5554", parse_dump(PASSWORD), "s3cret!")
 
-    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    typed = console.typed()
     assert len(typed) == 2 * len("s3cret!"), "typed twice"
     # MOVE_END and three DELs clear what the box showed, then ENTER once, at the end.
     assert _keys(console) == [
@@ -363,7 +363,7 @@ async def test_enter_code_calls_human_tap_and_human_type(console: Console) -> No
     await telegram_app.enter_code("emulator-5554", nodes, "12345")
     swipes = [call for call in console.shell_calls() if call[:2] == ["input", "swipe"]]
     assert len(swipes) == 1
-    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    typed = console.typed()
     assert "".join(typed) == "12345"
 
 
@@ -402,6 +402,6 @@ async def test_secrets_are_typed_without_simulated_typos(
     )
     await step("emulator-5554", parse_dump(screen), secret)
 
-    typed = [call[2] for call in console.shell_calls() if call[:2] == ["input", "text"]]
+    typed = console.typed()
     assert "".join(typed).replace("\\", "") == secret
     assert ["input", "keyevent", "67"] not in console.shell_calls()

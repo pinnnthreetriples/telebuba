@@ -45,28 +45,39 @@ async def _account() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_new_key_with_a_new_api_is_journaled_and_closed_done() -> None:
+async def test_a_new_key_with_a_new_api_is_journaled_and_closed_once_its_api_is_recorded() -> None:
     async with sign_in_intent(_profile(7), new_key=True):
         (open_one,) = await _intents()
         assert (open_one.kind, open_one.api_id, open_one.session_name) == ("sign_in", 7, "acc")
         assert open_one.closed_at is None
+        await set_device_api_id("acc", "desktop", 7)  # what the flow does after the sign-in
 
     (closed,) = await _intents()
     assert (closed.outcome, closed.closed_at is not None) == ("done", True)
 
 
 @pytest.mark.asyncio
-async def test_a_failing_sign_in_closes_the_intent_all_the_same() -> None:
+async def test_a_sign_in_that_never_recorded_its_api_leaves_the_intent_for_the_repair() -> None:
+    """Ended cleanly or not: a key made with an API nobody stored is the repair's to settle."""
+    async with sign_in_intent(_profile(7), new_key=True):
+        pass
+
+    (intent,) = await _intents()
+    assert (intent.outcome, intent.closed_at) == (None, None)
+
+
+@pytest.mark.asyncio
+async def test_a_failing_sign_in_leaves_the_intent_open() -> None:
     with pytest.raises(RuntimeError):
         async with sign_in_intent(_profile(7), new_key=True):
             raise RuntimeError
 
     (intent,) = await _intents()
-    assert intent.outcome == "done"
+    assert (intent.outcome, intent.closed_at) == (None, None)
 
 
 @pytest.mark.asyncio
-async def test_a_cancelled_sign_in_closes_the_intent_all_the_same() -> None:
+async def test_a_cancelled_sign_in_leaves_the_intent_open() -> None:
     entered = asyncio.Event()
 
     async def _flow() -> None:
@@ -76,6 +87,26 @@ async def test_a_cancelled_sign_in_closes_the_intent_all_the_same() -> None:
 
     task = asyncio.create_task(_flow())
     await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    (intent,) = await _intents()
+    assert (intent.outcome, intent.closed_at) == (None, None)
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_sign_in_that_had_recorded_its_api_is_still_closed() -> None:
+    recorded = asyncio.Event()
+
+    async def _flow() -> None:
+        async with sign_in_intent(_profile(7), new_key=True):
+            await set_device_api_id("acc", "desktop", 7)
+            recorded.set()
+            await asyncio.Event().wait()
+
+    task = asyncio.create_task(_flow())
+    await recorded.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task

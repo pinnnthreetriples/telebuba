@@ -29,9 +29,10 @@ step, which needs a migration story this feature does not have yet.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from typing import NamedTuple
 
-from sqlalchemy import select, update
+from sqlalchemy import case, func, select, update
 
 from core.db import _accounts, _get_engine, _now_iso
 
@@ -70,6 +71,9 @@ def _set_account_twofa_password(account_id: str, password: str | None) -> bool:
                 twofa_password_pending=None,
                 twofa_pending_at=None,
                 twofa_pending_refused_at=None,
+                # ... and the operator's decision starts a fresh budget of wrong answers.
+                twofa_rejected_count=None,
+                twofa_rejected_since=None,
                 updated_at=_now_iso(),
             ),
         )
@@ -116,10 +120,13 @@ async def twofa_password_candidates(account_id: str) -> list[str]:
 
     The login paths try these in order: the pending candidate is the one a write
     whose outcome is unknown (crash, lost reply) may have put on Telegram. An
-    unknown account or no password gives ``[]``. Never log or return the values.
+    unknown account or no password gives ``[]``, and a pending candidate equal to the
+    current one is listed once. Never log or return the values.
     """
-    current, pending = await fetch_account_twofa_pair(account_id)
-    return [value for value in (current, pending) if value]
+    state = await fetch_account_twofa_state(account_id)
+    # A pending candidate Telegram already refused is never sent again by itself.
+    pending = None if state.pending_refused else state.pending
+    return list(dict.fromkeys(value for value in (state.current, pending) if value))
 
 
 def _set_twofa_pending(account_id: str, password: str | None) -> bool:
@@ -216,6 +223,8 @@ def _promote_twofa_pending(account_id: str, password: str) -> bool:
                 twofa_password_pending=None,
                 twofa_pending_at=None,
                 twofa_pending_refused_at=None,
+                twofa_rejected_count=None,
+                twofa_rejected_since=None,
                 updated_at=_now_iso(),
             ),
         )
@@ -236,7 +245,12 @@ def _set_twofa_current_only(account_id: str, password: str) -> bool:
         result = connection.execute(
             update(_accounts)
             .where(_accounts.c.account_id == account_id)
-            .values(twofa_password=password, updated_at=_now_iso()),
+            .values(
+                twofa_password=password,
+                twofa_rejected_count=None,
+                twofa_rejected_since=None,
+                updated_at=_now_iso(),
+            ),
         )
     return result.rowcount > 0
 
@@ -257,9 +271,12 @@ async def confirm_twofa_password_used(account_id: str, password: str) -> bool:
     Call after a successful 2FA sign-in so a candidate that turned out to be in force
     stops being "pending". A no-op (``False``) when ``password`` is the current one or
     matches nothing. The promotion is one compare-and-swap, so a pending value that
-    changed since the read is never promoted in its place.
+    changed since the read is never promoted in its place. A password Telegram accepted also
+    ends the account's run of wrong answers (:func:`record_twofa_rejection`).
     """
-    return await asyncio.to_thread(_promote_twofa_pending, account_id, password)
+    promoted = await asyncio.to_thread(_promote_twofa_pending, account_id, password)
+    await reset_twofa_rejections(account_id)
+    return promoted
 
 
 def _list_verified_twofa_account_ids() -> set[str]:
@@ -280,3 +297,92 @@ async def list_verified_twofa_account_ids() -> set[str]:
     The unverified candidate (``twofa_password_pending``) does not count. Only ids leave.
     """
     return await asyncio.to_thread(_list_verified_twofa_account_ids)
+
+
+def _record_twofa_rejection(account_id: str, window_hours: float, now: datetime) -> int | None:
+    cutoff = (now - timedelta(hours=window_hours)).isoformat()
+    # One UPDATE decides "new window or same one" and counts, so two sign-ins that fail at the
+    # same moment cannot both read the old count and write the same new one.
+    # A window start later than ``now`` (the clock ran ahead once) is an expired window.
+    fresh = (
+        _accounts.c.twofa_rejected_since.is_(None)
+        | (_accounts.c.twofa_rejected_since < cutoff)
+        | (_accounts.c.twofa_rejected_since > now.isoformat())
+    )
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_accounts)
+            .where(_accounts.c.account_id == account_id)
+            .values(
+                twofa_rejected_count=case(
+                    (fresh, 1), else_=func.coalesce(_accounts.c.twofa_rejected_count, 0) + 1
+                ),
+                twofa_rejected_since=case(
+                    (fresh, now.isoformat()), else_=_accounts.c.twofa_rejected_since
+                ),
+            ),
+        )
+        if result.rowcount == 0:
+            return None
+        row = connection.execute(
+            select(_accounts.c.twofa_rejected_count).where(_accounts.c.account_id == account_id)
+        ).first()
+    return int(row[0]) if row is not None and row[0] is not None else None
+
+
+async def record_twofa_rejection(
+    account_id: str, *, window_hours: float, now: datetime | None = None
+) -> int | None:
+    """Count one wrong cloud-password answer from Telegram; the count in the window, or ``None``.
+
+    The window starts at the first rejection and restarts when it is older than
+    ``window_hours``. ``None`` for an unknown account. Never sees a password.
+    """
+    return await asyncio.to_thread(
+        _record_twofa_rejection, account_id, window_hours, now or datetime.now(UTC)
+    )
+
+
+def _remaining_twofa_attempts(
+    account_id: str, max_rejections: int, window_hours: float, now: datetime
+) -> int:
+    with _get_engine().connect() as connection:
+        row = connection.execute(
+            select(_accounts.c.twofa_rejected_count, _accounts.c.twofa_rejected_since).where(
+                _accounts.c.account_id == account_id
+            )
+        ).first()
+    if row is None or row[0] is None or row[1] is None:
+        return max_rejections
+    since = str(row[1])
+    if since < (now - timedelta(hours=window_hours)).isoformat() or since > now.isoformat():
+        return max_rejections
+    return max(0, max_rejections - int(row[0]))
+
+
+async def remaining_twofa_attempts(
+    account_id: str, *, max_rejections: int, window_hours: float, now: datetime | None = None
+) -> int:
+    """How many more wrong answers the account may get in this window (``0`` = exhausted)."""
+    return await asyncio.to_thread(
+        _remaining_twofa_attempts,
+        account_id,
+        max_rejections,
+        window_hours,
+        now or datetime.now(UTC),
+    )
+
+
+def _reset_twofa_rejections(account_id: str) -> bool:
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_accounts)
+            .where(_accounts.c.account_id == account_id)
+            .values(twofa_rejected_count=None, twofa_rejected_since=None),
+        )
+    return result.rowcount > 0
+
+
+async def reset_twofa_rejections(account_id: str) -> bool:
+    """Forget the account's wrong answers (a password was accepted or replaced)."""
+    return await asyncio.to_thread(_reset_twofa_rejections, account_id)

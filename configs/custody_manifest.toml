@@ -1,0 +1,143 @@
+# Modules that can lose an account (its auth key, its session file, its 2FA password, its
+# ownership of authorizations) or that guard against that. A PR that changes any of them needs
+# the repository owner's `custody-reviewed` label (tools/custody_gate.py, .github/workflows/
+# custody.yml). Agents never add the label.
+#
+# Paths are repo-relative. `**` crosses directories, `*` and `?` stay inside one segment.
+# Add a module when it constructs a Telethon client, touches a `.session` file, makes or ends
+# an authorization, reads or writes the 2FA password, deletes an account, copies or restores
+# the database or session files, runs a migration, or decides `status` / `link_status`.
+# The executable rules that pin this surface are tests/test_custody_invariants.py.
+
+label = "custody-reviewed"
+
+paths = [
+    # The gate itself: its manifest, its tool, its workflow, the rules, the file-mode helper.
+    "configs/custody_manifest.toml",
+    "tools/custody_gate.py",
+    ".github/workflows/custody.yml",
+    "tests/test_custody_invariants.py",
+    "tests/_custody_scan.py",
+    "tests/_custody_scan_*.py",
+    "core/secure_paths.py",
+    "core/_windows_acl.py",
+    "core/private_paths.py",
+    "core/twofa_budget.py",
+    "core/migration_steps_twofa_attempts.py",
+    "services/session_guard/_private_paths.py",
+    "tools/secure_paths.py",
+
+    # The one place a Telethon client is built, and the client that refuses what ends sessions.
+    "core/telegram_client/_client.py",
+    "core/telegram_client/_guarded_client.py",
+    "core/telegram_client/_pool*.py",
+    "core/telegram_client/_api_credentials.py",
+
+    # Sign-in and new auth keys: phone code, second device, QR, passkey, web login, re-key.
+    "core/telegram_client/_auth.py",
+    "core/telegram_client/_auth_bounds.py",
+    "core/telegram_client/_authorized.py",
+    "core/telegram_client/_login_code.py",
+    "core/telegram_client/_second_device.py",
+    "core/telegram_client/_qr_login.py",
+    "core/telegram_client/_passkey.py",
+    "core/telegram_client/_passkey_login.py",
+    "core/telegram_client/_web_login.py",
+    "core/telegram_client/_rekey*.py",
+    "core/telegram_client/_key_intent.py",
+    "core/telegram_client/_leftover.py",
+
+    # Ending authorizations, listing them, restoring a session file, probing a key.
+    "core/telegram_client/_session.py",
+    "core/telegram_client/_session_audit.py",
+    "core/telegram_client/_session_close.py",
+    "core/telegram_client/_session_restore.py",
+
+    # The 2FA password on the wire: set, verify, candidates, recovery e-mail, SRP.
+    "core/telegram_client/_twofa*.py",
+
+    # Session files and key copies on disk.
+    "core/session_file.py",
+    "core/session_json.py",
+    "core/session_vault.py",
+    "core/tdata_import.py",
+    "core/passkey_vault.py",
+    "core/passkey_vault_snapshot.py",
+    "tools/session_vault.py",
+
+    # The signed-in Telegram Web profile an account carries.
+    "core/web_login/browser.py",
+    "core/web_login/_passkey.py",
+    "core/web_login/_tombstone.py",
+
+    # Database safety nets and migrations.
+    "core/db.py",
+    "core/db_maintenance.py",
+    "core/db_mirror.py",
+    "core/db_snapshot.py",
+    "core/migrations.py",
+    "core/migration_steps.py",
+    "core/migration_steps_key_intents.py",
+    "core/migration_steps_own_authorizations.py",
+    "core/migration_steps_pending_cleanups.py",
+    "core/migration_steps_rekeys.py",
+    "core/migration_steps_passkeys.py",
+    "core/migration_steps_security_snapshots.py",
+    "core/migration_steps_foreign_*.py",
+    "core/migration_steps_link_status.py",
+    "core/migration_steps_twofa_*.py",
+    "core/_schema_tables.py",
+
+    # Repositories: the 2FA password and its candidates, deletion, status from a session check,
+    # the journal of key-making flows, own authorizations, tombstones, re-key and snapshot rows.
+    "core/repositories/_accounts_twofa.py",
+    "core/repositories/_accounts_delete.py",
+    "core/repositories/_accounts_session_check.py",
+    "core/repositories/_accounts_passkey.py",
+    "core/repositories/accounts.py",
+    "core/repositories/account_key_intents.py",
+    "core/repositories/account_own_authorizations.py",
+    "core/repositories/account_rekeys.py",
+    "core/repositories/account_security_snapshots.py",
+    "core/repositories/pending_cleanups.py",
+    "core/repositories/session_audits.py",
+
+    # Account services: re-key, repair, second device, QR, login, 2FA, close, lifecycle, import
+    # rollback, uploads, restore, recovery bundle, own authorizations, web windows, phone app.
+    "services/accounts/session_rekey.py",
+    "services/accounts/_key_repair*.py",
+    "services/accounts/_old_key_checklist.py",
+    "services/accounts/devices.py",
+    "services/accounts/device_setup.py",
+    "services/accounts/qr_login.py",
+    "services/accounts/login.py",
+    "services/accounts/passkey.py",
+    "services/accounts/twofa.py",
+    "services/accounts/_twofa_*.py",
+    "services/accounts/session_close.py",
+    "services/accounts/session_audit.py",
+    "services/accounts/_session_classify.py",
+    "services/accounts/lifecycle.py",
+    "services/accounts/_import_rollback.py",
+    "services/accounts/sessions.py",
+    "services/accounts/_uploads.py",
+    "services/accounts/_tdata.py",
+    "services/accounts/session_restore.py",
+    "services/accounts/_recovery_bundle.py",
+    "services/accounts/own_authorizations.py",
+    "services/accounts/web_login.py",
+    "services/accounts/web_windows.py",
+    "services/accounts/_web_drive*.py",
+    "services/accounts/_web_passkey.py",
+    "services/accounts/_phone_authorization.py",
+    "services/accounts/_pod_cleanup.py",
+    "services/accounts/_mobile_start.py",
+    "services/accounts/_emulator_sign_in.py",
+    "services/accounts/mobile_emulator.py",
+
+    # Copies of key files, the session guard (checks, re-checks, watches, vault health) and the
+    # watch that notices a dead key.
+    "services/session_backups.py",
+    "services/session_guard/**",
+    "services/session_death_watch.py",
+]

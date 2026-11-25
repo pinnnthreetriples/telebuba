@@ -37,12 +37,14 @@ from telethon import errors
 from core.config import settings
 from core.logging import log_event
 from core.qr_image import render_qr_data_uri
+from core.repositories._accounts_twofa import reset_twofa_rejections
 from core.telegram_client._api_credentials import record_key_api
 from core.telegram_client._auth import _alive_result, _auth_lock
 from core.telegram_client._authorized import probe_authorized
 from core.telegram_client._client import create_telegram_client, prepare_telegram_client_profile
 from core.telegram_client._key_intent import sign_in_intent
 from core.telegram_client._pool import removing_client
+from core.twofa_budget import record_password_rejection
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.qr_login import QrLoginState
 
@@ -306,6 +308,9 @@ async def _await_password(session: _QrSession, client: TelegramClient) -> bool:
         try:
             await client.sign_in(password=password)
         except errors.PasswordHashInvalidError:
+            # Typed by the operator, so never blocked; still counted against the account.
+            await record_password_rejection(session.state.account_id)
             await _publish(session, status="password_needed", error_code="password_invalid")
             continue
+        await reset_twofa_rejections(session.state.account_id)
         return True

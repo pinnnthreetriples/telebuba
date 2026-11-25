@@ -64,7 +64,16 @@ def create_app(lifespan: Lifespan | None = None) -> FastAPI:
     Runtime startup/shutdown (warming + neurocomment) and static frontend serving
     are the composition root's job (``main.py``); they are injected via ``lifespan``.
     """
-    app = FastAPI(title="Telebuba API", lifespan=lifespan)
+    # The docs/schema routes sit outside the auth gate, so they are opt-in;
+    # ``app.openapi()`` still works in process for ``tools/gen_api.py``.
+    docs = settings.api.docs_enabled
+    app = FastAPI(
+        title="Telebuba API",
+        lifespan=lifespan,
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.api.cors_origins,

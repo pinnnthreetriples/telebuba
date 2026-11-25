@@ -12,6 +12,7 @@ from telethon import errors
 
 from core.telegram_client._pool import TelegramClientPoolError
 from core.telegram_client._profile import _DEAD_SESSION_ERRORS
+from core.twofa_budget import TwofaAttemptsExhaustedError
 
 if TYPE_CHECKING:
     from schemas.session_rekey import RekeyRefusalCode
@@ -23,6 +24,7 @@ _APPROVER: RekeyRefusalCode = "rekey_approver_unavailable"
 _TOKEN: RekeyRefusalCode = "rekey_token_rejected"  # noqa: S105 - a refusal code
 _TWOFA_MISSING: RekeyRefusalCode = "rekey_twofa_missing"
 _TWOFA_INVALID: RekeyRefusalCode = "rekey_twofa_invalid"
+_TWOFA_EXHAUSTED: RekeyRefusalCode = "twofa_attempts_exhausted"
 _MISMATCH: RekeyRefusalCode = "rekey_user_mismatch"
 _CONFLICT: RekeyRefusalCode = "rekey_session_conflict"
 _SWAP: RekeyRefusalCode = "rekey_swap_failed"
@@ -60,6 +62,7 @@ def _refusal(code: str, error_type: str | None = None) -> RekeyGatewayError:
 # Telegram answers that end the attempt, each with the code the operator is shown.
 _ERROR_CODES: tuple[tuple[tuple[type[Exception], ...], str], ...] = (
     ((errors.PasswordHashInvalidError,), _TWOFA_INVALID),
+    ((TwofaAttemptsExhaustedError,), _TWOFA_EXHAUSTED),
     (
         (
             errors.AuthTokenExpiredError,

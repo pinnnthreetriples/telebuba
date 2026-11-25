@@ -41,6 +41,11 @@ from core.telegram_client import (
     login_code_cutoff,
     wait_account_login_code,
 )
+from core.twofa_budget import (
+    TwofaAttemptsExhaustedError,
+    ensure_twofa_budget,
+    record_password_rejection,
+)
 from services.accounts._app_screen import APP_UNRESPONSIVE, restarted_if_frozen, settled_screen
 from services.accounts._mobile_progress import report_stage
 from services.accounts._phone_authorization import PhoneSignIn, settle_recorded_authorization
@@ -61,6 +66,7 @@ _EMULATOR_CODE_TIMEOUT: EmulatorRefusalCode = "emulator_code_timeout"
 _EMULATOR_FIELD_MISSING: EmulatorRefusalCode = "emulator_field_missing"
 _EMULATOR_PASSWORD_REJECTED: EmulatorRefusalCode = "emulator_password_rejected"  # noqa: S105 - a refusal code
 _EMULATOR_TWOFA_MISSING: EmulatorRefusalCode = "emulator_twofa_missing"
+_TWOFA_ATTEMPTS_EXHAUSTED: EmulatorRefusalCode = "twofa_attempts_exhausted"
 
 # Where a sign-in may start, the prompts over a signed-in app's chat list included.
 _ENTRY: set[Screen] = {
@@ -187,10 +193,17 @@ async def _submit_password(
     password = await authorising_twofa_password(account.account_id)
     if not password:
         raise EmulatorError(_EMULATOR_TWOFA_MISSING)
+    # The stored password is typed for the operator: it obeys the account's budget of wrong
+    # answers like every other automatic sign-in (``core.twofa_budget``).
+    try:
+        await ensure_twofa_budget(account.account_id)
+    except TwofaAttemptsExhaustedError as exc:
+        raise EmulatorError(_TWOFA_ATTEMPTS_EXHAUSTED) from exc
     await enter_password(serial, nodes, password)
     screen, nodes = await _wait(serial, _PAST_CODE - {"password"})
     if screen == "password":
         # Telegram empties the field of a rejected password; waiting longer or asking for
         # another code would not change that, and the operator has to look.
+        await record_password_rejection(account.account_id)
         raise EmulatorError(_EMULATOR_PASSWORD_REJECTED)
     return screen, nodes

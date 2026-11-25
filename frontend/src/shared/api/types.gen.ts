@@ -4143,6 +4143,10 @@ export type LogCountResult = {
    * Matching
    */
   matching: number;
+  /**
+   * Kept Protected
+   */
+  kept_protected: number;
 };
 
 /**
@@ -4186,13 +4190,17 @@ export type LogEntry = {
 /**
  * LogPurgeResult
  *
- * How many log rows a clear operation removed.
+ * How many log rows a clear operation removed, and how many it kept back.
  */
 export type LogPurgeResult = {
   /**
    * Deleted
    */
   deleted: number;
+  /**
+   * Kept Protected
+   */
+  kept_protected: number;
 };
 
 /**
@@ -6470,6 +6478,7 @@ export type PhoneList = {
     | 'emulator_code_timeout'
     | 'emulator_code_refused'
     | 'emulator_twofa_missing'
+    | 'twofa_attempts_exhausted'
     | 'emulator_password_rejected'
     | 'emulator_not_running'
     | 'emulator_not_signed_in'
@@ -6490,6 +6499,9 @@ export type PhoneList = {
     | 'emulator_app_unresponsive'
     | 'emulator_screen_unknown'
     | 'emulator_signed_out'
+    | 'emulator_pod_limit'
+    | 'emulator_host_memory'
+    | 'emulator_gateway_unhealthy'
     | null;
   /**
    * Phones

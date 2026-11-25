@@ -92,17 +92,32 @@ async def docker_or_none(*args: str, seconds: float | None = None) -> str | None
         return None
 
 
-async def adb_command(*args: str, seconds: float | None = None, step: str) -> str:
-    """One adb CLI call (``adb <args>``), bounded like every other console step."""
+async def adb_command(
+    *args: str, seconds: float | None = None, step: str, stdin: bytes | None = None
+) -> str:
+    """One adb CLI call (``adb <args>``), bounded like every other console step.
+
+    ``stdin`` is what the call is fed instead of argv: the host's process list shows
+    argv, never a pipe (``adb.type_secret``). It is not logged, here or on a failure.
+    """
     return await run_command(
         [str(settings.emulator.adb_path), *args],
         seconds=seconds or settings.emulator.command_timeout_seconds,
         step=step,
+        stdin=stdin,
     )
 
 
-async def shell(serial: str, *args: str, seconds: float | None = None) -> str:
-    """Run an adb shell command on ``serial``."""
+async def shell(
+    serial: str, *args: str, seconds: float | None = None, stdin: bytes | None = None
+) -> str:
+    """Run an adb shell command on ``serial``; with no ``args`` the device runs ``stdin``."""
     return await adb_command(
-        "-s", serial, "shell", *args, seconds=seconds, step=f"adb shell {args[0]}"
+        "-s",
+        serial,
+        "shell",
+        *args,
+        seconds=seconds,
+        step=f"adb shell {args[0]}" if args else "adb shell stdin",
+        stdin=stdin,
     )

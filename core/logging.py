@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 import sentry_sdk
 from loguru import logger
 
+from core._log_redact import scrub_extra
 from core.config import settings
 from core.db import _now_iso, insert_log_row
 from core.events import publish as publish_event
@@ -272,6 +273,19 @@ def _send_to_sentry(event: LogEventInput) -> None:
         sentry_sdk.capture_message(message, level="error")
 
 
+def _safe_scrub(extra: dict[str, object] | None, event: str) -> dict[str, object]:
+    """:func:`scrub_extra` inside the never-raises contract: a failure drops the extra."""
+    try:
+        return scrub_extra(extra or {})
+    except Exception as exc:  # noqa: BLE001 — logging must never break callers.
+        logger.warning(
+            "log_scrub_failed event={event} error_type={error_type}",
+            event=event,
+            error_type=type(exc).__name__,
+        )
+        return {"scrub_failed": True}
+
+
 async def log_event(
     level: LogLevel,
     event: str,
@@ -281,7 +295,8 @@ async def log_event(
     """Write one event to all three tiers (loguru, SQLite ``logs``, Sentry).
 
     ``extra`` is an open key/value bag. Keep payloads compact — large blobs
-    bloat the ``logs`` table.
+    bloat the ``logs`` table. It is scrubbed first (:func:`scrub_extra`), so secrets
+    and proxy-URL userinfo reach none of the tiers even if a caller forgot.
 
     Best-effort: a failure in any tier (e.g. SQLite write error) is logged
     to loguru but never raised to the caller, so business operations cannot
@@ -291,7 +306,7 @@ async def log_event(
         level=level,
         event=event,
         account_id=account_id,
-        extra=extra or {},
+        extra=_safe_scrub(extra, event),
     )
 
     _LOG_METHODS[payload.level](
@@ -341,6 +356,6 @@ def signal_event(event: str, extra: dict[str, object] | None = None) -> None:
         status="success",
         account_id=None,
         event=event,
-        extra=extra or {},
+        extra=_safe_scrub(extra, event),
     )
     publish_event(entry)

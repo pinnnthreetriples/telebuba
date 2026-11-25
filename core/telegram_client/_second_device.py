@@ -58,6 +58,7 @@ from core.telegram_client._pool import (
     removing_client,
 )
 from core.telegram_client._twofa_candidates import sign_in_with_passwords
+from core.twofa_budget import TwofaAttemptsExhaustedError
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.devices import SecondDeviceResult
 
@@ -101,6 +102,8 @@ _ERROR_CODES: tuple[
         "device_code_invalid",
     ),
     (errors.PasswordHashInvalidError, "device_twofa_invalid"),
+    # Not sent: the account's wrong cloud-password answers for this window are spent.
+    (TwofaAttemptsExhaustedError, "twofa_attempts_exhausted"),
     (errors.ConnectionLangPackInvalidError, "device_lang_pack_invalid"),
     # SendCode refused for the app credentials themselves — a leaked official api_id
     # answers API_ID_PUBLISHED_FLOOD. Only other credentials help; the class name stays.
@@ -307,6 +310,9 @@ async def authorize_second_device(request: SecondDeviceSignIn) -> SecondDeviceRe
             api_id=fingerprint.api_id,
             device_json=fingerprint.model_dump_json(),
         )
+        if intent_id is None:
+            # No journal row, no sign-in: an authorization nobody wrote down cannot be repaired.
+            return _refusal(request, "device_auth_failed", error_type="JournalUnavailable")
         refusal = await _attempt(
             request,
             create_telegram_client(profile),

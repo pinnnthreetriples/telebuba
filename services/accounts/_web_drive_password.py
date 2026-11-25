@@ -19,6 +19,11 @@ import asyncio
 import weakref
 from typing import TYPE_CHECKING
 
+from core.twofa_budget import (
+    TwofaAttemptsExhaustedError,
+    ensure_twofa_budget,
+    record_password_rejection,
+)
 from core.web_login import password_outcome, type_2fa_password
 from core.web_login._cdp import CdpError
 
@@ -38,13 +43,26 @@ _PASSWORD_CHECK_MAX = 45.0
 _TYPE_RETRY_BUDGET = 45.0
 
 _submitted: weakref.WeakSet[WebWindow] = weakref.WeakSet()
+# Windows whose wrong-password screen was already counted: a re-drive sees the same screen.
+_rejection_counted: weakref.WeakSet[WebWindow] = weakref.WeakSet()
 
 
 async def _authorising_password(account_id: str) -> str | None:
-    """The stored password, a pending candidate settled against Telegram first."""
+    """The stored password, a pending candidate settled against Telegram first.
+
+    ``None`` once the account's budget of wrong answers is spent: the screen then goes to the
+    operator, who may type a password by hand.
+    """
     from services.accounts.twofa import authorising_twofa_password  # noqa: PLC0415 - import cycle
 
-    return await authorising_twofa_password(account_id)
+    password = await authorising_twofa_password(account_id)
+    if password is None:
+        return None
+    try:
+        await ensure_twofa_budget(account_id)
+    except TwofaAttemptsExhaustedError:
+        return None
+    return password
 
 
 def password_submitted(window: WebWindow) -> bool:
@@ -121,5 +139,8 @@ class PasswordSubmitter:
         self._trace.password_checking = outcome == "checking"
         if outcome == "error":
             self._trace.password_rejected = True
+            if self._window not in _rejection_counted:
+                _rejection_counted.add(self._window)
+                await record_password_rejection(self._account_id)
             return True
         return now >= (self._check_ends if outcome == "checking" else self._grace_ends)

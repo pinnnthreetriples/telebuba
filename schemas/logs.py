@@ -77,9 +77,12 @@ class LogsPageState(BaseModel):
 
 
 class LogPurgeResult(BaseModel):
-    """How many log rows a clear operation removed."""
+    """How many log rows a clear operation removed, and how many it kept back."""
 
     deleted: int = Field(ge=0)
+    # Matching WARNING/ERROR rows younger than the protection window, which a clear
+    # never removes (the journal is the custody audit trail).
+    kept_protected: int = Field(ge=0)
 
 
 class LogCountResult(BaseModel):
@@ -90,3 +93,5 @@ class LogCountResult(BaseModel):
     """
 
     matching: int = Field(ge=0)
+    # Further matching rows a clear would keep back as recent WARNING/ERROR entries.
+    kept_protected: int = Field(ge=0)

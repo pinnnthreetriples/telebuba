@@ -54,6 +54,9 @@ class PhoneCodeSubmit(BaseModel):
     password: str | None = None
     # Tried in order after ``password`` when Telegram rejects it (or none was typed).
     fallback_passwords: list[str] = Field(default_factory=list)
+    # ``password`` was typed by the operator for this attempt (not read from storage): it is
+    # sent even when the account's budget of wrong cloud passwords is spent.
+    password_typed: bool = False
     # As the code request said (a code is bound to the API that asked for it).
     new_key: bool = False
 

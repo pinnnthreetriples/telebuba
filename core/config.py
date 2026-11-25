@@ -148,6 +148,9 @@ class ApiSettings(BaseSettings):
     forwarded_allow_ips: str = Field(default="127.0.0.1", min_length=1)
     # API path version segment (``/api/{version}``).
     version: str = Field(default="v1", min_length=1)
+    # Swagger UI, ReDoc and /openapi.json sit outside the auth gate, so they are opt-in.
+    # ``tools/gen_api.py`` reads the schema in process and does not need them.
+    docs_enabled: bool = False
     # SSE live-event stream (``GET /api/v1/events``): keepalive comment cadence
     # (keeps idle proxies from closing the stream) + per-subscriber queue bound
     # (a slow client's queue fills → its live frames drop; the FE poll backstops).
@@ -190,6 +193,9 @@ class AuthSettings(BaseSettings):
     cookie_secure: bool = True
     cookie_samesite: Literal["lax", "strict", "none"] = "strict"
     session_ttl_minutes: int = Field(default=720, ge=1)
+    # Absolute session lifetime: the sliding TTL above is re-issued on every request,
+    # so without this a cookie that keeps being used would never expire.
+    session_max_days: int = Field(default=30, ge=1)
     # First-admin seeding (no public signup): when no users exist and both are
     # set, an admin is created at startup.
     admin_username: str = Field(default="", repr=False)
@@ -197,6 +203,11 @@ class AuthSettings(BaseSettings):
     # Login brute-force guard (in-memory, per-process).
     login_rate_limit_max_attempts: int = Field(default=5, ge=1)
     login_rate_limit_window_seconds: float = Field(default=60.0, gt=0)
+    # Second guard keyed by the submitted username (a botnet rotating IPs cannot
+    # brute-force one account); names past the tracked cap share one overflow bucket.
+    login_name_rate_limit_max_attempts: int = Field(default=10, ge=1)
+    login_name_rate_limit_window_seconds: float = Field(default=300.0, gt=0)
+    login_name_rate_limit_max_tracked: int = Field(default=1000, ge=1)
     # Argon2 intentionally consumes substantial CPU/RAM. Keep it off the event
     # loop and cap concurrent hashes/verifications so login bursts cannot exhaust
     # the process. Raising this requires a matching memory-capacity review.
@@ -372,6 +383,9 @@ class LoggingSettings(BaseSettings):
     rotation: str = Field(default="10 MB")
     retention: int = Field(default=10, ge=1)
     sentry_dsn: str = Field(default="", repr=False)
+    # "Clear logs" never removes WARNING/ERROR rows younger than this many days: the
+    # journal is the audit trail for account custody. 0 turns the protection off.
+    protected_retention_days: int = Field(default=30, ge=0)
 
 
 class Settings(BaseSettings):

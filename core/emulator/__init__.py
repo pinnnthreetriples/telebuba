@@ -14,7 +14,8 @@
 
 from __future__ import annotations
 
-from core.emulator._errors import EmulatorError
+from core.emulator._errors import EmulatorError, GatewayUnhealthyError
+from core.emulator._gateway import verify_gateway
 from core.emulator._gosuslugi import ensure_gosuslugi
 from core.emulator._input import HumanInputEngine, KeystrokeEvent, SwipeTrajectory, TapEvent
 from core.emulator._profile import ContainerSpec, container_spec
@@ -33,6 +34,7 @@ from core.emulator.adb import (
     wait_for_boot,
 )
 from core.emulator.assets import ensure_telegram_apk
+from core.emulator.host import host_memory_bytes
 from core.emulator.playbook import TelegramMobilePlaybook
 from core.emulator.pod import (
     StartedPod,
@@ -76,6 +78,7 @@ __all__ = [
     "BatteryTelemetryState",
     "ContainerSpec",
     "EmulatorError",
+    "GatewayUnhealthyError",
     "HumanInputEngine",
     "Instance",
     "KeystrokeEvent",
@@ -104,6 +107,7 @@ __all__ = [
     "escape_input_text",
     "find_instance",
     "go_back",
+    "host_memory_bytes",
     "human_swipe",
     "human_tap",
     "human_type",
@@ -124,6 +128,7 @@ __all__ = [
     "stop_pod",
     "stop_running_pods",
     "unpause_pod",
+    "verify_gateway",
     "viewer_open",
     "wait_for_boot",
     "wait_screen",

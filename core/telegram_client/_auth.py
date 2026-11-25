@@ -57,6 +57,7 @@ from core.telegram_client._pool import removing_client
 from core.telegram_client._profile import _DEAD_SESSION_ERRORS
 from core.telegram_client._twofa_candidates import sign_in_with_passwords
 from core.telegram_client._util import optional_bool, optional_str
+from core.twofa_budget import TwofaAttemptsExhaustedError
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeChallenge, PhoneCodeRequest, PhoneCodeSubmit
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -236,7 +237,10 @@ async def _sign_in(
         passwords = [*([request.password] if request.password else []), *request.fallback_passwords]
         if not passwords:
             raise
-        accepted = await sign_in_with_passwords(client, request.account_id, passwords, attempted)
+        typed = request.password if request.password_typed else None
+        accepted = await sign_in_with_passwords(
+            client, request.account_id, passwords, attempted, typed=typed
+        )
         return request.password is not None and accepted == request.password
     return False
 
@@ -302,6 +306,7 @@ _SIGN_IN_ERRORS = (
     errors.PhoneCodeEmptyError,
     errors.PhoneNumberInvalidError,
     errors.PasswordHashInvalidError,
+    TwofaAttemptsExhaustedError,
 )
 
 

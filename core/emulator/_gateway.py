@@ -30,11 +30,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.emulator._errors import EmulatorError
+from core.emulator._errors import EmulatorError, GatewayUnhealthyError
+from core.emulator._gateway_rules import ruleset_fault
 from core.emulator._process import docker, docker_or_none
 from core.emulator.redroid import ADB_PORT, GATEWAY_LABEL, INDEX_LABEL
 
 if TYPE_CHECKING:
+    from core.emulator._errors import GatewayFault
     from schemas.emulator import EmulatorRefusalCode
     from schemas.proxy import ProxySettings
 
@@ -45,9 +47,19 @@ _EMULATOR_PROXY_UNSUPPORTED: EmulatorRefusalCode = "emulator_proxy_unsupported"
 # ``docker cp`` of this directory lands at /etc/net-gateway, where the entrypoint reads it.
 _CONFIG_DIR = "net-gateway"
 _PROXY_FILE = f"/etc/{_CONFIG_DIR}/proxy"
+_ADDRESS_FILE = f"/etc/{_CONFIG_DIR}/address"
 # Seconds between tunnel probes: the tunnel is usually up within a second or two of the
 # start, and every poll interval past that is added to the pod's start.
 _TUNNEL_POLL_SECONDS = 0.2
+# The barrier re-check of an existing pod (``verify_gateway``). The gateway puts its policy
+# routing back every second after Android's netd flushes it, so a failed routing probe is
+# asked once more after this long; the kill-switch has no such flicker and is never retried.
+_RESTORE_SECONDS = 1.2
+_RESTORABLE: frozenset[str] = frozenset({"tunnel_down", "route_not_tunnel"})
+# Where the route probe asks the gateway to send a packet: TEST-NET-2 (RFC 5737), an address
+# no real host has, so the answer is the default route's and nothing is ever sent.
+_ROUTE_PROBE_ADDRESS = "198.51.100.1"
+_CHECK_TIMEOUT: GatewayFault = "check_timeout"
 
 
 def gateway_name(name: str) -> str:
@@ -159,12 +171,19 @@ async def wait_for_tunnel(gateway: str) -> None:
     loop = asyncio.get_running_loop()
     deadline = loop.time() + settings.emulator.tunnel_timeout_seconds
     while (left := deadline - loop.time()) > 0:
-        if await docker_or_none("exec", gateway, "net-gateway", "ready", seconds=left) is not None:
+        if await tunnel_ready(gateway, seconds=left):
             return
         if await _exited(gateway, deadline - loop.time()):
             raise EmulatorError(_EMULATOR_COMMAND_FAILED)
         await asyncio.sleep(max(0.0, min(_TUNNEL_POLL_SECONDS, deadline - loop.time())))
     raise EmulatorError(_EMULATOR_COMMAND_TIMEOUT)
+
+
+async def tunnel_ready(gateway: str, *, seconds: float) -> bool:
+    """Whether ``net-gateway ready`` passes: the tunnel runs, tun0 is up, the route rule is set."""
+    return (
+        await docker_or_none("exec", gateway, "net-gateway", "ready", seconds=seconds) is not None
+    )
 
 
 async def _exited(container: str, left: float) -> bool:
@@ -187,3 +206,51 @@ async def runs_proxy(gateway: str, proxy_text: str) -> bool:
     if listing is None:
         return False
     return listing.split(" ", 1)[0] == hashlib.sha256(proxy_text.encode()).hexdigest()
+
+
+async def _gateway_fault(gateway: str, seconds: float) -> GatewayFault | None:
+    """One pass of the barrier checks: the tunnel, the kill-switch's rules, the default route."""
+    if not await tunnel_ready(gateway, seconds=seconds):
+        return "tunnel_down"
+    v4 = await docker_or_none("exec", gateway, "iptables", "-S", "OUTPUT", seconds=seconds)
+    v6 = await docker_or_none("exec", gateway, "ip6tables", "-S", "OUTPUT", seconds=seconds)
+    address = await docker_or_none("exec", gateway, "cat", _ADDRESS_FILE, seconds=seconds)
+    if v4 is None or v6 is None or address is None:
+        return "kill_switch_unreadable"
+    if (fault := ruleset_fault(v4, v6, address)) is not None:
+        return fault
+    route = await docker_or_none(
+        "exec", gateway, "ip", "-4", "route", "get", _ROUTE_PROBE_ADDRESS, seconds=seconds
+    )
+    return None if route is not None and " dev tun0" in route else "route_not_tunnel"
+
+
+async def verify_gateway(name: str) -> None:
+    """Re-run the barrier check on the EXISTING pod ``name``: ``GatewayUnhealthyError`` if it fails.
+
+    A pod made earlier was trusted for as long as it lived, though its tunnel may have
+    died or its kill-switch been flushed since: ``wait_for_tunnel`` only vouches for the
+    moment of its start. This asks the running gateway again, with what its image holds
+    (``net-gateway ready``, ``iptables``, ``ip``; nothing is sent to the proxy): the
+    tunnel carries the namespace, the OUTPUT chain drops by default in both families and
+    opens only where the gateway wrote it (the proxy's own address, read from the
+    gateway too), and a packet for an outside address would
+    leave through tun0. The whole check is bounded by ``gateway_check_seconds``: a docker
+    that does not answer is as unhealthy as one that says no.
+    """
+    gateway = gateway_name(name)
+    seconds = settings.emulator.gateway_check_seconds
+    try:
+        async with asyncio.timeout(seconds):
+            fault = await _gateway_fault(gateway, seconds)
+            if fault in _RESTORABLE:
+                await asyncio.sleep(_RESTORE_SECONDS)
+                fault = await _gateway_fault(gateway, seconds)
+    except TimeoutError as exc:
+        raise GatewayUnhealthyError(_CHECK_TIMEOUT) from exc
+    except EmulatorError as exc:
+        if exc.code == _EMULATOR_COMMAND_TIMEOUT:
+            raise GatewayUnhealthyError(_CHECK_TIMEOUT) from exc
+        raise
+    if fault is not None:
+        raise GatewayUnhealthyError(fault)
