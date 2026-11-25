@@ -157,7 +157,9 @@ def test_an_unparsable_manifest_never_passes(repo: Path) -> None:
 
 def test_a_mode_only_change_of_a_custody_file_is_seen(repo: Path) -> None:
     _git(repo, "update-index", "--chmod=+x", "core/session_file.py")
-    _commit(repo)
+    # Commit the index as it is: `git add -A` would take the mode back from the working
+    # tree wherever git tracks file modes (Linux), and the PR would change nothing.
+    _git(repo, "commit", "-q", "-m", "pr")
     assert _run(repo).returncode == 1
 
 
