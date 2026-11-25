@@ -185,9 +185,9 @@ async def limit_reached(
 ) -> Step:
     """Its limit is spent: it rests until the limit lets it write again, to the second.
 
-    While it rests its chats go to accounts with room — the ones it has not entered
-    when the wait is short, all of them when it is long; with nobody having room they
-    wait for it.
+    While it rests each chat goes to an account that would write there before it is back
+    (``_rotation.rest_until``); a chat nobody would write sooner waits for it, and it joins
+    the ones it is not in yet while it waits (``_join.join_ahead``).
     """
     await repository.update_target(
         ctx.campaign_id, target.chat_key, expect_states=_moves.ACTIVE_STATES, state=state

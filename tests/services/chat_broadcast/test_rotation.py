@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from core.config import settings
 from core.repositories import chat_broadcast as repository
 from services.chat_broadcast import _rotation
 from services.chat_broadcast._context import load_context
@@ -96,16 +95,17 @@ async def test_an_account_at_its_daily_limit_hands_even_joined_chats_to_one_with
 
 
 @pytest.mark.asyncio
-async def test_a_limit_ending_soon_keeps_the_chats_it_is_already_in(
-    telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+async def test_a_limit_ending_before_a_strangers_join_pause_keeps_the_chats_it_is_in(
+    telegram: FakeTelegram,
 ) -> None:
-    monkeypatch.setattr(settings.chat_broadcast, "handover_rest_seconds", 7200.0)
+    # An hour's rest for a1 against a join and two hours' pause for a2.
     campaign_id = await seed(
         accounts=("a1", "a2"),
         targets=("@chat1", "@chat2"),
         messages=("one", "two"),
         per_hour=1,
         per_day=50,
+        join_delay_minutes=120,
     )
     telegram.send_answers["a2"] = [refused(error_type="ChatWriteForbiddenError")]
 

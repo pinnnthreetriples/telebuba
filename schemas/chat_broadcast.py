@@ -146,7 +146,7 @@ class ChatBroadcastSettings(BaseModel):
     messages: list[ChatBroadcastMessage] = Field(default_factory=list, max_length=_MAX_MESSAGES)
     approval_wait_hours: ApprovalWaitHours = 24
     join_delay_minutes: JoinDelayMinutes = 60
-    between_chats: SecondsRange = Field(default_factory=lambda: SecondsRange(min=30, max=90))
+    between_chats: SecondsRange = Field(default_factory=lambda: SecondsRange(min=150, max=210))
     between_messages: SecondsRange = Field(default_factory=lambda: SecondsRange(min=3, max=8))
     typing: bool = True
     stop_mode: ChatBroadcastStopMode = "count"

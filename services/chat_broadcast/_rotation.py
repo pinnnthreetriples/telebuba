@@ -15,9 +15,10 @@ What stops an account, and what becomes of it:
   alone moves the chat to another one; a chat closed to everybody is skipped.
 * **A dead session** (frozen, deactivated, logged out) — it leaves for good, as before.
 
-While it rests its chats are not abandoned: a short rest keeps them, a medium one hands
-over the chats it has not joined (re-joining costs a join and a pause, waiting does not),
-a long one hands over everything — always to accounts that still have room. The run with
+While it rests its chats are not abandoned: a rest of a minute keeps them; past that each
+chat goes to an account that would write there before the owner is back — one already
+inside it first (it writes at once), a stranger only when its join and the pause after it
+still beat the rest — and to no account beyond the sends it has left. The run with
 every account resting waits for the first one back instead of stalling, and the scheduler
 re-applies those thresholds to the rest that is left (``place_resting``), so a chat that
 comes up for its next round while its owner still rests is not kept waiting for it.
@@ -37,6 +38,8 @@ from services.chat_broadcast import _moves, _seams
 from services.chat_broadcast._verdicts import halt_reason
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from schemas.chat_broadcast_board import ChatBroadcastSkipReason
     from schemas.chat_broadcast_records import RosterAccount, TargetRecord
     from schemas.telegram_actions import ActionResult
@@ -115,6 +118,18 @@ async def limit_ends(ctx: RunContext, account_id: str) -> tuple[int, str] | None
     return max(ends) if ends else None
 
 
+async def spare_sends(ctx: RunContext, account_id: str) -> int | None:
+    """Sends the account's hourly and daily limits still allow now; ``None`` = no limit."""
+    if not ctx.settings.account_limit:
+        return None
+    now = _seams.now()
+    left = [
+        cap - len(await repository.list_account_send_times_since(account_id, now - window))
+        for window, cap in ((_HOUR, ctx.settings.per_hour), (_DAY, ctx.settings.per_day))
+    ]
+    return max(0, min(left))
+
+
 async def room(ctx: RunContext, exclude: str) -> list[str]:
     """Live accounts other than ``exclude`` that may still write now."""
     return [
@@ -183,15 +198,22 @@ async def place_resting(ctx: RunContext) -> int:
 
 
 async def _place_chats(ctx: RunContext, account_id: str, seconds: int) -> int:
-    limits = settings.chat_broadcast
-    if seconds <= limits.keep_chats_rest_seconds:
+    """Lend the resting account's chats to whoever writes there before it is back.
+
+    Each account takes no more chats than it has sends left. Asked again on every tick
+    (``place_resting``), so a chat kept now moves as soon as an account inside it has room.
+    """
+    if seconds <= settings.chat_broadcast.keep_chats_rest_seconds:
         return 0
-    others = await room(ctx, account_id)
-    if not others:
+    spare: dict[str, int | None] = {}
+    for other in await live_accounts(ctx.campaign_id):
+        if other != account_id and (left := await spare_sends(ctx, other)) != 0:
+            spare[other] = left
+    if not spare:
         # Nobody can take them now: they stay with it and it picks them up when back.
         return 0
     return await _moves.hand_over(
-        ctx, account_id, others, only_unjoined=seconds <= limits.handover_rest_seconds
+        ctx, account_id, list(spare), back_at=_seams.now() + seconds, spare=spare
     )
 
 
@@ -315,12 +337,20 @@ async def limit(ctx: RunContext, account_id: str, target: TargetRecord) -> Resti
     return await rest_until(ctx, account_id, until, reason, target)
 
 
-async def sit_out(ctx: RunContext, account_id: str) -> bool:
+async def sit_out(
+    ctx: RunContext,
+    account_id: str,
+    meanwhile: Callable[[], Awaitable[object]] | None = None,
+) -> bool:
     """Wait the account's rest out. ``True`` = back in the run, ``False`` = it left.
 
     Slept in slices, re-reading the end each time. At the
     end a spam block is checked with @SpamBot and a limit is counted again — a send by
     another campaign may have used the room up meanwhile.
+
+    ``meanwhile`` runs before each slice of a rest on the account's OWN limit — Telegram has
+    not stopped it, only the operator's count has — so it can get ready for its return. A rest
+    Telegram imposed (a flood, a spam block) runs nothing.
     """
     tick = settings.chat_broadcast.rest_poll_seconds
     while True:
@@ -330,7 +360,10 @@ async def sit_out(ctx: RunContext, account_id: str) -> bool:
         if item.resting_until_unix is None:
             return True
         if (remaining := item.resting_until_unix - _seams.now()) > 0:
-            await _seams.sleep(min(remaining, tick))
+            if meanwhile is not None and item.rest_reason in LIMIT_REASONS:
+                await meanwhile()
+                remaining = item.resting_until_unix - _seams.now()
+            await _seams.sleep(max(1, min(remaining, tick)))
             continue
         _seams.assert_live_run()
         if item.rest_reason in SPAM_REASONS:

@@ -7,6 +7,7 @@ import { SegmentedControl, Switch } from '@/shared/ui';
 import type { Settings } from '../../model/draft';
 
 import { Eyebrow, NumberField, RangeField, Row } from './fields';
+import { HourTip, JoinTip, RestTip } from './PaceTips';
 
 const APPROVAL_WAITS = [1, 3, 6, 12, 24] as const;
 const JOIN_DELAYS = [0, 30, 60, 120] as const;
@@ -64,6 +65,12 @@ function Pauses({
           }}
         />
       </Row>
+      <JoinTip
+        minutes={settings.join_delay_minutes}
+        onApply={(minutes) => {
+          onPatch({ join_delay_minutes: minutes as Settings['join_delay_minutes'] });
+        }}
+      />
       <Row
         label={t('chatBroadcast.settings.pace.betweenChats')}
         hint={t('chatBroadcast.settings.pace.betweenChatsHint')}
@@ -79,6 +86,13 @@ function Pauses({
           }}
         />
       </Row>
+      <HourTip
+        betweenChats={settings.between_chats}
+        perHour={settings.account_limit ? settings.per_hour : null}
+        onApply={(value) => {
+          onPatch({ between_chats: value });
+        }}
+      />
       <Row
         label={t('chatBroadcast.settings.pace.betweenMessages')}
         hint={t('chatBroadcast.settings.pace.betweenMessagesHint')}
@@ -188,6 +202,12 @@ function Volume({
               }}
             />
           </Row>
+          <RestTip
+            minutes={settings.rest_minutes}
+            onApply={(value) => {
+              onPatch({ rest_minutes: value });
+            }}
+          />
           <Row
             label={t('chatBroadcast.settings.pace.rounds')}
             hint={t('chatBroadcast.settings.pace.roundsHint')}

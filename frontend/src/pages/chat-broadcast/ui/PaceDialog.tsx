@@ -12,6 +12,7 @@ import { Button, Modal, ModalFooter, ModalHeader, Notice } from '@/shared/ui';
 import { conflictCode } from '../model/errors';
 
 import { RangeField, Row } from './settings/fields';
+import { HourTip, RestTip } from './settings/PaceTips';
 
 const MAX_SECONDS = 3600;
 const MAX_MINUTES = 1440;
@@ -20,7 +21,7 @@ function paceOf(read: ChatBroadcastSettingsRead): ChatBroadcastPace {
   const { between_messages, between_chats, rest_minutes } = read.settings;
   return {
     between_messages: between_messages ?? { min: 3, max: 8 },
-    between_chats: between_chats ?? { min: 30, max: 90 },
+    between_chats: between_chats ?? { min: 150, max: 210 },
     rest_minutes: rest_minutes ?? { min: 60, max: 120 },
   };
 }
@@ -111,6 +112,15 @@ export function PaceDialog({
                 }}
               />
             </Row>
+            <HourTip
+              betweenChats={pace.between_chats}
+              perHour={
+                (read.settings.account_limit ?? true) ? (read.settings.per_hour ?? 20) : null
+              }
+              onApply={(value) => {
+                setPace((current) => ({ ...current, between_chats: value }));
+              }}
+            />
             {loop ? (
               <Row
                 label={t('chatBroadcast.settings.pace.rest')}
@@ -126,6 +136,14 @@ export function PaceDialog({
                   }}
                 />
               </Row>
+            ) : null}
+            {loop ? (
+              <RestTip
+                minutes={pace.rest_minutes}
+                onApply={(value) => {
+                  setPace((current) => ({ ...current, rest_minutes: value }));
+                }}
+              />
             ) : null}
           </fieldset>
           <ModalFooter>

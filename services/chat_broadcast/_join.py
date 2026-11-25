@@ -74,6 +74,31 @@ async def _cap_reached(ctx: RunContext, account_id: str, target: TargetRecord) -
     return "idle"
 
 
+async def join_ahead(ctx: RunContext, account_id: str) -> None:
+    """While it rests on its own limit, get the account into one more of its chats.
+
+    The operator's "write in a new chat after" pause then runs out during the rest instead of
+    after it. One chat per call, through ``join`` — the same join budget, spacing and checks as
+    ever. A chat that may yet be skipped as already written is left to the worker, which asks
+    before it spends a join. A queued chat's own time is not waited for: what sets one is this
+    very rest (``_rotation.rest_until``) or the join cap, asked first.
+    """
+    if await at_join_cap(account_id):
+        return
+    check_written = ctx.settings.skip_already_written
+    pending = [
+        t
+        for t in await repository.list_targets(ctx.campaign_id)
+        if t.assigned_account_id == account_id
+        and t.state == "queued"
+        and t.member_account_id != account_id
+        and can_join(t)
+        and not (check_written and t.round == 1 and t.step_index == 0)
+    ]
+    if pending:
+        await join(ctx, account_id, min(pending, key=lambda t: (t.round, t.position)))
+
+
 async def join(ctx: RunContext, account_id: str, target: TargetRecord) -> Step:
     """Walk ``account_id`` into ``target``; the chat leaves in its next state."""
     action = _join_action(target)

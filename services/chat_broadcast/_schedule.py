@@ -30,7 +30,7 @@ from services.chat_broadcast import _join, _moves, _rotation, _seams, _state
 from services.chat_broadcast._moves import more_rounds, open_load, rest_end
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from schemas.chat_broadcast_records import TargetRecord
     from services.chat_broadcast._context import RunContext
@@ -199,18 +199,19 @@ async def promote(
     return moved
 
 
-def _cost(target: TargetRecord, receiver: str) -> int:
+def _cost(inside: set[str], receiver: str) -> int:
     """What it costs ``receiver`` to take this chat over: 0 it is inside, 1 nobody is."""
-    if target.member_account_id == receiver:
+    if receiver in inside:
         return 0
-    return 1 if target.member_account_id is None else 2
+    return 1 if not inside else 2
 
 
-def _pick(
+def _pick(  # noqa: PLR0913 - the walk's whole view of one donor and one receiver
     targets: Sequence[TargetRecord],
     donor: str,
     receiver: str,
     excluded: set[str],
+    known: Mapping[str, set[str]],
     *,
     receiver_at_join_cap: bool,
 ) -> TargetRecord | None:
@@ -224,6 +225,7 @@ def _pick(
     either. ``excluded`` are chats off the table for it (lost to a change under the balance,
     or banned or muted the receiver).
     """
+    inside = {t.chat_key: _moves.members_of(t, known) for t in targets}
     movable = [
         t
         for t in targets
@@ -231,11 +233,16 @@ def _pick(
         and t.state in _moves.REBALANCE_STATES
         and not t.pinned
         and t.chat_key not in excluded
-        and (t.member_account_id == receiver or (_join.can_join(t) and not receiver_at_join_cap))
+        # Inside by the history alone still goes through the join path (which finds it is
+        # a member, at no cost to the budget), so the chat must have a way in.
+        and (
+            t.member_account_id == receiver
+            or (_join.can_join(t) and (receiver in inside[t.chat_key] or not receiver_at_join_cap))
+        )
     ]
     return min(
         movable,
-        key=lambda t: (_cost(t, receiver), t.state == "round_done", t.position),
+        key=lambda t: (_cost(inside[t.chat_key], receiver), t.state == "round_done", t.position),
         default=None,
     )
 
@@ -243,7 +250,7 @@ def _pick(
 async def _balance_step(
     ctx: RunContext,
     targets: Sequence[TargetRecord],
-    accounts: tuple[list[str], list[str], dict[str, int], set[str]],
+    accounts: tuple[list[str], list[str], dict[str, int], set[str], Mapping[str, set[str]]],
     blocked: set[str],
 ) -> tuple[TargetRecord | None, str] | None:
     """One move of the walk.
@@ -254,7 +261,7 @@ async def _balance_step(
     The idlest receiver is tried first, the busiest donor to it first; a donor with nothing
     movable (all in flight, or nothing the receiver can take) gives way to the next.
     """
-    live, receivers, order, capped = accounts
+    live, receivers, order, capped, known = accounts
     load = open_load(targets)
     donors = sorted(live, key=lambda a: (-load[a], order[a]))
     for receiver in sorted(receivers, key=lambda a: (load[a], order[a])):
@@ -263,7 +270,12 @@ async def _balance_step(
                 break
             refused = {t.chat_key for t in targets if receiver in t.refused_by}
             chosen = _pick(
-                targets, donor, receiver, blocked | refused, receiver_at_join_cap=receiver in capped
+                targets,
+                donor,
+                receiver,
+                blocked | refused,
+                known,
+                receiver_at_join_cap=receiver in capped,
             )
             if chosen is None:
                 continue
@@ -295,10 +307,11 @@ async def rebalance(ctx: RunContext, live: list[str]) -> int:
     order = {account: index for index, account in enumerate(live)}
     capped = {a for a in receivers if await _join.at_join_cap(a)}
     targets = await repository.list_targets(ctx.campaign_id)
+    known = await repository.list_chat_members(ctx.campaign_id)
     blocked: set[str] = set()
     moved = 0
     while True:
-        step = await _balance_step(ctx, targets, (live, receivers, order, capped), blocked)
+        step = await _balance_step(ctx, targets, (live, receivers, order, capped, known), blocked)
         if step is None:
             break
         chosen, receiver = step
