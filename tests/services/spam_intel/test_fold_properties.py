@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from itertools import permutations
 from typing import get_args
 
 from hypothesis import given, settings
@@ -47,6 +48,16 @@ def test_the_order_of_the_evidence_does_not_matter(items: list[Evidence], rnd) -
     shuffled = list(items)
     rnd.shuffle(shuffled)
     assert _dump(shuffled) == _dump(items)
+
+
+def test_limits_of_one_instant_that_differ_only_in_their_date_fold_the_same_in_any_order() -> None:
+    """The example the property above once found: the undated reading leads, whatever the order."""
+    undated = ev("spambot_limited", 24 * 5, source="a")
+    dated = ev("spambot_limited", 24 * 5, expires_in_hours=1, source="a")
+    for items in permutations([undated, undated, dated]):
+        verdict = fold(items, NOW, CFG)
+        assert (verdict.status, verdict.valid_until) == ("limited", None)
+        assert (verdict.needs_probe, verdict.reason) == (True, "recheck_due")
 
 
 @_PROFILE

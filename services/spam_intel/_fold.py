@@ -49,8 +49,16 @@ def bucket(value: float) -> ConfidenceBucket:
 
 
 def _strongest(pairs: list[_Scored]) -> _Scored:
-    """The strongest item; ties break on recency, then names, so order never matters."""
-    return max(pairs, key=lambda p: (p[1], p[0].observed_at, p[0].kind, p[0].source))
+    """The strongest item; ties break on recency, then no end date, then names.
+
+    Order never matters. Between two readings of one instant the undated one leads: it is the
+    one nothing ends by itself, so it is the one ``valid_until`` already follows ("no end in
+    sight") and the one that must still be rechecked when the dated reading runs out.
+    """
+    return max(
+        pairs,
+        key=lambda p: (p[1], p[0].observed_at, p[0].expires_at is None, p[0].kind, p[0].source),
+    )
 
 
 def _active(items: list[Evidence], now: datetime, direction: str) -> list[_Scored]:
