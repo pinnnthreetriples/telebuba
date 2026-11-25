@@ -1,7 +1,7 @@
 ---
 name: conventions
 description: Backend implementation and review rules.
-last_updated: 2026-10-10
+last_updated: 2026-11-25
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -16,3 +16,5 @@ edges:
 # Backend Rules
 
 Backend coding rules live in `CODING_STANDARDS.md` at the repo root; read it for backend implementation or review. Fingerprint identity rules are in `context/runtime-telegram.md`.
+
+Tests copy a per-process template database (`tests/_db_template.py`); a test about building the database itself takes `@pytest.mark.fresh_database`, and `TELEBUBA_TEST_FRESH_DB=1` builds every one from scratch.
