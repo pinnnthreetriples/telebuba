@@ -76,6 +76,8 @@ _SUBMIT_CODES = {
     "PhoneCodeExpiredError": "code_expired",
     "PhoneNumberInvalidError": "phone_invalid",
     "PasswordHashInvalidError": "password_invalid",
+    # Telegram was not asked: the stored password's wrong answers for this window are spent.
+    "TwofaAttemptsExhaustedError": "twofa_attempts_exhausted",
 }
 
 # The statuses that say the account's key is gone: a sign-in then makes a new authorization,
@@ -268,6 +270,7 @@ async def submit_login_code(
             code=code,
             password=candidates[0] if candidates else None,
             fallback_passwords=candidates[1:],
+            password_typed=bool(password),
             new_key=pending.new_key,
         ),
     )

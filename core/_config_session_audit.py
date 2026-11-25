@@ -81,3 +81,8 @@ class SessionAuditSettings(BaseSettings):
     # Each proxy bound to an account is checked in the background this often (0 = never); one
     # proxy per guard pass, with a little jitter.
     proxy_watch_hours: float = Field(default=6.0, ge=0.0)
+    # Wrong cloud-password answers Telegram may give one account inside the window below
+    # before a STORED password is no longer sent by itself (a password the operator types is
+    # still sent). Repeated wrong passwords earn a long flood wait and look like an attack.
+    wrong_answer_limit: int = Field(default=5, ge=1)
+    wrong_answer_window_hours: float = Field(default=24.0, gt=0.0)

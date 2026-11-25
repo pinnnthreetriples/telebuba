@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core.config import settings
 from core.emulator.redroid import Instance
+from core.repositories._accounts_twofa import record_twofa_rejection, remaining_twofa_attempts
 from services.accounts import _app_screen, _emulator_sign_in, _mobile_start, open_mobile_progress
 from services.accounts import mobile_emulator as emulator_module
 from services.accounts.mobile_emulator import EmulatorRefusedError, open_account_mobile
@@ -207,6 +209,32 @@ async def test_a_cloud_password_telegram_does_not_take_is_a_refusal_of_its_own(
     assert (result.signed_in, result.sign_in_refusal) == (False, "emulator_password_rejected")
     assert container.steps.count("password:cloud-pass") == 1, "typed once, never again"
     assert open_mobile_progress("acc").reason == "emulator_password_rejected"
+    assert await _attempts_left("acc") == settings.session_audit.wrong_answer_limit - 1
+
+
+async def _attempts_left(account_id: str) -> int:
+    audit = settings.session_audit
+    return await remaining_twofa_attempts(
+        account_id,
+        max_rejections=audit.wrong_answer_limit,
+        window_hours=audit.wrong_answer_window_hours,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_spent_password_budget_keeps_the_stored_password_out_of_the_phone(
+    container: _Container,
+) -> None:
+    await _account()
+    audit = settings.session_audit
+    for _ in range(audit.wrong_answer_limit):
+        await record_twofa_rejection("acc", window_hours=audit.wrong_answer_window_hours)
+    container.screens = ["phone", "code", "password", "password"]
+
+    result = await open_account_mobile("acc")
+
+    assert (result.signed_in, result.sign_in_refusal) == (False, "twofa_attempts_exhausted")
+    assert not any(step.startswith("password:") for step in container.steps)
 
 
 @pytest.mark.asyncio

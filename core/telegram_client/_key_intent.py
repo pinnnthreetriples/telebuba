@@ -65,7 +65,10 @@ async def open_quietly(
     api_id: int | None,
     device_json: str | None,
 ) -> int | None:
-    """Journal a second device's sign-in; ``None`` (logged) when the journal cannot be written."""
+    """Journal a second device's sign-in; ``None`` (logged) when the journal cannot be written.
+
+    The caller does not sign in without it (see ``_second_device``).
+    """
     try:
         return await open_intent(
             account_id=account_id,
@@ -75,7 +78,7 @@ async def open_quietly(
             api_id=api_id,
             device_json=device_json,
         )
-    except Exception as exc:  # noqa: BLE001 - without a journal the sign-in is as it was.
+    except Exception as exc:  # noqa: BLE001 - reported to the caller as ``None``.
         logger.warning("second-device intent not opened (%s)", type(exc).__name__)
         return None
 
@@ -101,12 +104,30 @@ async def _open_sign_in(profile: TelegramClientProfile, *, new_key: bool) -> int
         return None
 
 
+async def _settle_sign_in(intent_id: int, profile: TelegramClientProfile) -> None:
+    """Close the intent only when the key's API is on record; otherwise leave it open.
+
+    A sign-in that landed while its answer was lost, a cancellation, or a failed write of
+    the API all end the flow with the key made but its API not stored. The repair
+    (``services.accounts._key_repair``) settles an open intent from the files; closing it
+    here would leave nothing to repair.
+    """
+    api_id = getattr(getattr(profile, "device", None), "api_id", None)
+    try:
+        stored = await fetch_device_fingerprint(profile.account_id, profile.device_type)
+    except Exception as exc:  # noqa: BLE001 - unknown is not "recorded": the repair decides.
+        logger.warning("sign-in intent left open (%s)", type(exc).__name__)
+        return
+    if stored is not None and stored.api_id == api_id:
+        await close_quietly(intent_id, "done")
+
+
 @contextlib.asynccontextmanager
 async def sign_in_intent(profile: TelegramClientProfile, *, new_key: bool) -> AsyncIterator[None]:
-    """Journal a sign-in that makes a new key; closed, shielded, however the flow ends."""
+    """Journal a sign-in that makes a new key; settled, shielded, however the flow ends."""
     intent_id = await _open_sign_in(profile, new_key=new_key)
     try:
         yield
     finally:
         if intent_id is not None:
-            await asyncio.shield(close_quietly(intent_id, "done"))
+            await asyncio.shield(_settle_sign_in(intent_id, profile))

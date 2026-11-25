@@ -10,8 +10,12 @@ otherwise written solely by ``core.logging.log_event``.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
+from core.config import settings
 from core.db import count_logs, list_filtered_logs, purge_logs
 from core.logging import log_event
+from core.repositories.logs import count_protected_logs
 from schemas.api import Page
 from schemas.logs import (
     LogCountResult,
@@ -56,13 +60,27 @@ async def list_logs_page(log_filter: LogFilter, cursor: str | None = None) -> Pa
     return Page(items=items, next_cursor=next_cursor)
 
 
+def _protected_since() -> str:
+    """Cutoff before which a WARNING/ERROR row may be cleared; later ones are kept."""
+    days = settings.logging.protected_retention_days
+    return (datetime.now(UTC) - timedelta(days=days)).isoformat()
+
+
 async def count_matching_logs(event_prefix: str = "") -> LogCountResult:
-    """How many rows :func:`clear_logs` would delete for the same ``event_prefix``."""
-    return LogCountResult(matching=await count_logs(event_prefix))
+    """How many rows :func:`clear_logs` would delete (and keep) for the same ``event_prefix``."""
+    cutoff = _protected_since()
+    return LogCountResult(
+        matching=await count_logs(event_prefix, cutoff),
+        kept_protected=await count_protected_logs(event_prefix, cutoff),
+    )
 
 
 async def clear_logs(event_prefix: str = "") -> LogPurgeResult:
-    """Delete the rows matching ``event_prefix``; return how many went.
+    """Delete the rows matching ``event_prefix``; return how many went and how many stayed.
+
+    WARNING/ERROR rows younger than ``logging.protected_retention_days`` are never
+    removed: the journal is the audit trail for account custody (foreign sessions, key
+    changes, failed backups), and one press of "clear logs" must not erase it.
 
     The purge leaves an audit row behind. One press of "clear logs" once erased a
     month of neurocomment history with nothing recording that it had happened, and
@@ -71,7 +89,9 @@ async def clear_logs(event_prefix: str = "") -> LogPurgeResult:
     any feed purges — a ``neurocomment_*`` code would be wiped by the next press of
     the very button it documents.
     """
-    deleted = await purge_logs(event_prefix)
+    cutoff = _protected_since()
+    deleted = await purge_logs(event_prefix, cutoff)
+    kept_protected = await count_protected_logs(event_prefix, cutoff)
     if deleted:
         # No row for a no-op press, as the retention sweeps do (``services.warming
         # ._purge``, ``services.neurocomment._sweep``): an operator clicking an
@@ -79,11 +99,14 @@ async def clear_logs(event_prefix: str = "") -> LogPurgeResult:
         await log_event(
             "INFO",
             "logs_cleared",
-            # ``*`` rather than "" so the whole-table case is legible in the row the
-            # operator reads, instead of an absent value they have to interpret.
-            extra={"deleted": deleted, "event_prefix": event_prefix or "*"},
+            # Whether a prefix was used, not the prefix list itself: it can be long.
+            extra={
+                "deleted": deleted,
+                "prefix_scoped": bool(event_prefix),
+                "kept_protected": kept_protected,
+            },
         )
-    return LogPurgeResult(deleted=deleted)
+    return LogPurgeResult(deleted=deleted, kept_protected=kept_protected)
 
 
 def _summarize(entries: list[LogEntry]) -> LogsSummary:

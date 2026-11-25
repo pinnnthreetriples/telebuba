@@ -224,7 +224,7 @@ async def enter_code(serial: str, nodes: list[UiNode], code: str) -> None:
     escape_input_text(code)  # refuse untypeable text before touching the screen
     boxes = fields(nodes)
     await adb.human_tap(serial, _require(boxes[0] if boxes else None))
-    await adb.human_type(serial, code, as_code=True)
+    await adb.human_type(serial, code, as_code=True, secret=True)
 
 
 async def enter_password(serial: str, nodes: list[UiNode], password: str) -> None:
@@ -243,7 +243,7 @@ async def enter_password(serial: str, nodes: list[UiNode], password: str) -> Non
         await adb.human_tap(serial, field)
         if shown:
             await adb.press(serial, adb.KEYCODE_MOVE_END, *([adb.KEYCODE_DEL] * shown))
-        await adb.human_type(serial, password, typo_probability=0.0)
+        await adb.human_type(serial, password, typo_probability=0.0, secret=True)
         shown = await _password_length(serial)
         if shown in (None, len(password)):
             await adb.press(serial, adb.KEYCODE_ENTER)

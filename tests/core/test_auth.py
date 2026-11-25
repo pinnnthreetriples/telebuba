@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from core import auth
@@ -57,3 +59,60 @@ def test_decode_rejects_token_when_no_secret_configured(
     monkeypatch.setattr(settings.auth, "secret", "")
     monkeypatch.setattr(auth.jwt, "decode", lambda *_a, **_k: {"sub": "someuser", "ver": 0})
     assert auth.decode_session_claims("any.forged.token") is None
+
+
+def _forge(**claims: object) -> str:
+    return auth.jwt.encode(claims, settings.auth.secret, algorithm=settings.auth.algorithm)
+
+
+def _now() -> int:
+    return int(datetime.now(UTC).timestamp())
+
+
+def test_a_fresh_token_carries_its_login_time() -> None:
+    before = _now()
+    claims = auth.decode_session_claims(auth.encode_session_token("user-123"))
+    assert claims is not None
+    assert before <= claims.auth_time <= _now()
+
+
+def test_a_reissued_token_keeps_the_original_login_time() -> None:
+    long_ago = _now() - 5 * 86_400
+    token = auth.encode_session_token("user-123", 0, auth_time=long_ago)
+    claims = auth.decode_session_claims(token)
+    assert claims is not None
+    assert claims.auth_time == long_ago
+
+
+def test_a_token_past_the_absolute_limit_is_rejected_though_exp_is_in_the_future(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.auth, "session_max_days", 30)
+    token = auth.encode_session_token("user-123", 0, auth_time=_now() - 31 * 86_400)
+    assert auth.jwt.decode(token, options={"verify_signature": False})["exp"] > _now()
+    assert auth.decode_session_claims(token) is None
+
+
+def test_a_token_just_inside_the_absolute_limit_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.auth, "session_max_days", 30)
+    token = auth.encode_session_token("user-123", 0, auth_time=_now() - 29 * 86_400)
+    assert auth.decode_session_claims(token) is not None
+
+
+def test_a_legacy_token_without_auth_time_counts_as_logged_in_at_iat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.auth, "session_max_days", 30)
+    exp = _now() + 600
+    recent = _forge(sub="u", ver=0, iat=_now() - 3600, exp=exp)
+    claims = auth.decode_session_claims(recent)
+    assert claims is not None
+    assert abs(claims.auth_time - (_now() - 3600)) <= 1
+    stale = _forge(sub="u", ver=0, iat=_now() - 31 * 86_400, exp=exp)
+    assert auth.decode_session_claims(stale) is None
+
+
+def test_a_token_with_neither_auth_time_nor_iat_is_rejected() -> None:
+    assert auth.decode_session_claims(_forge(sub="u", ver=0, exp=_now() + 600)) is None

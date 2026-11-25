@@ -18,7 +18,9 @@ from services import auth as auth_service
 from services.auth import _argon2
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
+    from types import ModuleType
 
 
 @pytest.fixture(autouse=True)
@@ -251,3 +253,151 @@ def test_rate_limiter_evicts_stale_buckets(monkeypatch: pytest.MonkeyPatch) -> N
     assert auth_service.check_login_rate_limit("ip-b", 1_000.0) is True
     assert set(_ratelimit._attempts) == {"ip-b"}
     _ratelimit._attempts.clear()
+
+
+@pytest.mark.asyncio
+async def test_refresh_keeps_the_original_login_time_and_never_slides_past_the_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _seed_user()
+    monkeypatch.setattr(settings.auth, "session_max_days", 30)
+    login = int(time.time()) - 29 * 86_400
+    token = core_auth.encode_session_token("u1", 0, auth_time=login)
+
+    resolved = await auth_service.resolve_and_refresh(token)
+
+    assert resolved is not None
+    refreshed_claims = core_auth.decode_session_claims(resolved[1])
+    assert refreshed_claims is not None
+    assert refreshed_claims.auth_time == login
+    # Past the cap the same cookie dies: exp alone would have kept it alive forever.
+    monkeypatch.setattr(settings.auth, "session_max_days", 28)
+    assert await auth_service.resolve_and_refresh(resolved[1]) is None
+    assert await auth_service.resolve_user(resolved[1]) is None
+
+
+@pytest.mark.asyncio
+async def test_a_new_login_starts_a_fresh_absolute_lifetime() -> None:
+    await _seed_user()
+    claims = core_auth.decode_session_claims(await auth_service.issue_session_token("u1"))
+    assert claims is not None
+    assert abs(claims.auth_time - int(time.time())) <= 2
+
+
+def _configure_admin(monkeypatch: pytest.MonkeyPatch, password: str) -> None:
+    monkeypatch.setattr(settings.auth, "admin_username", "admin")
+    monkeypatch.setattr(settings.auth, "admin_password", password)
+
+
+@pytest.mark.asyncio
+async def test_a_changed_admin_password_is_adopted_and_revokes_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _seed_user(password="old-pw")
+    token = await auth_service.issue_session_token("u1")
+    _configure_admin(monkeypatch, "new-pw")
+    logged: list[tuple[str, str, object]] = []
+
+    async def _capture(level: str, event: str, **kwargs: object) -> None:
+        logged.append((level, event, kwargs.get("extra")))
+
+    monkeypatch.setattr("services.auth.policy.log_event", _capture)
+
+    await auth_service.seed_admin_if_empty()
+
+    assert await auth_service.authenticate(LoginRequest(username="admin", password="new-pw"))
+    old = await auth_service.authenticate(LoginRequest(username="admin", password="old-pw"))
+    assert old is None
+    assert await auth_service.resolve_user(token) is None
+    assert logged == [("WARNING", "admin_password_changed", {"username": "admin"})]
+    assert await count_users() == 1
+
+
+@pytest.mark.asyncio
+async def test_an_unchanged_admin_password_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _seed_user(password="same-pw")
+    token = await auth_service.issue_session_token("u1")
+    before = await get_user_by_username("admin")
+    _configure_admin(monkeypatch, "same-pw")
+
+    await auth_service.seed_admin_if_empty()
+
+    assert before is not None
+    assert await get_user_by_username("admin") == before
+    assert await auth_service.resolve_user(token) is not None
+
+
+@pytest.mark.asyncio
+async def test_admin_password_sync_ignores_a_configured_admin_who_does_not_exist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _seed_user(username="someone", password="pw")
+    _configure_admin(monkeypatch, "other-pw")
+
+    await auth_service.seed_admin_if_empty()
+
+    assert await count_users() == 1
+    record = await get_user_by_username("someone")
+    assert record is not None
+    assert core_auth.verify_password("pw", record.password_hash)
+
+
+@pytest.fixture
+def limiter() -> Iterator[ModuleType]:
+    from services.auth import _ratelimit  # noqa: PLC0415 - reach the process-global dicts.
+
+    _ratelimit._attempts.clear()
+    _ratelimit._user_attempts.clear()
+    yield _ratelimit
+    _ratelimit._attempts.clear()
+    _ratelimit._user_attempts.clear()
+
+
+@pytest.mark.usefixtures("limiter")
+def test_user_limit_is_independent_of_the_client_ip(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.auth, "login_name_rate_limit_max_attempts", 2)
+    monkeypatch.setattr(settings.auth, "login_name_rate_limit_window_seconds", 100.0)
+    assert auth_service.check_login_user_rate_limit("admin", 1.0) is True
+    assert auth_service.check_login_user_rate_limit("admin", 1.1) is True
+    assert auth_service.check_login_user_rate_limit("admin", 1.2) is False
+    # Another name is unaffected; the IP limiter has its own, separate counters.
+    assert auth_service.check_login_user_rate_limit("other", 1.3) is True
+    assert auth_service.check_login_rate_limit("203.0.113.9", 1.4) is True
+
+
+@pytest.mark.usefixtures("limiter")
+def test_user_limit_normalises_the_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.auth, "login_name_rate_limit_max_attempts", 2)
+    assert auth_service.check_login_user_rate_limit("Admin", 1.0) is True
+    assert auth_service.check_login_user_rate_limit("  admin ", 1.1) is True
+    assert auth_service.check_login_user_rate_limit("ADMIN", 1.2) is False
+
+
+@pytest.mark.usefixtures("limiter")
+def test_user_limit_window_expires(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.auth, "login_name_rate_limit_max_attempts", 1)
+    monkeypatch.setattr(settings.auth, "login_name_rate_limit_window_seconds", 100.0)
+    assert auth_service.check_login_user_rate_limit("admin", 1.0) is True
+    assert auth_service.check_login_user_rate_limit("admin", 50.0) is False
+    assert auth_service.check_login_user_rate_limit("admin", 200.0) is True
+
+
+def test_unknown_usernames_do_not_grow_memory_without_bound(
+    monkeypatch: pytest.MonkeyPatch,
+    limiter: ModuleType,
+) -> None:
+    ratelimit = limiter
+    monkeypatch.setattr(settings.auth, "login_name_rate_limit_max_tracked", 5)
+    monkeypatch.setattr(settings.auth, "login_name_rate_limit_max_attempts", 3)
+    monkeypatch.setattr(settings.auth, "login_name_rate_limit_window_seconds", 100.0)
+    for index in range(500):
+        auth_service.check_login_user_rate_limit(f"ghost-{index}", 1.0 + index * 0.001)
+    assert len(ratelimit._user_attempts) <= 6  # the cap plus the shared overflow bucket
+    # A very long name is cut, not stored whole.
+    auth_service.check_login_user_rate_limit("x" * 100_000, 2.0)
+    assert all(len(key) <= 128 for key in ratelimit._user_attempts)
+    # Idle names are swept once their window passes.
+    auth_service.check_login_user_rate_limit("late", 10_000.0)
+    assert set(ratelimit._user_attempts) == {"late"}

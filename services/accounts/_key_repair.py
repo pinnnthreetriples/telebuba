@@ -34,6 +34,7 @@ from services.accounts._key_repair_rekey import (
     finish_rekey,
     recover_rekey,
     settle_legacy_leftover,
+    settle_stale_aside,
 )
 
 if TYPE_CHECKING:
@@ -199,4 +200,22 @@ async def repair_key_intents(account_id: str | None = None) -> int:
                 account_id=listed.account_id,
                 extra={"kind": listed.kind, "error_type": type(exc).__name__},
             )
+    if account_id is not None:
+        await _settle_side_copy(account_id)
     return closed
+
+
+async def _settle_side_copy(account_id: str) -> None:
+    """Before an operator's retry: the side copy a finished re-key left behind is put away."""
+    lock = account_auth_lock(account_id)
+    if lock.locked():
+        return
+    try:
+        async with lock:
+            if await list_open_intents(account_id):
+                return
+            account = await fetch_account(account_id)
+            if account is not None and await settle_stale_aside(account):
+                await log_event("WARNING", "session_rekey_aside_put_away", account_id=account_id)
+    except Exception as exc:  # noqa: BLE001 - the retry itself refuses over what is left.
+        logger.warning("stale side copy not settled (%s)", type(exc).__name__)

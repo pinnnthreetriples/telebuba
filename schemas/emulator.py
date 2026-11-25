@@ -32,6 +32,8 @@ EmulatorRefusalCode = Literal[
     # Telegram refused to send a login code: its "too many attempts" dialog is on the screen.
     "emulator_code_refused",
     "emulator_twofa_missing",
+    # The stored cloud password was not typed: the account's wrong answers are spent.
+    "twofa_attempts_exhausted",
     "emulator_password_rejected",
     "emulator_not_running",
     "emulator_not_signed_in",
@@ -54,6 +56,13 @@ EmulatorRefusalCode = Literal[
     # The app shows an entry screen although its sign-in was recorded: warming never
     # signs it in again; the operator opens the phone and signs it in.
     "emulator_signed_out",
+    # The operator's open would start a pod past ``EMULATOR__MAX_RUNNING_PODS``, or one the
+    # Docker host's memory cannot carry (``EMULATOR__HOST_MEMORY_FRACTION``).
+    "emulator_pod_limit",
+    "emulator_host_memory",
+    # A pod that already existed no longer held its network barrier when it was opened: it
+    # was stopped, never handed over (``core.emulator._gateway.verify_gateway``).
+    "emulator_gateway_unhealthy",
 ]
 
 # A search query ``input text`` can type: 2-32 letters, digits and spaces.

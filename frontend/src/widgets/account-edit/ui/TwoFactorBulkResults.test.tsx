@@ -3,7 +3,7 @@
 // the two routes the plaintext leaves by — the clipboard and the .csv. The
 // selection form and the batch itself are in TwoFactorBulkStep.test.tsx.
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -180,6 +180,54 @@ test('with no clipboard at all the panel asks for a manual copy, not a dead butt
   }
 });
 
+// The download is a speed bump, not a one-click export: the file holds every password in
+// plain text, so a dialog asks first. Asserted on behaviour (dialog, cancel, confirm), not on
+// its wording; the confirm button is the dialog's last one.
+async function confirmDownload() {
+  await userEvent.click(screen.getByRole('button', { name: 'Скачать .csv' }));
+  const dialog = screen.getAllByRole('dialog').at(-1)!;
+  return {
+    dialog,
+    confirm: () => userEvent.click(within(dialog).getAllByRole('button').at(-1)!),
+    cancel: () => userEvent.click(within(dialog).getAllByRole('button')[0]!),
+  };
+}
+
+test('the .csv download waits for a confirmation and cancelling writes no file', async () => {
+  const create = vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:test-csv');
+  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+  try {
+    renderResults([ok('acc-1')]);
+
+    const { dialog, cancel } = await confirmDownload();
+    expect(create).not.toHaveBeenCalled();
+    await cancel();
+
+    expect(dialog).not.toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+  } finally {
+    create.mockRestore();
+    revoke.mockRestore();
+  }
+});
+
+test('confirming the dialog downloads the .csv exactly once', async () => {
+  const create = vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:test-csv');
+  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+  try {
+    renderResults([ok('acc-1')]);
+
+    const { dialog, confirm } = await confirmDownload();
+    await confirm();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(dialog).not.toBeInTheDocument();
+  } finally {
+    create.mockRestore();
+    revoke.mockRestore();
+  }
+});
+
 test('the .csv carries every password, quoted, and its url outlives the click', async () => {
   const blobs: Blob[] = [];
   const create = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob: Blob | MediaSource) => {
@@ -192,6 +240,7 @@ test('the .csv carries every password, quoted, and its url outlives the click', 
     // A name carrying a comma must not split the row its password sits in.
     renderResults([ok('acc-1'), failed('acc-2'), ok('acc-3')]);
     fireEvent.click(screen.getByRole('button', { name: 'Скачать .csv' }));
+    fireEvent.click(within(screen.getAllByRole('dialog').at(-1)!).getAllByRole('button').at(-1)!);
 
     expect(await blobs[0]!.text()).toBe(
       'account,password,apostrophe_added\n' +
@@ -236,6 +285,7 @@ test.each([
     try {
       renderResults([ok('acc-1', { password })]);
       fireEvent.click(screen.getByRole('button', { name: 'Скачать .csv' }));
+      fireEvent.click(within(screen.getAllByRole('dialog').at(-1)!).getAllByRole('button').at(-1)!);
 
       const [, row] = (await blobs[0]!.text()).split('\n');
       expect(row).toBe(`"Аня",${cells}`);

@@ -32,6 +32,7 @@ import httpx
 from core.config import settings
 from core.secure_paths import make_private_dir
 from core.web_login._cdp import CdpSession
+from core.web_login._launch_args import build_launch_args
 from core.web_login._lifetime import browser_env, tie_to_backend
 from core.web_login._navigation import WEBK_URL as _WEBK_URL
 from core.web_login._passkey import PASSKEY_HOOK, PasskeyBridge
@@ -168,53 +169,6 @@ def find_browser() -> Path:
             return candidate
     msg = "No Chrome or Edge executable found; install one to open a web session."
     raise BrowserNotFoundError(msg)
-
-
-def build_launch_args(
-    *,
-    user_data_dir: Path,
-    relay_port: int,
-    url: str,
-    debug_port: int,
-    fingerprint: Fingerprint,
-) -> list[str]:
-    """The Chromium argv: isolated profile, loopback proxy, WebRTC guard, identity, app mode.
-
-    The DevTools endpoint is always emitted: the fingerprint is applied over it and
-    dies with it. Its allow-origin is scoped to that exact loopback origin rather than
-    the lifetime-wide ``*``.
-
-    ``--user-agent`` / ``--lang`` are the NETWORK-layer half of the identity.
-    ``Emulation.setUserAgentOverride`` is page-scoped and never reaches a browser-level
-    shared worker, so without these the very connection whose ``initConnection`` claims
-    a Mac would carry the operator's real Chrome/Windows request headers.
-    """
-    return [
-        f"--user-data-dir={user_data_dir}",
-        f"--proxy-server=http://127.0.0.1:{relay_port}",
-        # Keep WebRTC from leaking the real IP around the proxy. mDNS host-candidate
-        # obfuscation stays ON: disabling it puts this desktop's LAN IP into the SDP of
-        # every account's window — the same address in all of them.
-        "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
-        f"--user-agent={fingerprint.user_agent}",
-        f"--lang={fingerprint.locale}",
-        f"--remote-debugging-port={debug_port}",
-        # Recent Chrome refuses the CDP WebSocket without an allowed origin;
-        # scope it to this endpoint instead of disabling the check with "*".
-        f"--remote-allow-origins=http://127.0.0.1:{debug_port}",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--no-service-autorun",
-        "--disable-sync",
-        # Component updates, the optimization guide, Safe Browsing update fetches and
-        # domain reliability all go through --proxy-server, and each one opens a fresh
-        # upstream tunnel — TCP + greeting + auth + CONNECT, ~600 ms at a residential
-        # RTT — competing with WebK's own bundle exactly while time-to-signed-in is
-        # being decided. The umbrella flag covers the lot and touches no page load.
-        # It also keeps Google-domain background traffic off the account's exit IP.
-        "--disable-background-networking",
-        f"--app={url}",
-    ]
 
 
 def web_profiles_root() -> Path:

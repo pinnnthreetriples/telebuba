@@ -43,6 +43,7 @@ NotificationKind = Literal[
     "security_changed",
     "login_code_unrequested",
     "proxy_problem",
+    "private_path_open",
 ]
 BotSendStatus = Literal["sent", "rejected", "unreachable"]
 

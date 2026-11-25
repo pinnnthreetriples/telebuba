@@ -20,6 +20,7 @@ from services.accounts import (
     _app_screen,
     _bulk_runner,
     _emulator_sign_in,
+    _mobile_guard,
     _mobile_start,
     _twofa_pending,
     bulk_messages,
@@ -92,6 +93,9 @@ def _isolate_runtime(
     monkeypatch.setattr(settings.telegram, "session_dir", tmp_path / "sessions")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
+    # A checkout inside the live install picks up its ``.env``: the emulator is off unless a
+    # test (``mobile_enabled``) turns it on.
+    monkeypatch.setattr(settings.emulator, "enabled", False)
     # Per-key import locks are module-level and bind to the loop alive when first
     # awaited; clear them so each function-scoped test gets fresh locks (mirrors
     # warming's _ACCOUNT_LOCKS reset).
@@ -244,7 +248,7 @@ def container(monkeypatch: pytest.MonkeyPatch) -> _Container:
 
     monkeypatch.setattr(own_authorizations_module, "read_account_sessions", _unreachable)
     for name in _SERVICE_FAKES:
-        modules = [m for m in (emulator_module, _mobile_start) if hasattr(m, name)]
+        modules = [m for m in (emulator_module, _mobile_start, _mobile_guard) if hasattr(m, name)]
         assert modules, name
         for module in modules:
             monkeypatch.setattr(module, name, getattr(fake, name))

@@ -11,7 +11,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from core.android_apk import AppIdentity
-from core.emulator import EmulatorError
+from core.emulator import EmulatorError, GatewayUnhealthyError
 from core.emulator.pod import StartedPod
 from core.emulator.redroid import Instance
 from core.repositories.proxies import create_and_assign_proxy, update_proxy_check
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
     import pytest
 
+    from core.emulator._errors import GatewayFault
     from core.emulator._profile import ContainerSpec
     from core.emulator.ui_dump import Screen
     from schemas.proxy import ProxySettings
@@ -63,6 +64,11 @@ class _Container:
         self.battery_now: datetime | None = None
         self.data_kept = False
         self.app_installed = True
+        # The guard's seams (``_mobile_guard``); none of them is a ``steps`` entry.
+        self.gateway_fault: GatewayFault | None = None
+        self.gateway_checks: list[str] = []
+        self.others_up: list[Instance] = []
+        self.host_memory: int | None = None
 
     def step(self, name: str) -> None:
         self.steps.append(name)
@@ -92,6 +98,17 @@ class _Container:
         if self.launch_gate is not None:
             await self.launch_gate.wait()
         return StartedPod(self.instance, fresh_data=fresh)
+
+    async def list_instances(self) -> list[Instance]:
+        return [*self.others_up, *([self.instance] if self.instance else [])]
+
+    async def host_memory_bytes(self) -> int | None:
+        return self.host_memory
+
+    async def verify_gateway(self, name: str) -> None:
+        self.gateway_checks.append(name)
+        if self.gateway_fault is not None:
+            raise GatewayUnhealthyError(self.gateway_fault)
 
     async def pod_runs_proxy(self, _name: str, proxy: ProxySettings) -> bool:
         self.step(f"proxy?:{proxy.host}")
@@ -210,6 +227,9 @@ class _Container:
 
 _SERVICE_FAKES = (
     "find_instance",
+    "list_instances",
+    "host_memory_bytes",
+    "verify_gateway",
     "start_pod",
     "pod_runs_proxy",
     "wait_for_boot",

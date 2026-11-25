@@ -59,6 +59,21 @@ async def bump_token_version(user_id: str) -> None:
     await asyncio.to_thread(_bump_token_version, user_id)
 
 
+def _set_password_hash(user_id: str, password_hash: str) -> None:
+    statement = (
+        update(_users)
+        .where(_users.c.id == user_id)
+        .values(password_hash=password_hash, updated_at=_now_iso())
+    )
+    with _get_engine().begin() as connection:
+        connection.execute(statement)
+
+
+async def set_password_hash(user_id: str, password_hash: str) -> None:
+    """Replace a user's stored password hash (the caller revokes their sessions)."""
+    await asyncio.to_thread(_set_password_hash, user_id, password_hash)
+
+
 def _get_user_by_username(username: str) -> UserRecord | None:
     statement = select(_users).where(_users.c.username == username)
     with _get_engine().connect() as connection:

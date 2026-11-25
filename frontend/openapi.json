@@ -33234,11 +33234,17 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Matching"
+          },
+          "kept_protected": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Kept Protected"
           }
         },
         "type": "object",
         "required": [
-          "matching"
+          "matching",
+          "kept_protected"
         ],
         "title": "LogCountResult",
         "description": "How many log rows a clear operation *would* remove, asked before confirming.\n\nThe Logs views hold only one page of rows, so the count on screen is no guide to\nthe size of the purge; this is the whole-table answer."
@@ -33312,14 +33318,20 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Deleted"
+          },
+          "kept_protected": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Kept Protected"
           }
         },
         "type": "object",
         "required": [
-          "deleted"
+          "deleted",
+          "kept_protected"
         ],
         "title": "LogPurgeResult",
-        "description": "How many log rows a clear operation removed."
+        "description": "How many log rows a clear operation removed, and how many it kept back."
       },
       "LoginRequest": {
         "properties": {
@@ -37052,6 +37064,7 @@
                   "emulator_code_timeout",
                   "emulator_code_refused",
                   "emulator_twofa_missing",
+                  "twofa_attempts_exhausted",
                   "emulator_password_rejected",
                   "emulator_not_running",
                   "emulator_not_signed_in",
@@ -37071,7 +37084,10 @@
                   "emulator_app_offline",
                   "emulator_app_unresponsive",
                   "emulator_screen_unknown",
-                  "emulator_signed_out"
+                  "emulator_signed_out",
+                  "emulator_pod_limit",
+                  "emulator_host_memory",
+                  "emulator_gateway_unhealthy"
                 ]
               },
               {

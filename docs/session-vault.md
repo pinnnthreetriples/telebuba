@@ -75,6 +75,15 @@ The database is backed up as well (`DB__BACKUP_ENABLED`, on by default): it hold
 5. If passkeys are used: the key vault comes back from `openbao-*.snap` with the SAME unseal keys (see `docs/passkeys.md`), otherwise accounts fall back to SMS sign-in.
 6. Start ONE instance (never two on the same keys), then check every account.
 
+## Who can open the folders (Windows)
+
+Owner-only modes (`0700`/`0600`) exist on Linux only. On Windows a folder inherits the access list of its parent, and the root of a data disk grants "Authenticated Users" access: every other account on this computer could read the `.session` files, the database (it holds the 2FA passwords) and the copies. The mirror (`SESSION_VAULT__MIRROR_DIR`) usually sits on a second disk and is the usual offender.
+
+At every start Telebuba checks the access list of `sessions`, `quarantine`, `database`, `backups`, `web_profiles`, `session_vault` and `vault_mirror` and writes one journal event `private_path_open` per open one (extra `what` is the name, `grants` is who: `everyone`, `authenticated_users`, `users`, `interactive`, `anonymous`, `guests`). The operator bot says it too. Nothing is changed by itself.
+
+- See it: `uv run python -m tools.secure_paths check` (exit 1 when anything is open).
+- Close it: `uv run python -m tools.secure_paths fix`. Only the open paths are changed: inheritance is cut and only your user, SYSTEM and Administrators keep full control (SIDs, so any system language works). Run it as the user that runs Telebuba. A mirror in a synced cloud folder or on a share may refuse; then set the folder's access in Explorer by hand.
+
 ## One owner of the fleet
 
 Copies of the session files on a second computer (a laptop) are a backup only while that computer never connects them: two instances on one key, from two IPs, get the key revoked. `INSTANCE__FLEET_OWNER_HOST` names the one computer (its hostname) that may build Telegram clients. Set it on every computer that holds copies; on any other the client factory refuses (`FleetOwnerRefusedError`, read by every caller as an unreachable account) and the startup log says `instance_not_fleet_owner`. Empty means no restriction.

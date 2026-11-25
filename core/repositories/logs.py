@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import cast
+from typing import Any, cast
 
-from sqlalchemy import ColumnElement, delete, false, func, insert, or_, select
+from sqlalchemy import ColumnElement, and_, delete, false, func, insert, not_, or_, select
 
 from core.db import _get_engine, _logs, _now_iso, _optional_str
 from schemas.logs import LogEntry, LogEventInput, LogFilter, LogLevel, LogStatus
@@ -45,6 +45,29 @@ def _event_prefix_clause(event_prefix: str) -> ColumnElement[bool] | None:
         if part.strip()
     ]
     return or_(*clauses) if clauses else false()
+
+
+# Levels the journal keeps as the custody audit trail (see ``_protected_clause``).
+_PROTECTED_LEVELS: tuple[LogLevel, ...] = ("WARNING", "ERROR")
+
+
+def _protected_clause(protected_since: str) -> ColumnElement[bool]:
+    """Rows a clear must never remove: WARNING/ERROR rows created at or after the cutoff.
+
+    ``created_at`` is an ISO timestamp, so the comparison is lexicographic, the same
+    shape ``purge_logs_older_than`` relies on.
+    """
+    return and_(_logs.c.level.in_(_PROTECTED_LEVELS), _logs.c.created_at >= protected_since)
+
+
+def _removable_statement(statement: Any, event_prefix: str, protected_since: str | None) -> Any:  # noqa: ANN401
+    """``statement`` narrowed to the rows a clear may remove: the prefix match, minus protected."""
+    prefix_clause = _event_prefix_clause(event_prefix)
+    if prefix_clause is not None:
+        statement = statement.where(prefix_clause)
+    if protected_since is not None:
+        statement = statement.where(not_(_protected_clause(protected_since)))
+    return statement
 
 
 def _insert_log_row(event: LogEventInput) -> LogEntry:
@@ -142,8 +165,28 @@ async def list_filtered_logs(log_filter: LogFilter, offset: int = 0) -> list[Log
     return await asyncio.to_thread(_list_filtered_logs, log_filter, offset)
 
 
-def _count_logs(event_prefix: str) -> int:
-    statement = select(func.count()).select_from(_logs)
+def _count_logs(event_prefix: str, protected_since: str | None) -> int:
+    statement = _removable_statement(
+        select(func.count()).select_from(_logs),
+        event_prefix,
+        protected_since,
+    )
+    with _get_engine().connect() as connection:
+        return int(connection.execute(statement).scalar_one())
+
+
+async def count_logs(event_prefix: str = "", protected_since: str | None = None) -> int:
+    """Count the rows a clear would remove for ``event_prefix``, without touching them.
+
+    Deliberately the SAME clause as :func:`purge_logs`, so the number the operator
+    is asked to confirm cannot disagree with the number the purge then removes.
+    ``protected_since`` (ISO timestamp) spares WARNING/ERROR rows created at or after it.
+    """
+    return await asyncio.to_thread(_count_logs, event_prefix, protected_since)
+
+
+def _count_protected_logs(event_prefix: str, protected_since: str) -> int:
+    statement = select(func.count()).select_from(_logs).where(_protected_clause(protected_since))
     prefix_clause = _event_prefix_clause(event_prefix)
     if prefix_clause is not None:
         statement = statement.where(prefix_clause)
@@ -151,31 +194,25 @@ def _count_logs(event_prefix: str) -> int:
         return int(connection.execute(statement).scalar_one())
 
 
-async def count_logs(event_prefix: str = "") -> int:
-    """Count the rows ``event_prefix`` matches, without touching them.
-
-    Deliberately the SAME clause as :func:`purge_logs`, so the number the operator
-    is asked to confirm cannot disagree with the number the purge then removes.
-    """
-    return await asyncio.to_thread(_count_logs, event_prefix)
+async def count_protected_logs(event_prefix: str, protected_since: str) -> int:
+    """Count the rows ``event_prefix`` matches that a clear keeps back as protected."""
+    return await asyncio.to_thread(_count_protected_logs, event_prefix, protected_since)
 
 
-def _purge_logs(event_prefix: str) -> int:
-    statement = delete(_logs)
-    prefix_clause = _event_prefix_clause(event_prefix)
-    if prefix_clause is not None:
-        statement = statement.where(prefix_clause)
+def _purge_logs(event_prefix: str, protected_since: str | None) -> int:
+    statement = _removable_statement(delete(_logs), event_prefix, protected_since)
     with _get_engine().begin() as connection:
         return connection.execute(statement).rowcount
 
 
-async def purge_logs(event_prefix: str = "") -> int:
+async def purge_logs(event_prefix: str = "", protected_since: str | None = None) -> int:
     """Delete log rows matching ``event_prefix`` (see ``_event_prefix_clause``).
 
     Powers the operator "clear logs" action; scoped by prefix so the neurocomment
     panel can wipe only its own feed without touching warming/account history.
+    Rows :func:`_protected_clause` selects for ``protected_since`` are never removed.
     """
-    return await asyncio.to_thread(_purge_logs, event_prefix)
+    return await asyncio.to_thread(_purge_logs, event_prefix, protected_since)
 
 
 def _purge_logs_older_than(cutoff_iso: str) -> int:

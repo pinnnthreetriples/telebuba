@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from schemas.emulator import EmulatorRefusalCode
+
+# Why a pod's gateway failed its barrier check: stable words, never an address.
+GatewayFault = Literal[
+    "tunnel_down",
+    "kill_switch_missing",
+    "kill_switch_unreadable",
+    "egress_open",
+    "route_not_tunnel",
+    "check_timeout",
+    "check_failed",
+]
 
 
 class EmulatorError(RuntimeError):
@@ -18,3 +29,15 @@ class EmulatorError(RuntimeError):
     def __init__(self, code: EmulatorRefusalCode) -> None:
         super().__init__(code)
         self.code: EmulatorRefusalCode = code
+
+
+class GatewayUnhealthyError(EmulatorError):
+    """An existing pod's gateway no longer holds its barrier; ``reason`` says which part.
+
+    Its code is ``emulator_gateway_unhealthy``. ``reason`` is journalled, so like the
+    code it names the failed check only: never a proxy address, rule text or output.
+    """
+
+    def __init__(self, reason: GatewayFault) -> None:
+        super().__init__("emulator_gateway_unhealthy")
+        self.reason: GatewayFault = reason

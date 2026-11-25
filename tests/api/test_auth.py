@@ -31,9 +31,11 @@ def _auth_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings.auth, "secret", "api-test-secret-0123456789abcdef-pad")
     monkeypatch.setattr(settings.auth, "cookie_secure", False)
     monkeypatch.setattr(settings.auth, "cookie_samesite", "strict")
-    _ratelimit._attempts.clear()  # reset the process-global limiter
+    _ratelimit._attempts.clear()  # reset the process-global limiters
+    _ratelimit._user_attempts.clear()
     yield
     _ratelimit._attempts.clear()
+    _ratelimit._user_attempts.clear()
 
 
 def _raw_app() -> FastAPI:
@@ -116,6 +118,26 @@ async def test_login_is_rate_limited(monkeypatch: pytest.MonkeyPatch) -> None:
     assert first.status_code == 401
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_login_is_rate_limited_per_username_across_client_ips(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.auth, "login_name_rate_limit_max_attempts", 2)
+    await _seed_admin()
+    creds = {"username": "Admin", "password": "x"}
+    statuses = []
+    for octet in range(1, 5):
+        transport = httpx.ASGITransport(
+            app=_raw_app(),
+            raise_app_exceptions=False,
+            client=(f"198.51.100.{octet}", 5000),
+        )
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/api/v1/auth/login", json=creds)
+        statuses.append(resp.status_code)
+    assert statuses == [401, 401, 429, 429]
 
 
 @pytest.mark.asyncio

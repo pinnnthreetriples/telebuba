@@ -37,6 +37,7 @@ from core.telegram_client._key_intent import sign_in_intent
 from core.telegram_client._passkey import PasskeyGatewayError, public_key_options
 from core.telegram_client._pool import removing_client
 from core.telegram_client._twofa_candidates import sign_in_with_passwords
+from core.twofa_budget import TwofaAttemptsExhaustedError
 from core.webauthn_passkey import build_assertion
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -130,6 +131,9 @@ async def _second_factor(client: TelegramClient, passkey: StoredPasskey) -> None
         await sign_in_with_passwords(client, passkey.account_id, candidates)
     except errors.PasswordHashInvalidError as exc:
         msg = "passkey_twofa_invalid"
+        raise PasskeyGatewayError(msg) from exc
+    except TwofaAttemptsExhaustedError as exc:
+        msg = "twofa_attempts_exhausted"
         raise PasskeyGatewayError(msg) from exc
 
 

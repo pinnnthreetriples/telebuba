@@ -142,6 +142,16 @@ class EmulatorSettings(BaseSettings):
     # Pods warming may run at once; a mobile stint finding none free skips its cycle
     # (``emulator_capacity``) and tries again next time (the operator's opens are not counted).
     max_running_pods: int = Field(default=4, ge=1)
+    # The share of the Docker host's total memory the pods may be given (``memory_mb`` each):
+    # the operator's open of one more pod past it is refused (``emulator_host_memory``).
+    host_memory_fraction: float = Field(default=0.8, gt=0, le=1)
+    # The barrier re-check of a pod that already exists (``core.emulator._gateway``), all
+    # its docker calls together; a check that runs out of time fails closed.
+    gateway_check_seconds: float = Field(default=10.0, gt=0)
+    # Off: a failed re-check is journalled and the pod is still used (the check has not met
+    # a real gateway yet; the kill-switch itself is unchanged). On: the pod is stopped and
+    # the open refused. Turn on once the journal shows no false alarms on your pods.
+    gateway_check_enforce: bool = False
     # A warming pod is paused, not stopped, after a visit, and stopped once paused this
     # long: a visit within it skips the Android boot. 0 stops it after every visit.
     pause_ttl_seconds: int = Field(default=1200, ge=0)

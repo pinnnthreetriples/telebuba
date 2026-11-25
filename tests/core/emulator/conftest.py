@@ -86,6 +86,19 @@ class Console:
         """The device-side part (after ``shell``) of every adb shell call."""
         return [call[call.index("shell") + 1 :] for call in self.calls if "shell" in call]
 
+    def typed(self) -> list[str]:
+        """Every ``input text`` argument in order: from argv, or (a secret) from stdin."""
+        out: list[str] = []
+        for call, stdin in zip(self.calls, self.stdins, strict=True):
+            if "shell" not in call:
+                continue
+            command = call[call.index("shell") + 1 :]
+            if command[:2] == ["input", "text"]:
+                out.append(command[2])
+            elif not command and stdin:
+                out.append(stdin.decode().removeprefix("input text ").removesuffix(chr(10)))
+        return out
+
 
 @pytest.fixture
 def console(monkeypatch: pytest.MonkeyPatch) -> Console:

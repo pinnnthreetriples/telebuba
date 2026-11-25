@@ -45,6 +45,7 @@ PasskeyGatewayCode = Literal[
     "passkey_telegram_refused",
     "passkey_twofa_missing",
     "passkey_twofa_invalid",
+    "twofa_attempts_exhausted",
     "passkey_user_mismatch",
     "passkey_vault_disabled",
     "passkey_vault_unreachable",

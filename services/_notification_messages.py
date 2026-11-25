@@ -70,13 +70,15 @@ _EVENT_KINDS: dict[str, NotificationKind] = {
     # The copies that leave the disk, and the key vault's own snapshot.
     "db_mirror_failed": "db_maintenance",
     "passkey_vault_snapshot_failed": "passkey_vault",
+    # A folder with keys, the database or their copies is open to other users of this computer.
+    "private_path_open": "private_path_open",
 }
 # ``proxy_exit_changed`` is news only when the country moved: a rotating proxy's IP moves all day.
 _PROXY_EXIT_EVENT = "proxy_exit_changed"
 # Kinds that tell one fleet-wide thing however many accounts raise it (a full disk fails every
 # account's copy at once): the throttle slot is shared, not one per account.
 FLEET_KINDS: frozenset[NotificationKind] = frozenset(
-    {"session_backup_failed", "passkey_vault", "proxy_problem"}
+    {"session_backup_failed", "passkey_vault", "proxy_problem", "private_path_open"}
 )
 
 _PREFIX = "Telebuba · "
@@ -165,6 +167,11 @@ _TEMPLATES: dict[NotificationKind, str] = {
     "login_code_unrequested": (
         "{label}: пришёл код входа, который Telebuba не запрашивала, — кто-то пытается войти "
         "в аккаунт. Проверьте раздел «Сессии» на карточке аккаунта."
+    ),
+    "private_path_open": (
+        "Папка с ключами аккаунтов, базой или их копиями открыта другим пользователям "
+        "этого компьютера. Посмотрите: python -m tools.secure_paths check; "
+        "закрыть: python -m tools.secure_paths fix (docs/session-vault.md)."
     ),
     "proxy_problem": (
         "Фоновая проверка прокси: прокси перестал отвечать или сменил страну выхода. "

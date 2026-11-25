@@ -33,6 +33,8 @@ RekeyRefusalCode = Literal[
     # The account has a cloud password Telebuba does not have, or Telegram refused it.
     "rekey_twofa_missing",
     "rekey_twofa_invalid",
+    # The stored password was not sent: its wrong answers for this window are spent.
+    "twofa_attempts_exhausted",
     # The new session signed in as a different Telegram user: it was undone.
     "rekey_user_mismatch",
     # A file with the scratch name is already in the sessions directory.

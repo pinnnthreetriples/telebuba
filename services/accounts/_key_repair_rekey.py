@@ -18,7 +18,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
 from core.logging import log_event
-from core.repositories.account_key_intents import close_intent, fetch_intent, list_open_intents
+from core.repositories.account_key_intents import (
+    close_intent,
+    fetch_intent,
+    fetch_last_closed_intent,
+    list_open_intents,
+)
 from core.repositories.account_rekeys import fetch_rekey, save_rekey
 from core.repositories.device_fingerprint import set_device_api_id
 from core.telegram_client import end_leftover_session, same_session_key, session_key_mark
@@ -195,6 +200,35 @@ async def recover_rekey(account: AccountRead, intent: KeyIntent) -> bool:
     if not await _end_scratch(account, intent, scratch):
         return False
     await close_intent(intent.id, "undone")
+    return True
+
+
+_LANDED = frozenset({"done", "recovered"})
+
+
+async def settle_stale_aside(account: AccountRead) -> bool:
+    """Put away the side copy a landed swap could not remove; whether one was put away.
+
+    Only on proof: the account's last re-key is closed as landed, its ``old_key_mark`` is the
+    side copy's key (so the copy is the superseded key, ended through the new one), and the
+    account's file holds another, readable key. Then the copy goes to the quarantine, where
+    it stays recoverable. Anything else is left for the next re-key to refuse over.
+    """
+    final = _files.own_file(account)
+    if final is None:
+        return False
+    aside = _files.aside_of(final)
+    if not await asyncio.to_thread(aside.exists):
+        return False
+    last = await fetch_last_closed_intent(account.account_id, "rekey")
+    if last is None or last.outcome not in _LANDED or last.old_key_mark is None:
+        return False
+    if await asyncio.to_thread(session_key_mark, str(aside)) != last.old_key_mark:
+        return False
+    own = await asyncio.to_thread(session_key_mark, str(final))
+    if own is None or own == last.old_key_mark or await _files.state_of(final) != "ok":
+        return False
+    await _files.quarantine(aside)
     return True
 
 

@@ -33,7 +33,11 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Use
             detail="authentication is not configured",
         )
     client_key = request.client.host if request.client else "unknown"
-    if not auth_service.check_login_rate_limit(client_key, time.time()):
+    now = time.time()
+    if not (
+        auth_service.check_login_rate_limit(client_key, now)
+        and not auth_service.login_user_blocked(body.username, now)
+    ):
         raise HTTPException(
             status_code=http_status.HTTP_429_TOO_MANY_REQUESTS,
             detail="too many login attempts",
@@ -47,6 +51,7 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Use
             headers={"Retry-After": "1"},
         ) from exc
     if user is None:
+        auth_service.record_login_failure(body.username, now)
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail="invalid credentials",

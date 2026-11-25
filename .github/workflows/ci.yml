@@ -190,7 +190,12 @@ jobs:
         # oversubscribing a small runner or leaving a large one idle. Test-level
         # isolation is what makes this safe (tests/conftest.py gives every test
         # its own session dir); nothing here depends on the worker count.
-        run: uv run pytest --maxfail=10 -n auto
+        #
+        # --dist worksteal: with the default `load` the worker that drew tests/api
+        # (about two seconds a test) ran alone for eight more minutes after the
+        # other three had finished, and the job reached the twenty-minute limit.
+        # Idle workers now take tests from the longest queue.
+        run: uv run pytest --maxfail=10 -n auto --dist worksteal
 
       - name: Upload coverage HTML report
         if: always()

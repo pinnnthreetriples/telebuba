@@ -7,10 +7,17 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
+from core.config import settings
 from core.logging import log_event
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+
+
+@pytest.fixture(autouse=True)
+def _no_protection_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests clear freshly seeded WARNING rows; the protection window has its own tests."""
+    monkeypatch.setattr(settings.logging, "protected_retention_days", 0)
 
 
 def _client(app: FastAPI) -> httpx.AsyncClient:
@@ -79,7 +86,7 @@ async def test_blank_only_event_prefix_purges_nothing_over_http(app: FastAPI, bl
         listed = await client.get("/api/v1/logs", params={"event_prefix": blank})
         assert listed.json()["items"] == []
         deleted = await client.request("DELETE", "/api/v1/logs", params={"event_prefix": blank})
-        assert deleted.json() == {"deleted": 0}
+        assert deleted.json() == {"deleted": 0, "kept_protected": 0}
         left = await client.get("/api/v1/logs")
     assert len(left.json()["items"]) == 2
 
@@ -95,7 +102,7 @@ async def test_clear_logs_by_comma_separated_prefixes_deletes_the_union(app: Fas
         resp = await client.request(
             "DELETE", "/api/v1/logs", params={"event_prefix": "warming_,spam_status"}
         )
-        assert resp.json() == {"deleted": 2}
+        assert resp.json() == {"deleted": 2, "kept_protected": 0}
         left = await client.get("/api/v1/logs")
     events = {row["event"] for row in left.json()["items"]}
     assert events == {"telegram_action_unavailable", "neurocomment_posted", "logs_cleared"}
@@ -120,7 +127,7 @@ async def test_clear_logs_by_prefix_deletes_and_returns_count(app: FastAPI) -> N
             "DELETE", "/api/v1/logs", params={"event_prefix": "neurocomment"}
         )
         assert resp.status_code == 200
-        assert resp.json() == {"deleted": 2}
+        assert resp.json() == {"deleted": 2, "kept_protected": 0}
         left = await client.get("/api/v1/logs")
     events = [row["event"] for row in left.json()["items"]]
     assert events == ["logs_cleared", "warming_subscribe"]
@@ -135,9 +142,27 @@ async def test_count_logs_reports_what_the_delete_would_then_remove(app: FastAPI
     async with _client(app) as client:
         counted = await client.get("/api/v1/logs/count", params={"event_prefix": "neurocomment"})
         assert counted.status_code == 200
-        assert counted.json() == {"matching": 2}
-        assert (await client.get("/api/v1/logs/count")).json() == {"matching": 3}
+        assert counted.json() == {"matching": 2, "kept_protected": 0}
+        assert (await client.get("/api/v1/logs/count")).json() == {
+            "matching": 3,
+            "kept_protected": 0,
+        }
         deleted = await client.request(
             "DELETE", "/api/v1/logs", params={"event_prefix": "neurocomment"}
         )
-    assert deleted.json() == {"deleted": counted.json()["matching"]}
+    assert deleted.json() == {"deleted": counted.json()["matching"], "kept_protected": 0}
+
+
+@pytest.mark.asyncio
+async def test_clear_reports_the_recent_problem_rows_it_kept_back(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.logging, "protected_retention_days", 30)
+    await log_event("INFO", "thing_happened")
+    await log_event("WARNING", "custody_problem")
+    async with _client(app) as client:
+        counted = await client.get("/api/v1/logs/count")
+        deleted = await client.request("DELETE", "/api/v1/logs")
+    assert counted.json() == {"matching": 1, "kept_protected": 1}
+    assert deleted.json() == {"deleted": 1, "kept_protected": 1}
