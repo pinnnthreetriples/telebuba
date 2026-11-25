@@ -327,7 +327,9 @@ async def chat_failed(
     leave = await account_error(ctx, account_id, failed=True)
     if not ctx.settings.skip_errors:
         raise ChatBroadcastStoppedOnErrorError(error_type or "failed")
-    await skip(ctx, target, "error", account_id)
+    # The halt goes on record first: the skip may close the last open chat, and a run with
+    # nothing left ends and cancels this worker before it could write anything more.
     if leave:
         await halt_account(ctx, account_id, "errors_in_a_row")
+    await skip(ctx, target, "error", account_id)
     return leave

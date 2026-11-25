@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -10,10 +11,16 @@ from core.repositories import masstagging as repository
 from core.repositories.spam_status import get_spam_status
 from core.telegram_client import UNCONFIRMED_ERROR_TYPE, TelegramReadError
 from schemas.telegram_actions_masstagging import MasstagResolvedTarget, MasstagUser
+from services.masstagging import _seams, _worker
 from tests.services.masstagging.fakes import answer, run_to_end, seed
 
 if TYPE_CHECKING:
+    from schemas.telegram_actions import ActionResult, TelegramAction
+    from services.masstagging._context import RunContext
+    from services.masstagging._fleet import FleetAccount
     from tests.services.masstagging.fakes import Clock, FakeTelegram
+
+_DAY = 86_400
 
 
 async def _rows(campaign_id: str) -> dict[str, tuple[str, str | None]]:
@@ -69,6 +76,51 @@ async def test_a_flooded_account_rests_while_another_goes_on(telegram: FakeTeleg
 
     assert {state for state, _reason in (await _rows(campaign_id)).values()} == {"tagged"}
     assert {account for account, _peer in telegram.toggles} == {"a2"}
+
+
+@pytest.mark.asyncio
+async def test_an_account_that_ran_out_of_people_takes_what_a_flooded_one_gives_back(
+    telegram: FakeTelegram, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    campaign_id = await seed(
+        mode="priming",
+        media=[],
+        accounts=("a1", "a2"),
+        targets=("@alpha", "@beta", "@gamma"),
+        floods_to_rest=1,
+    )
+    telegram.toggle_answers["a1"] = [answer("flood_wait", flood_wait_seconds=10)]
+    # The order that used to rest the campaign until tomorrow: a1 holds a person, a2 tags
+    # the others and finds nothing left for it, and only then a1 is flooded out.
+    a1_holds = asyncio.Event()
+    a2_finished = asyncio.Event()
+    work = _worker.work
+
+    async def _work(ctx: RunContext, account: FleetAccount) -> _worker.WorkerOutcome:
+        outcome = await work(ctx, account)
+        if account.account_id == "a2":
+            a2_finished.set()
+        return outcome
+
+    async def _execute(account_id: str, action: TelegramAction) -> ActionResult:
+        if account_id == "a1":
+            a1_holds.set()
+            await a2_finished.wait()
+        else:
+            await a1_holds.wait()
+        return await telegram.execute(account_id, action)
+
+    monkeypatch.setattr(_worker, "work", _work)
+    monkeypatch.setattr(_seams, "execute", _execute)
+    start = clock.now()
+
+    await run_to_end(campaign_id)
+
+    assert await _record(campaign_id) == ("done", None)
+    assert {state for state, _reason in (await _rows(campaign_id)).values()} == {"tagged"}
+    # a2 went on with the person a1 gave back, the same day: a1 never got a second try.
+    assert {account for account, _peer in telegram.toggles} == {"a2"}
+    assert clock.now() - start < _DAY
 
 
 @pytest.mark.asyncio

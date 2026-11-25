@@ -1,7 +1,7 @@
 ---
 name: runtime-masstagging
 description: Masstagging campaigns — story mentions and priming through the auto-delete toggle.
-last_updated: 2026-11-07
+last_updated: 2026-11-25
 edges:
   - target: context/runtime-chat-broadcast.md
     condition: the run lifecycle it copies, or the account-ownership registry
@@ -37,6 +37,8 @@ a failed run continue the same run, a restart resumes it.
 - Limits are per account and day, whatever campaign spends them; the day starts at 09:00
   local time. A day spent rests the campaign until then and it goes on by itself; floods
   in a row rest that account; every account flooded out stops the run for the operator.
+  People a stopping account gives back go to an account that can still work today, even
+  one that had already run out of people: the campaign rests only when none can take them.
 - "Skip those already tagged" reads one registry across all campaigns, by Telegram user
   id; deleting a campaign keeps it, because those people were tagged regardless.
 - An id is per account session: a person is resolved by the account that tags them, a
