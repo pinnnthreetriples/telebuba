@@ -1,7 +1,7 @@
 ---
 name: import-seller-session
 description: Change the seller .session + .json import, its device fingerprint, recording a known 2FA password (after the proxy), or how an auth key is made, replaced, ended or restored.
-last_updated: 2026-11-24
+last_updated: 2026-11-25
 edges:
   - target: context/runtime-telegram.md
     condition: sessions, proxies or the client pool
@@ -13,8 +13,8 @@ edges:
 
 1. A `.session` may come with the seller's `.json` (`core/session_json.py`, a pure parser). The password is kept out of `repr` and logs. The JSON phone must equal the file stem's digits (`session_json_phone_mismatch`), and a bad file is `session_json_invalid`.
 2. An `sdk` starting with `Android` forces `session_device=mobile` and stores the seller device VERBATIM as the fingerprint (platform `android`, `system_version` like `Android 14`, not the minted `SDK 34`). The emulator reads those sales names (`Samsung Galaxy S23`, `Android 14`) as the catalogue phone and SDK through `android_phone_for` in `core/device_fingerprint_android.py`, exact names only (a base model never matches its Ultra, a shared name matches nothing); the stored fingerprint, what Telegram is told, is never rewritten. A phone outside the catalogue, or on a release it never ran there, is still `emulator_device_unknown`.
-3. A password is stored only after Telegram verifies it: `VerifyTwoFactorPassword` is `getPassword`, then `account.getPasswordSettings` with the SRP proof, read-only on both sides. A wrong password is `twofa_current_password_invalid`; no cloud password is `twofa_not_enabled`.
+3. A password is stored only after Telegram verifies it: `VerifyTwoFactorPassword` is `getPassword`, then `account.getPasswordSettings` with the SRP proof. A wrong password is `twofa_current_password_invalid`; no cloud password is `twofa_not_enabled`.
 4. The import makes NO Telegram call: the account has no proxy yet, and a proxyless client connects from the operator's own IP. The password is recorded later, once the wizard's proxy step assigned one: `POST /accounts/{id}/2fa/record-json` (the same JSON again; `session_json_no_password` when it has none) and `POST /accounts/{id}/2fa/record` (typed), both under the per-account 2FA lock. The account card offers the typed record without a copy, and behind a link with one: a password changed on Telegram leaves the copy stale, and emulator sign-in then ends `emulator_password_rejected`. `record_account_twofa` refuses an account with no proxy (`twofa_proxy_missing`) before any call. Until then the seller's password is only a candidate (`has_unverified_candidate`), not `has_stored_password`; a refusal by Telegram is remembered (`twofa_candidate_refused`).
 5. Wizard order once a proxy is assigned: check each account, then the session audit (`docs/session-audit.md`), THEN record-json, the second device, the cloud password and the passkey. An account with foreign sessions stops at the audit step, held out of those until the operator closes them or goes on; the import option closes them without asking (default off). Skipping the proxy skips the audit. A refused record-json (a wrong password is `twofa_current_password_invalid`) shows on the 2FA step.
-6. Test with fake values only; i18n parity covers `SessionJsonRefusalCode`.
-7. Key custody (re-key, devices, sign-ins, restore): an intent first (`account_key_intents`; `_key_repair.py` settles open ones); a session file goes only on PROOF its authorization ended; "not authorized" only from `probe_authorized`; cleanup by tombstone, never by absence from the DB.
+6. Fake values in tests; i18n parity covers `SessionJsonRefusalCode`.
+7. Key custody (re-key, devices, sign-ins, restore): an intent first (`account_key_intents`, settled by `_key_repair.py`); a session file goes only on PROOF its authorization ended; "not authorized" only from `probe_authorized`; cleanup by tombstone, not by absence from the DB. Listed in `configs/custody_manifest.toml`: the PR needs the operator's label. Crash matrix: `tests/custody/`.
